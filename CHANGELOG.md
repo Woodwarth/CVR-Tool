@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- Check GitHub for native stable updates, verify SHA-256, stage and restart without extra software.
+- Add direct platform download links and update instructions.
+- Replace Main input gain entry boxes with plain text; use 0.5 dB arrow-key steps.
+- Reuse existing delay/EQ windows instead of opening duplicates.
+- Add graphical input EQ with draggable band handles and synchronized band controls.
+- Preserve observed device filter types and avoid inventing responses for unknown types.
+- Compact the routing matrix and remove its left output labels.
+
 ## 0.3.0
 
 - Begin a new repository history; retire previous tags and releases.

@@ -15,6 +15,7 @@ the same feature set; variants differ by channel count (two or four).
 - Never publish manufacturer executables/source, private presets or captures.
 - MCP stdout is protocol only; logs go to stderr.
 - Never claim a build or test passed without running it.
+- Updates: docs/updates.md. Keep checks explicit and preserve old installations.
 - Source headers describe purpose, units, state and scope in approximately five lines.
 
 ## Development

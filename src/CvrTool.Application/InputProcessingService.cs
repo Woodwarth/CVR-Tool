@@ -26,6 +26,8 @@ public sealed partial class AmplifierService
             throw new ArgumentException("Input EQ requires exactly eight uniquely numbered bands.");
         foreach (var band in bands)
         {
+            if (band.FilterType != before.Bands.Single(b => b.Number == band.Number).FilterType)
+                throw new NotSupportedException("Filter type changes are not supported; preserve the observed type.");
             if (!double.IsFinite(band.FrequencyHz) || band.FrequencyHz is < 20 or > 20000 ||
                 !double.IsFinite(band.GainDb) || band.GainDb is < -18 or > 18 ||
                 !double.IsFinite(band.Q) || band.Q is < .1 or > 20)

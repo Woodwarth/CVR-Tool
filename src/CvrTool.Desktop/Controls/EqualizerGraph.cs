@@ -1,0 +1,169 @@
+// Desktop / Graphical input EQ
+// Purpose: plot the summed response and edit numbered band handles.
+// Units: logarithmic 20 Hz–20 kHz axis, ±24 dB view, 48 kHz preview.
+// State: dragging and keyboard edits update the editor draft only.
+// Scope: unsupported filter types show handles without an invented curve.
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Media;
+using CvrTool.Application;
+using CvrTool.Core;
+
+namespace CvrTool.Desktop;
+
+public sealed class EqualizerGraph : Control
+{
+    private IReadOnlyList<EqualizerBand> bands = [];
+    private bool enabled = true;
+    private int selected = 1;
+    private bool dragging;
+    public event Action<EqualizerBand>? BandChanged;
+    public IReadOnlyList<EqualizerBand> Bands
+    {
+        get => bands; set
+        {
+            bands = value.ToArray();
+            InvalidateVisual();
+        }
+    }
+    public bool EqEnabled
+    {
+        get => enabled; set
+        {
+            enabled = value;
+            InvalidateVisual();
+        }
+    }
+    private Rect Plot => new(46, 12, Math.Max(1, Bounds.Width - 62), Math.Max(1, Bounds.Height - 45));
+    public EqualizerGraph()
+    {
+        Height = 330;
+        Focusable = true;
+        ClipToBounds = true;
+        Cursor = new Cursor(StandardCursorType.Hand);
+    }
+    public Point BandPosition(EqualizerBand band) => new(Plot.X + Math.Log(band.FrequencyHz / 20) / Math.Log(1000) * Plot.Width, Plot.Y + (24 - band.GainDb) / 48 * Plot.Height);
+    private static FormattedText Label(string text, double size, IBrush brush) => new(text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Inter, Segoe UI, sans-serif"), size, brush);
+    public override void Render(DrawingContext context)
+    {
+        base.Render(context);
+        var plot = Plot;
+        context.DrawRectangle(Brush.Parse("#101B23"), null, plot);
+        var grid = new Pen(Brush.Parse("#34454F"), 1);
+        foreach (var frequency in new[] { 20, 30, 40, 50, 60, 80, 100, 200, 300, 400, 500, 600, 800, 1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000, 20000 })
+        {
+            var x = plot.X + Math.Log(frequency / 20.0) / Math.Log(1000) * plot.Width;
+            context.DrawLine(grid, new(x, plot.Top), new(x, plot.Bottom));
+            if (frequency is 20 or 50 or 100 or 200 or 500 or 1000 or 2000 or 5000 or 10000 or 20000)
+            {
+                var text = Label(frequency >= 1000 ? frequency / 1000 + "k" : frequency.ToString(), 11, Brushes.LightGray);
+                context.DrawText(text, new(x - text.Width / 2, plot.Bottom + 8));
+            }
+        }
+        for (var db = -24; db <= 24; db += 6)
+        {
+            var y = plot.Y + (24 - db) / 48.0 * plot.Height;
+            context.DrawLine(new Pen(Brush.Parse(db == 0 ? "#65828C" : "#34454F"), 1), new(plot.Left, y), new(plot.Right, y));
+            var text = Label(db.ToString(), 11, Brushes.LightGray);
+            context.DrawText(text, new(Plot.X - text.Width - 9, y - 7));
+        }
+        var available = bands.All(b => !b.Enabled || b.FilterType == 0);
+        if (available)
+        {
+            var geometry = new StreamGeometry();
+            using (var path = geometry.Open())
+            {
+                for (var pixel = 0; pixel <= 500; pixel++)
+                {
+                    var frequency = 20 * Math.Pow(1000, pixel / 500.0);
+                    var db = enabled ? bands.Sum(b => EqualizerResponse.GainDb(b, frequency)) : 0;
+                    var point = new Point(plot.X + pixel / 500.0 * plot.Width, plot.Y + (24 - Math.Clamp(db, -24, 24)) / 48 * plot.Height);
+                    if (pixel == 0)
+                        path.BeginFigure(point, false);
+                    else
+                        path.LineTo(point);
+                }
+                path.EndFigure(false);
+            }
+            context.DrawGeometry(null, new Pen(Brush.Parse(enabled ? "#00CEBD" : "#71838E"), 2), geometry);
+        }
+        else
+            context.DrawText(Label("Curve unavailable for device filter type", 12, Brushes.LightGray), new(plot.Left + 12, plot.Top + 10));
+        foreach (var band in bands)
+        {
+            var point = BandPosition(band);
+            var active = band.Enabled && enabled;
+            context.DrawEllipse(Brush.Parse(band.Number == selected ? "#007F7D" : "#101B23"), new Pen(active ? Brushes.White : Brushes.Gray, 2), point, 13, 13);
+            var text = Label(band.Number.ToString(), 12, active ? Brushes.White : Brushes.Gray);
+            context.DrawText(text, new(point.X - text.Width / 2, point.Y - text.Height / 2));
+        }
+    }
+    public void MoveBand(int number, double frequency, double gain)
+    {
+        var band = bands.Single(b => b.Number == number) with
+        {
+            FrequencyHz = Math.Round(Math.Clamp(frequency, 20, 20000)),
+            GainDb = Math.Round(Math.Clamp(gain, -18, 18), 1)
+        };
+        Bands = bands.Select(b => b.Number == number ? band : b).ToArray();
+        BandChanged?.Invoke(band);
+    }
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || bands.Count == 0)
+            return;
+        var point = e.GetPosition(this);
+        double Distance(EqualizerBand b)
+        {
+            var p = BandPosition(b);
+            return Math.Sqrt(Math.Pow(p.X - point.X, 2) + Math.Pow(p.Y - point.Y, 2));
+        }
+        var closest = bands.MinBy(Distance)!;
+        if (Distance(closest) > 22)
+            return;
+        selected = closest.Number;
+        dragging = true;
+        Focus();
+        e.Pointer.Capture(this);
+        InvalidateVisual();
+        e.Handled = true;
+    }
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (!dragging)
+            return;
+        var point = e.GetPosition(this);
+        MoveBand(selected, 20 * Math.Pow(1000, (point.X - Plot.X) / Plot.Width), 24 - (point.Y - Plot.Y) / Plot.Height * 48);
+        e.Handled = true;
+    }
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        dragging = false;
+        e.Pointer.Capture(null);
+    }
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        dragging = false;
+    }
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        var band = bands.SingleOrDefault(b => b.Number == selected);
+        if (band is null)
+            return;
+        if (e.Key is Key.Up or Key.Down)
+            MoveBand(selected, band.FrequencyHz, band.GainDb + (e.Key == Key.Up ? .5 : -.5));
+        else if (e.Key is Key.Left or Key.Right)
+            MoveBand(selected, band.FrequencyHz * (e.Key == Key.Right ? 1.01 : .99), band.GainDb);
+        else
+        {
+            base.OnKeyDown(e);
+            return;
+        }
+        e.Handled = true;
+    }
+}

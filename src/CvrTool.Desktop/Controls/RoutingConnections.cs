@@ -9,7 +9,7 @@ using Avalonia.Media;
 
 namespace CvrTool.Desktop;
 
-internal sealed class RoutingConnections(int outputs) : Control
+internal sealed class RoutingConnections(int outputs, double firstRow = 113, double rowStep = 112) : Control
 {
     public override void Render(DrawingContext context)
     {
@@ -17,7 +17,7 @@ internal sealed class RoutingConnections(int outputs) : Control
         var pen = new Pen(Brush.Parse("#46525D"), 2);
         for (var row = 0; row < outputs; row++)
         {
-            var y = 113 + row * 112;
+            var y = firstRow + row * rowStep;
             context.DrawLine(pen, new Point(0, y), new Point(170, y));
             context.DrawLine(pen, new Point(Bounds.Width - 170, y), new Point(Bounds.Width, y));
         }

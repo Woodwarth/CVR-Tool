@@ -17,6 +17,10 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (args.FirstOrDefault() == "--finish-update")
+            args = AppUpdateLifecycle.Complete(args);
+        else if (AppUpdateLifecycle.Redirect(args))
+            return;
         if (args.FirstOrDefault() == "--mcp")
         {
             McpHost.RunAsync(args.Skip(1).ToArray()).GetAwaiter().GetResult();

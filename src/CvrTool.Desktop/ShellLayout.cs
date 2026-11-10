@@ -69,6 +69,11 @@ public sealed partial class MainWindow
         row.Children.Add(new Image { Source = Branding.Bitmap(), Width = 38, Height = 38 });
         row.Children.Add(Text("CVR Tool", 27, weight: FontWeight.Bold));
         row.Children.Add(new Border { Child = Text("LOCAL SESSION", 12, Accent, FontWeight.SemiBold), Padding = new Thickness(12, 6), BorderBrush = Accent, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), VerticalAlignment = VerticalAlignment.Center });
-        return new Border { Child = row, Padding = new Thickness(16, 10), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1) };
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        header.Children.Add(row);
+        var updates = new Button { Content = "Updates · " + AppUpdateLifecycle.Version, Tag = "software-updates", VerticalAlignment = VerticalAlignment.Center };
+        updates.Click += (_, _) => OpenUpdates();
+        AddColumn(header, updates, 1);
+        return new Border { Child = header, Padding = new Thickness(16, 10), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1) };
     }
 }

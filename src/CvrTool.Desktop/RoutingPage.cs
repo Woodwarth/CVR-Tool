@@ -28,25 +28,22 @@ public sealed partial class MainWindow
 
         var content = new StackPanel
         {
-            Spacing = 18
+            Spacing = 12
         };
         content.Children.Add(Heading($"Inputs · {deviceName.Text}"));
         content.Children.Add(Text($"{routing.InputCount} × {routing.OutputCount} routing matrix · Shared application session.", 13, Muted));
         content.Children.Add(Text("Drag or scroll a dial to change gain · Click to mute · −80 to +18 dB · Gain is retained while muted.", 13, Muted));
         var matrix = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("90," + string.Join(",", Enumerable.Repeat("*", routing.InputCount))),
-            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("100", routing.OutputCount))),
-            ColumnSpacing = 20,
-            RowSpacing = 12
+            ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("84", routing.InputCount))),
+            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("84", routing.OutputCount))),
+            ColumnSpacing = 8,
+            RowSpacing = 8
         };
         for (var input = 1; input <= routing.InputCount; input++)
-            AddColumn(matrix, Centered($"Source {input}", 14), input);
+            AddColumn(matrix, Centered($"Source {input}", 13), input - 1);
         for (var output = 1; output <= routing.OutputCount; output++)
         {
-            var label = Text($"Output {(char)('A' + output - 1)}", 14);
-            Grid.SetRow(label, output);
-            matrix.Children.Add(label);
             for (var input = 1; input <= routing.InputCount; input++)
             {
                 var state = routing.Cells.Single(c => c.Input == input && c.Output == output);
@@ -77,28 +74,28 @@ public sealed partial class MainWindow
                 dial.MuteRequested += () => Change(muted: !current.Muted);
                 dial.GainChanged += value => Change(gainDb: value);
                 Grid.SetRow(dial, output);
-                AddColumn(matrix, dial, input);
+                AddColumn(matrix, dial, input - 1);
             }
         }
 
         // Preserve signal-flow alignment; small windows can scroll the full matrix horizontally.
         var environment = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("156,*,156"),
+            ColumnDefinitions = new ColumnDefinitions("156,Auto,156"),
             ColumnSpacing = 14,
-            MinWidth = 156 + routing.InputCount * 94 + 156 + 64,
+            HorizontalAlignment = HorizontalAlignment.Left,
             Tag = "routing-environment"
         };
         var sourceProcessing = new Grid
         {
-            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("100", routing.InputCount))),
-            RowSpacing = 12,
+            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("84", routing.InputCount))),
+            RowSpacing = 8,
             Margin = new Thickness(0, 19)
         };
         var outputLevels = new Grid
         {
-            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("100", routing.OutputCount))),
-            RowSpacing = 12,
+            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("84", routing.OutputCount))),
+            RowSpacing = 8,
             Margin = new Thickness(0, 19)
         };
         sourceProcessing.Children.Add(Centered("Input processing", 13, Muted));
@@ -124,13 +121,13 @@ public sealed partial class MainWindow
             var label = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
             label.Children.Add(Centered("Volume " + output.Name, 13));
             label.Children.Add(gain);
-            var block = new Border { Child = label, Height = 80, Padding = new Thickness(6), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), VerticalAlignment = VerticalAlignment.Center };
+            var block = new Border { Child = label, Height = 72, Padding = new Thickness(6), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), VerticalAlignment = VerticalAlignment.Center };
             block.Tag = "route-volume-" + output.Name;
             Grid.SetRow(block, output.Number);
             outputLevels.Children.Add(block);
         }
 
-        var connections = new RoutingConnections(routing.OutputCount)
+        var connections = new RoutingConnections(routing.OutputCount, 101, 92)
         {
             IsHitTestVisible = false
         };

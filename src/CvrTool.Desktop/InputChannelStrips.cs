@@ -49,6 +49,7 @@ public sealed partial class MainWindow
                 Minimum = -80,
                 Maximum = 18,
                 Value = draft.Gain,
+                SmallChange = .5,
                 Orientation = Orientation.Vertical,
                 Opacity = 0
             };
@@ -58,12 +59,8 @@ public sealed partial class MainWindow
             overlay.Children.Add(slider);
             fader.Children.Add(overlay);
             AddColumn(fader, new ChannelMeter(data.LevelDbFs) { Width = 24, Height = MeterHeight, Tag = "channel-meter-" + draft.State.Name }, 1);
-            var gain = new GainReadout
-            {
-                Value = draft.Gain,
-                Tag = "gain-" + draft.State.Name,
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
+            var gain = Centered(draft.Gain.ToString("0.0") + " dB", 15);
+            gain.Tag = "gain-" + draft.State.Name;
             slider.GotFocus += (_, _) =>
             {
                 face.HasFocus = true;
@@ -78,12 +75,11 @@ public sealed partial class MainWindow
             slider.ValueChanged += (_, _) =>
             {
                 draft.Gain = slider.Value;
-                gain.Value = slider.Value;
+                gain.Text = slider.Value.ToString("0.0") + " dB";
                 face.Value = slider.Value;
                 face.InvalidateVisual();
                 Commit(new(deviceId, draft.State.Number, GainDb: slider.Value));
             };
-            gain.ValueChanged += value => slider.Value = value;
             Grid.SetRow(fader, 1);
             strip.Children.Add(fader);
             var clip = StatusLight("Clip", data.Status?.Clip);

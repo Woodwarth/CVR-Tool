@@ -16,7 +16,7 @@ public sealed partial class CvrLanBackend
         var raw = Read(52, ch);
         if (raw.Length != 141 || raw[140] > 1)
             throw new NotSupportedException("Unsupported CVR input filter format.");
-        var bands = Enumerable.Range(1, 8).Select(n => new EqualizerBand(n, Float(raw, n * 14 + 5), Float(raw, n * 14 + 1), Float(raw, n * 14 + 9), unchecked((sbyte)raw[n * 14]) >= 0)).ToArray();
+        var bands = Enumerable.Range(1, 8).Select(n => new EqualizerBand(n, Float(raw, n * 14 + 5), Float(raw, n * 14 + 1), Float(raw, n * 14 + 9), unchecked((sbyte)raw[n * 14]) >= 0, raw[n * 14] < 128 ? raw[n * 14] : 255 - raw[n * 14])).ToArray();
         return (new(channel, delay, raw[140] == 0, bands), raw);
     }
     public (InputProcessingState State, long Revision) GetInputProcessing(string deviceId, int channel)

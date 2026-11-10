@@ -16,6 +16,10 @@ configuration = sys.argv[1] if len(sys.argv) > 1 else "Debug"
 executable = os.environ.get("CVR_MCP_EXECUTABLE")
 base = [executable] if executable else ["dotnet", str(root / f"src/CvrTool.Mcp/bin/{configuration}/net10.0/CvrTool.Mcp.dll")]
 integrated = os.environ.get("CVR_MCP_INTEGRATED") == "1"
+handoff = None
+if os.environ.get("CVR_MCP_HANDOFF") == "1":
+    handoff = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(1)"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    base += ["--finish-update", str(handoff.pid)]
 session = "cvr-check-" + uuid.uuid4().hex
 
 class Client:
@@ -117,6 +121,9 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         assert len(telemetry) == 2 and all(t["Voltage"] is None for t in telemetry)
         exported = b.call("export_preset", deviceId="demo-2002")
         assert exported["SchemaVersion"] == 3 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
+        if handoff is not None:
+            handoff.wait(timeout=5)
+            print("PASS: updated executable waits for the previous process and completes the update handoff")
         print("PASS: MCP without demo flag, two shared clients, uniform models, channel/routing/input edits, revision conflicts, rename, controls and schema 3 export")
     except Exception:
         errors.seek(0)

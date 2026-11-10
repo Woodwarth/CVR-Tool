@@ -1,25 +1,22 @@
-# Validation — version 0.3.0
+# Validation — version 0.4.0
 
-Local host: Windows x64, .NET SDK 10.0.403.
+Windows x64 / .NET SDK 10.0.403:
 
-- Locked restore and Release solution build: zero warnings/errors.
-- 93 core checks: validation, immutable previews, revisions, one-use/expired
-  plans, uniform model features, input DSP, schema 3 and offline file analysis.
-- 63 network checks: target/configuration validation, loopback transport,
-  capture-derived lock fixture, synthetic CVR peer, confirmed output/routing/
-  input DSP/name/control writes, shared-session access, telemetry mapping,
-  rejected writes, external edits and missing replies.
-- 89 desktop checks: meter/status geometry, symbols, equal two-/four-channel
-  card dimensions, gain/routing/name controls, uniform scaling from 1008×588
-  through 1920×1080, delay unit synchronization and input EQ editing.
-- MCP stdio: two separate clients share one owner without --demo; channel,
-  routing, input processing, controls, name, conflicts and schema 3 export.
-- Main and Inputs directly rendered from Avalonia and visually inspected.
+- 112 core checks, including stable release selection, exact platform assets,
+  SHA-256, staging/activation/reuse, rejected downloads and escaping paths,
+  draft/prerelease filtering and analytic peak-EQ response checks.
+- 63 network checks with synthetic loopback peers; no physical amplifier.
+- 95 desktop checks, including plain gain labels, 0.5 dB keyboard steps,
+  duplicate editor prevention, graph/field synchronization, compact matrix
+  geometry, one update dialog and explicit check/download behavior.
+- Main, Inputs and graphical EQ rendered directly and visually inspected.
+- Shared-session MCP smoke test remains part of each native CI job.
 
-Native platform release jobs separately restore/build/test and smoke-test MCP
-from each self-contained desktop executable. CI results and package checks
-are recorded with the release. No development environment or external runtime
-is needed by the downloaded app.
+Release jobs additionally extract their real self-contained package through
+the updater and run integrated MCP from the installed copy. This checks ZIP
+on both Windows architectures and tar.gz/file permissions on Apple Silicon.
+Download integrity and staging are tested without replacing this development
+workspace. Automated checks do not perform an interactive full GUI restart.
 
 ## Remaining validation
 

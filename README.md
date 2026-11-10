@@ -4,11 +4,22 @@ A cross-platform desktop app with integrated MCP for CVR DSP amplifiers.
 The interface and functions follow the CVR application, with the same controls
 for two- and four-channel models.
 
-[Download v0.3.0](https://github.com/Woodwarth/CVR-Tool/releases/tag/v0.3.0):
-Windows x64, Windows ARM64 and macOS Apple Silicon. Extract the entire package;
-Windows: run `START-CVR-TOOL.cmd`. Mac: open `CVR Tool.app`.
-The runtime is included; no development environment or additional runtime is required.
-Packages are unsigned (Mac ad-hoc signed, not notarized).
+## Download
+
+| Platform | Direct download | Start after extracting |
+| --- | --- | --- |
+| Windows x64 · Intel / AMD | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.4.0/CVR-Tool-0.4.0-win-x64.zip) | `START-CVR-TOOL.cmd` |
+| Windows ARM64 · Snapdragon | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.4.0/CVR-Tool-0.4.0-win-arm64.zip) | `START-CVR-TOOL.cmd` |
+| Mac · Apple Silicon | [Download archive](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.4.0/CVR-Tool-0.4.0-osx-arm64.tar.gz) | `CVR Tool.app` |
+
+[Latest release and checksums](https://github.com/Woodwarth/CVR-Tool/releases/latest).
+Extract the entire package. The runtime is included; no SDK or additional
+software is required. Windows packages are unsigned; Mac is ad-hoc signed,
+not notarized. No Intel Mac build.
+
+From v0.4.0, choose **Updates → Check for updates → Download and restart**
+inside the app. Updates are verified and installed in your user profile;
+existing versions are retained. Export session settings before restarting.
 
 Desktop and MCP share one local session. Manual CVR UDP connections and local
 models are available. Physical-amplifier validation remains pending.

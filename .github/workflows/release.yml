@@ -39,12 +39,23 @@ jobs:
       - run: python scripts/check-mcp.py Release
       - shell: pwsh
         run: ./scripts/package.ps1 -Runtime ${{ matrix.rid }}
+      - name: Verify native update installation
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $version = [string]$props.Project.PropertyGroup.Version
+          $extension = if ($IsWindows) { 'zip' } else { 'tar.gz' }
+          dotnet run --project tests/CvrTool.Checks -c Release --no-build -- --update-package "artifacts/CVR-Tool-$version-${{ matrix.rid }}.$extension" "${{ matrix.rid }}" "$version"
+          if ($LASTEXITCODE -ne 0) { throw 'Native update installation failed' }
       - name: Test self-contained MCP executable
         shell: pwsh
         run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $version = [string]$props.Project.PropertyGroup.Version
           $binary = if ($IsWindows) { 'desktop/CvrTool.Desktop.exe' } else { 'CVR Tool.app/Contents/MacOS/CvrTool.Desktop' }
           $env:CVR_MCP_INTEGRATED = '1'
-          $env:CVR_MCP_EXECUTABLE = Join-Path $PWD "artifacts/stage-${{ matrix.rid }}/$binary"
+          $env:CVR_MCP_HANDOFF = '1'
+          $env:CVR_MCP_EXECUTABLE = Join-Path $PWD "artifacts/update-install-check/versions/$version/${{ matrix.rid }}/$binary"
           $env:DOTNET_ROOT = Join-Path $PWD 'artifacts/no-installed-runtime'
           $env:DOTNET_MULTILEVEL_LOOKUP = '0'
           python scripts/check-mcp.py Release
@@ -75,4 +86,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "$GITHUB_REF_NAME" artifacts/CVR-Tool-* artifacts/SHA256SUMS.txt --draft --title "CVR Tool $GITHUB_REF_NAME" --notes "Cross-platform desktop application with integrated shared-session MCP, input DSP editors, manual CVR UDP connections and self-contained Windows x64/ARM64 and Apple Silicon packages. Physical-amplifier validation remains pending. macOS packages are not notarized."
+          gh release create "$GITHUB_REF_NAME" artifacts/CVR-Tool-* artifacts/SHA256SUMS.txt --draft --title "CVR Tool $GITHUB_REF_NAME" --notes "GitHub updates with verified native installation, graphical input EQ, compact routing and 0.5 dB fader keyboard steps. Self-contained Windows x64/ARM64 and Apple Silicon packages. Physical-amplifier validation remains pending; Mac packages are not notarized."
