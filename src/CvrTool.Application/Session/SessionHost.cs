@@ -25,18 +25,19 @@ public sealed class SessionHost : IDisposable
         listener = Task.Run(() => ListenAsync(first));
     }
     private NamedPipeServerStream CreatePipe() => new(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-    private async Task ListenAsync(NamedPipeServerStream first)
+    private async Task ListenAsync(NamedPipeServerStream pipe)
     {
-        var pipe = first;
-        try
+        using (pipe)
         {
-            while (!shutdown.IsCancellationRequested)
+            try
             {
-                using (pipe)
+                while (!shutdown.IsCancellationRequested)
                 {
+                    var accepted = false;
                     try
                     {
                         await pipe.WaitForConnectionAsync(shutdown.Token);
+                        accepted = true;
                         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
                         timeout.CancelAfter(TimeSpan.FromSeconds(120));
                         SessionReply reply;
@@ -53,15 +54,17 @@ public sealed class SessionHost : IDisposable
                     }
                     catch (OperationCanceledException) when (!shutdown.IsCancellationRequested) { }
                     catch (IOException) when (!shutdown.IsCancellationRequested) { }
+                    finally
+                    {
+                        // Keep the listening endpoint alive across calls. Recreating a Unix socket
+                        // can discard clients queued just after the previous reply was sent.
+                        if (accepted) pipe.Disconnect();
+                    }
                 }
-                if (shutdown.IsCancellationRequested)
-                    break;
-                pipe = CreatePipe();
             }
+            catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { }
+            catch (IOException) when (shutdown.IsCancellationRequested) { }
         }
-        catch (OperationCanceledException) when (shutdown.IsCancellationRequested) { }
-        catch (IOException) when (shutdown.IsCancellationRequested) { }
-        finally { pipe.Dispose(); }
     }
     private object Dispatch(SessionRequest request)
     {

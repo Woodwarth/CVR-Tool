@@ -153,4 +153,23 @@ finally
         Directory.Delete(directory);
 }
 CvrPeerChecks.Run(Check);
+var sessionLabel="stress-"+Guid.NewGuid();
+using (var sessionHost = new SessionHost(new DemoBackend(), sessionLabel))
+{
+    var clientA=new SessionBackend(sessionLabel);var clientB=new SessionBackend(sessionLabel);
+    for(var request=0;request<200;request++)
+        if((request%2==0 ? clientA : clientB).GetDevice("demo-1004").Outputs.Count!=4)throw new Exception("Sequential IPC state mismatch");
+    Check(true,"200 alternating IPC connections reuse the listening endpoint");
+    using(var interrupted=new System.IO.Pipes.NamedPipeClientStream(".",SessionDefaults.Resolve(sessionLabel),System.IO.Pipes.PipeDirection.InOut,System.IO.Pipes.PipeOptions.Asynchronous))
+        await interrupted.ConnectAsync(5000);
+    Check((await Task.Run(()=>clientA.ListDevices()).WaitAsync(TimeSpan.FromSeconds(10))).Count==3,"An aborted IPC peer does not stop the session listener");
+    await Task.WhenAll(Enumerable.Range(0,4).Select(_=>Task.Run(()=>
+    {
+        var client=new SessionBackend(sessionLabel);
+        for(var request=0;request<50;request++)
+            if(client.GetInputProcessing("demo-2002",1).State.HighPass is null)throw new Exception("Concurrent IPC state mismatch");
+    })));
+    Check(true,"200 concurrent IPC reads retain complete crossover snapshots");
+}
+
 Console.WriteLine($"PASS: {count} network checks (synthetic loopback peers; no physical amplifier)");

@@ -4,8 +4,9 @@ Windows x64 / .NET SDK 10.0.403:
 
 - 169 core checks: crossover validation, all eleven options, isolated edits,
   read-only previews/revisions, and analytical Butterworth/LR/Bessel landmarks.
-- 74 network checks: synthetic UDP readback for every crossover type, frequency
-  and bypass setting, preserving all unedited EQ bytes. No physical amplifier.
+- 77 network checks: synthetic UDP readback for every crossover type, frequency
+  and bypass setting, preserving all unedited EQ bytes. Repeated/concurrent IPC
+  connections and an aborted peer retain the session listener. No physical amplifier.
 - 94 desktop checks: HP/LP controls, all eleven dropdown choices, synchronized
   cutoff handles, applied settings, removed tabs/footer text and existing UI behavior.
 - Shared-session MCP smoke test includes highPass/lowPass preview, apply and readback.

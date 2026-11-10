@@ -31,7 +31,8 @@ Device-side names currently use ASCII, 1–32 bytes. Readback confirms the curre
 name; retention across a power cycle depends on firmware and is untested.
 Input filter edits preserve unedited crossover records, EQ type codes and reset bytes.
 Explicit HP/LP changes edit type/bypass and cutoff in records 0 and 9.
-The editor changes frequency/gain/Q/enable state, not filter type. Application
+The eight parametric bands retain their observed filter type. HP/LP offer the
+eleven observed crossover selections. Application
 edit ranges are conservative limits, not verified physical model specifications.
 
 Telemetry supports known 56/72/76/88/92/96-byte four-slot and 32-byte two-slot
