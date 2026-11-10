@@ -66,8 +66,14 @@ if ($Runtime.StartsWith('osx-')) {
     codesign --force --deep --sign - $app
     if ($LASTEXITCODE -ne 0) { throw 'Ad-hoc codesign failed' }
     $archive = Join-Path $PWD "artifacts/CVR-Tool-$version-$Runtime.tar.gz"
-    tar -czf $archive -C $stage .
-    if ($LASTEXITCODE -ne 0) { throw 'Archive failed' }
+    # Use standard .NET tar records instead of macOS-specific extended headers.
+    Add-Type -AssemblyName System.Formats.Tar
+    $archiveStream = [System.IO.File]::Create($archive)
+    try {
+        $gzip = [System.IO.Compression.GZipStream]::new($archiveStream, [System.IO.Compression.CompressionLevel]::Optimal, $true)
+        try { [System.Formats.Tar.TarFile]::CreateFromDirectory($stage, $gzip, $false) }
+        finally { $gzip.Dispose() }
+    } finally { $archiveStream.Dispose() }
 } else {
     $launcher = "@echo off`r`nstart `"`" `"%~dp0desktop\CvrTool.Desktop.exe`"`r`n"
     [System.IO.File]::WriteAllText((Join-Path $stage 'START-CVR-TOOL.cmd'), $launcher, (New-Object System.Text.UTF8Encoding($false)))
