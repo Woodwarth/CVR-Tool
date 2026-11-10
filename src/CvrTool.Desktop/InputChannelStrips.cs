@@ -92,7 +92,6 @@ public sealed partial class MainWindow
         }
 
         content.Children.Add(strips);
-        content.Children.Add(Text("−80 … +18 dB · Changes apply immediately", 11, Muted));
         return content;
     }
 }

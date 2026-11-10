@@ -165,6 +165,7 @@ if (firArgument >= 0 && firArgument + 1 < args.Length)
     var inspection = await FirFileAnalyzer.AnalyzeAsync(stream);
     Console.WriteLine($"LOCAL FIR: {inspection.Coefficients.Count} coefficients, {inspection.NonZeroCount} nonzero, {inspection.SampleRate} Hz preview");
 }
+CrossoverChecks.Run(Check);
 await UpdateChecks.RunAsync(Check);
 await UpdateChecks.StageNativePackage(args);
 Console.WriteLine($"PASS: {count} checks");

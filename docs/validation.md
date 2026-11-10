@@ -1,16 +1,15 @@
-# Validation — version 0.4.0
+# Validation — version 0.5.0
 
 Windows x64 / .NET SDK 10.0.403:
 
-- 112 core checks, including stable release selection, exact platform assets,
-  SHA-256, staging/activation/reuse, rejected downloads and escaping paths,
-  draft/prerelease filtering and analytic peak-EQ response checks.
-- 63 network checks with synthetic loopback peers; no physical amplifier.
-- 95 desktop checks, including plain gain labels, 0.5 dB keyboard steps,
-  duplicate editor prevention, graph/field synchronization, compact matrix
-  geometry, one update dialog and explicit check/download behavior.
-- Main, Inputs and graphical EQ rendered directly and visually inspected.
-- Shared-session MCP smoke test remains part of each native CI job.
+- 169 core checks: crossover validation, all eleven options, isolated edits,
+  read-only previews/revisions, and analytical Butterworth/LR/Bessel landmarks.
+- 74 network checks: synthetic UDP readback for every crossover type, frequency
+  and bypass setting, preserving all unedited EQ bytes. No physical amplifier.
+- 94 desktop checks: HP/LP controls, all eleven dropdown choices, synchronized
+  cutoff handles, applied settings, removed tabs/footer text and existing UI behavior.
+- Shared-session MCP smoke test includes highPass/lowPass preview, apply and readback.
+- Main, Inputs and HP/LP EQ directly rendered and visually inspected.
 
 Release jobs additionally extract their real self-contained package through
 the updater and run integrated MCP from the installed copy. This checks ZIP

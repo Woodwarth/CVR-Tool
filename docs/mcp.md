@@ -23,7 +23,10 @@ for compatibility with isolated test clients and does not share GUI state.
 - `get_routing`, `plan_routing_change`, `apply_routing_change`.
 - `plan_channel_change`, `apply_change` (gain, mute, delay, polarity).
 - `get_input_processing`, `plan_input_processing`, `apply_input_processing`
-  (delay, EQ enable state, eight bands with Hz/dB/Q and enable state).
+  (delay, EQ enable state, eight bands with Hz/dB/Q and enable state, plus
+  highPass/lowPass objects with FrequencyHz, FilterType and Enabled).
+  Crossover type IDs: 0 BW-12, 1 BE-12, 2 LR-12, 3 BW-18, 4 BW-24,
+  5 BE-24, 6 LR-24, 7 BW-36, 8 BW-48, 9 BE-48, 10 LR-48.
 
 Channel numbers start at 1. Physical IDs are `cvr:ADDRESS:PORT`; local models
 are `demo-1004`, `demo-2002` and `demo-1502`. Local state is volatile. Exported

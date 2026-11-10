@@ -16,6 +16,24 @@ public sealed class EqualizerGraph : Control
 {
     private IReadOnlyList<EqualizerBand> bands = [];
     private bool enabled = true;
+    private CrossoverFilter? highPass, lowPass;
+    public event Action<bool, CrossoverFilter>? CrossoverChanged;
+    public CrossoverFilter? HighPass
+    {
+        get => highPass; set
+        {
+            highPass = value;
+            InvalidateVisual();
+        }
+    }
+    public CrossoverFilter? LowPass
+    {
+        get => lowPass; set
+        {
+            lowPass = value;
+            InvalidateVisual();
+        }
+    }
     private int selected = 1;
     private bool dragging;
     public event Action<EqualizerBand>? BandChanged;
@@ -68,7 +86,7 @@ public sealed class EqualizerGraph : Control
             var text = Label(db.ToString(), 11, Brushes.LightGray);
             context.DrawText(text, new(Plot.X - text.Width - 9, y - 7));
         }
-        var available = bands.All(b => !b.Enabled || b.FilterType == 0);
+        var available = bands.All(b => !b.Enabled || b.FilterType == 0) && new[] { highPass, lowPass }.All(f => f is null || !f.Enabled || CrossoverFilters.Options.Any(o => o.Code == f.FilterType));
         if (available)
         {
             var geometry = new StreamGeometry();
@@ -77,7 +95,7 @@ public sealed class EqualizerGraph : Control
                 for (var pixel = 0; pixel <= 500; pixel++)
                 {
                     var frequency = 20 * Math.Pow(1000, pixel / 500.0);
-                    var db = enabled ? bands.Sum(b => EqualizerResponse.GainDb(b, frequency)) : 0;
+                    var db = enabled ? bands.Sum(b => EqualizerResponse.GainDb(b, frequency)) + CrossoverResponse.GainDb(highPass, true, frequency) + CrossoverResponse.GainDb(lowPass, false, frequency) : 0;
                     var point = new Point(plot.X + pixel / 500.0 * plot.Width, plot.Y + (24 - Math.Clamp(db, -24, 24)) / 48 * plot.Height);
                     if (pixel == 0)
                         path.BeginFigure(point, false);
@@ -98,6 +116,32 @@ public sealed class EqualizerGraph : Control
             var text = Label(band.Number.ToString(), 12, active ? Brushes.White : Brushes.Gray);
             context.DrawText(text, new(point.X - text.Width / 2, point.Y - text.Height / 2));
         }
+        foreach (var (filter, label, index) in new[] { (highPass, "HP", 0), (lowPass, "LP", 9) })
+        {
+            if (filter is null)
+                continue;
+            var point = CrossoverPosition(filter);
+            var color = Brush.Parse(filter.Enabled && enabled ? "#F0BD71" : "#71838E");
+            context.DrawEllipse(Brush.Parse(selected == index ? "#715322" : "#101B23"), new Pen(color, 2), point, 15, 15);
+            var text = Label(label, 10, color);
+            context.DrawText(text, new(point.X - text.Width / 2, point.Y - text.Height / 2));
+        }
+    }
+    private Point CrossoverPosition(CrossoverFilter filter) => new(Plot.X + Math.Log(Math.Clamp(filter.FrequencyHz, 20, 20000) / 20) / Math.Log(1000) * Plot.Width, Plot.Y + Plot.Height / 2);
+    public void MoveCrossover(bool high, double frequency)
+    {
+        var filter = (high ? HighPass : LowPass);
+        if (filter is null)
+            return;
+        filter = filter with
+        {
+            FrequencyHz = Math.Round(Math.Clamp(frequency, 20, 20000))
+        };
+        if (high)
+            HighPass = filter;
+        else
+            LowPass = filter;
+        CrossoverChanged?.Invoke(high, filter);
     }
     public void MoveBand(int number, double frequency, double gain)
     {
@@ -121,9 +165,22 @@ public sealed class EqualizerGraph : Control
             return Math.Sqrt(Math.Pow(p.X - point.X, 2) + Math.Pow(p.Y - point.Y, 2));
         }
         var closest = bands.MinBy(Distance)!;
-        if (Distance(closest) > 22)
-            return;
+        var best = Distance(closest);
         selected = closest.Number;
+        foreach (var (filter, index) in new[] { (highPass, 0), (lowPass, 9) })
+        {
+            if (filter is null)
+                continue;
+            var p = CrossoverPosition(filter);
+            var distance = Math.Sqrt(Math.Pow(p.X - point.X, 2) + Math.Pow(p.Y - point.Y, 2));
+            if (distance < best)
+            {
+                best = distance;
+                selected = index;
+            }
+        }
+        if (best > 22)
+            return;
         dragging = true;
         Focus();
         e.Pointer.Capture(this);
@@ -136,7 +193,11 @@ public sealed class EqualizerGraph : Control
         if (!dragging)
             return;
         var point = e.GetPosition(this);
-        MoveBand(selected, 20 * Math.Pow(1000, (point.X - Plot.X) / Plot.Width), 24 - (point.Y - Plot.Y) / Plot.Height * 48);
+        var frequency = 20 * Math.Pow(1000, (point.X - Plot.X) / Plot.Width);
+        if (selected is 0 or 9)
+            MoveCrossover(selected == 0, frequency);
+        else
+            MoveBand(selected, frequency, 24 - (point.Y - Plot.Y) / Plot.Height * 48);
         e.Handled = true;
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -152,6 +213,16 @@ public sealed class EqualizerGraph : Control
     }
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (selected is 0 or 9)
+        {
+            var filter = selected == 0 ? highPass : lowPass;
+            if (filter is not null && e.Key is Key.Left or Key.Right)
+            {
+                MoveCrossover(selected == 0, filter.FrequencyHz * (e.Key == Key.Right ? 1.01 : .99));
+                e.Handled = true;
+            }
+            return;
+        }
         var band = bands.SingleOrDefault(b => b.Number == selected);
         if (band is null)
             return;

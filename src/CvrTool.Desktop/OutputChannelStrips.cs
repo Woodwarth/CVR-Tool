@@ -112,7 +112,6 @@ public sealed partial class MainWindow
         }
 
         panel.Children.Add(strips);
-        panel.Children.Add(Text("— / grey = unknown · No live measurements", 11, Muted));
         return panel;
     }
 }

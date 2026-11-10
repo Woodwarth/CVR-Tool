@@ -23,7 +23,7 @@ public sealed partial class MainWindow
         var sidebar = new StackPanel { Spacing = 12, Margin = new Thickness(12) };
         sidebar.Children.Add(Heading("Devices"));
         sidebar.Children.Add(navigation);
-        sidebar.Children.Add(Text("MCP shares this session\nManual targets in Network", 11, Muted));
+        sidebar.Children.Add(Text("MCP shares this session", 11, Muted));
         center.Children.Add(new Border { Background = Brush.Parse("#192129"), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 1, 0), Child = sidebar });
         var workspace = new Grid { RowDefinitions = new RowDefinitions("84,48,*"), RowSpacing = 12, Margin = new Thickness(16), Tag = "workspace" };
         workspace.Children.Add(DeviceHeader());

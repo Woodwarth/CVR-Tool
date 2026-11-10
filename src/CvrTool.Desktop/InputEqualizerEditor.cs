@@ -6,6 +6,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Controls.Templates;
 using CvrTool.Core;
 
 namespace CvrTool.Desktop;
@@ -25,10 +26,10 @@ public sealed partial class MainWindow
         var enabled = new CheckBox { Content = input.EqEnabled ? "EQ On" : "EQ Off", IsChecked = input.EqEnabled, Tag = "input-eq-enabled" };
         AddColumn(header, enabled, 1);
         content.Children.Add(header);
-        var graph = new EqualizerGraph { Bands = draft, EqEnabled = input.EqEnabled, Tag = "input-eq-graph", Height = 340 };
+        var graph = new EqualizerGraph { HighPass = input.HighPass, LowPass = input.LowPass, Bands = draft, EqEnabled = input.EqEnabled, Tag = "input-eq-graph", Height = 340 };
         Grid.SetRow(graph, 1);
         content.Children.Add(graph);
-        var cards = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("*", 8))), ColumnSpacing = 8 };
+        var cards = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("*", 10))), ColumnSpacing = 8 };
         var fields = new Dictionary<int, (NumericUpDown Frequency, NumericUpDown Gain, NumericUpDown Q, CheckBox Enabled)>();
         var syncing = false;
         foreach (var band in draft)
@@ -51,7 +52,7 @@ public sealed partial class MainWindow
             column.Children.Add(active);
             var card = Card(column);
             card.Padding = new Thickness(8);
-            AddColumn(cards, card, band.Number - 1);
+            AddColumn(cards, card, band.Number);
             fields.Add(band.Number, (frequency, gain, q, active));
             void Changed()
             {
@@ -71,6 +72,62 @@ public sealed partial class MainWindow
             q.ValueChanged += (_, _) => Changed();
             active.IsCheckedChanged += (_, _) => Changed();
         }
+        var highPass = input.HighPass;
+        var lowPass = input.LowPass;
+        var crossoverFields = new Dictionary<bool, NumericUpDown>();
+        Control CrossoverCard(bool high)
+        {
+            var filter = (high ? highPass : lowPass);
+            var key = high ? "hp" : "lp";
+            var column = new StackPanel { Spacing = 8 };
+            column.Children.Add(Centered(high ? "HP" : "LP", 14, Accent));
+            var type = new ComboBox
+            {
+                ItemsSource = CrossoverFilters.Options,
+                SelectedItem = CrossoverFilters.Options.SingleOrDefault(o => o.Code == filter?.FilterType),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                MinWidth = 0,
+                MaxDropDownHeight = 380,
+                Tag = key + "-type",
+                ItemTemplate = new FuncDataTemplate<CrossoverOption>((o, _) => new TextBlock { Text = o?.Label, FontSize = 12 }),
+                SelectionBoxItemTemplate = new FuncDataTemplate<CrossoverOption>((o, _) => new TextBlock { Text = o?.ShortName, FontSize = 12 })
+            };
+            var frequency = Number(20, 20000, 1, (decimal)(filter?.FrequencyHz ?? (high ? 20 : 20000)));
+            frequency.Tag = key + "-frequency";
+            frequency.FormatString = "0";
+            var active = new CheckBox { Content = "On", IsChecked = filter?.Enabled == true, Tag = key + "-enabled" };
+            column.Children.Add(type);
+            column.Children.Add(Field("Hz", frequency));
+            column.Children.Add(active);
+            column.Children.Add(Text("Cutoff", 11, Muted));
+            column.IsEnabled = filter is not null;
+            crossoverFields[high] = frequency;
+            void Changed()
+            {
+                if (syncing || frequency.Value is null || type.SelectedItem is not CrossoverOption option)
+                    return;
+                var next = new CrossoverFilter((double)frequency.Value.Value, option.Code, active.IsChecked == true);
+                if (high)
+                {
+                    highPass = next;
+                    graph.HighPass = next;
+                }
+                else
+                {
+                    lowPass = next;
+                    graph.LowPass = next;
+                }
+            }
+            type.SelectionChanged += (_, _) => Changed();
+            frequency.ValueChanged += (_, _) => Changed();
+            active.IsCheckedChanged += (_, _) => Changed();
+            var card = Card(column);
+            card.Padding = new Thickness(8);
+            return card;
+        }
+        AddColumn(cards, CrossoverCard(true), 0);
+        AddColumn(cards, CrossoverCard(false), 9);
+        graph.CrossoverChanged += (high, filter) => { syncing = true; if (high) highPass = filter; else lowPass = filter; crossoverFields[high].Value = (decimal)filter.FrequencyHz; syncing = false; };
         graph.BandChanged += band =>
         {
             syncing = true;
@@ -83,7 +140,7 @@ public sealed partial class MainWindow
         Grid.SetRow(cards, 2);
         content.Children.Add(cards);
         var footer = new StackPanel { Spacing = 10 };
-        var message = Text("Drag numbered handles to adjust Hz/dB · Peak response preview at 48 kHz · Crossovers remain unchanged", 11, Muted);
+        var message = Text("Drag numbered handles to adjust Hz/dB · 48 kHz preview · Bessel phase-normalized", 11, Muted);
         footer.Children.Add(message);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         var apply = new Button { Content = "Apply", Tag = "apply-input-eq" };
@@ -93,9 +150,9 @@ public sealed partial class MainWindow
         footer.Children.Add(actions);
         Grid.SetRow(footer, 3);
         content.Children.Add(footer);
-        var canvas = new Viewbox { Child = new Border { Width = 1120, Height = 760, Child = content }, Stretch = Avalonia.Media.Stretch.Uniform };
-        var editor = EditorWindow("Input EQ · Channel " + channel, canvas, 1160, 800);
-        editor.MinWidth = 840;
+        var canvas = new Viewbox { Child = new Border { Width = 1360, Height = 760, Child = content }, Stretch = Avalonia.Media.Stretch.Uniform };
+        var editor = EditorWindow("Input EQ · Channel " + channel, canvas, 1400, 800);
+        editor.MinWidth = 1008;
         editor.MinHeight = 590;
         var screen = Screens.ScreenFromWindow(this);
         if (screen is not null)
@@ -112,8 +169,8 @@ public sealed partial class MainWindow
             }
             try
             {
-                var plan = service.PlanInputProcessing(new(editedId, channel, EqEnabled: enabled.IsChecked == true, Bands: draft));
-                if (plan.Before.EqEnabled != input.EqEnabled || !plan.Before.Bands.SequenceEqual(input.Bands))
+                var plan = service.PlanInputProcessing(new(editedId, channel, EqEnabled: enabled.IsChecked == true, Bands: draft, HighPass: highPass != input.HighPass ? highPass : null, LowPass: lowPass != input.LowPass ? lowPass : null));
+                if (plan.Before.EqEnabled != input.EqEnabled || !plan.Before.Bands.SequenceEqual(input.Bands) || plan.Before.HighPass != input.HighPass || plan.Before.LowPass != input.LowPass)
                     throw new InvalidOperationException("Input EQ changed externally. Reopen the editor before applying.");
                 service.ApplyInputProcessing(plan.Id);
                 Render();

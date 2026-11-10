@@ -76,7 +76,8 @@ public sealed class UpdateInstallation(string? root = null)
                 return null;
             var directory = VersionDirectory(installed.Version, runtime);
             var executable = Executable(directory, runtime);
-            if (!File.Exists(executable) || !File.Exists(Path.Combine(directory, "installation.json"))) return null;
+            if (!File.Exists(executable) || !File.Exists(Path.Combine(directory, "installation.json")))
+                return null;
             var manifest = JsonSerializer.Deserialize<InstalledVersion>(File.ReadAllText(Path.Combine(directory, "installation.json")));
             var assembly = runtime.StartsWith("win-") ? Path.ChangeExtension(executable, ".dll") : executable + ".dll";
             return manifest == installed && System.Reflection.AssemblyName.GetAssemblyName(assembly).Version?.ToString(3) == installed.Version ? executable : null;

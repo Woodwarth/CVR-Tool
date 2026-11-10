@@ -17,7 +17,8 @@ public sealed partial class CvrLanBackend
         if (raw.Length != 141 || raw[140] > 1)
             throw new NotSupportedException("Unsupported CVR input filter format.");
         var bands = Enumerable.Range(1, 8).Select(n => new EqualizerBand(n, Float(raw, n * 14 + 5), Float(raw, n * 14 + 1), Float(raw, n * 14 + 9), unchecked((sbyte)raw[n * 14]) >= 0, raw[n * 14] < 128 ? raw[n * 14] : 255 - raw[n * 14])).ToArray();
-        return (new(channel, delay, raw[140] == 0, bands), raw);
+        CrossoverFilter Crossover(int offset) => new(Float(raw, offset + 5), raw[offset] < 128 ? raw[offset] : 255 - raw[offset], raw[offset] < 128);
+        return (new(channel, delay, raw[140] == 0, bands, Crossover(0), Crossover(126)), raw);
     }
     public (InputProcessingState State, long Revision) GetInputProcessing(string deviceId, int channel)
     {
@@ -39,7 +40,7 @@ public sealed partial class CvrLanBackend
             var ch = Channel(change.Channel, true);
             if (change.DelayMs is not null)
                 Write(14, FloatBytes(after.DelayMs), ch);
-            if (change.Bands is not null || change.EqEnabled is not null)
+            if (change.Bands is not null || change.EqEnabled is not null || change.HighPass is not null || change.LowPass is not null)
             {
                 var raw = before.Raw.ToArray();
                 raw[140] = (byte)(after.EqEnabled ? 0 : 1);
@@ -54,6 +55,15 @@ public sealed partial class CvrLanBackend
                         FloatBytes(band.FrequencyHz).CopyTo(raw, offset + 5);
                         FloatBytes(band.Q).CopyTo(raw, offset + 9);
                     }
+                void Crossover(int offset, CrossoverFilter? filter)
+                {
+                    if (filter is null)
+                        return;
+                    raw[offset] = unchecked((byte)(filter.Enabled ? filter.FilterType : -filter.FilterType - 1));
+                    FloatBytes(filter.FrequencyHz).CopyTo(raw, offset + 5);
+                }
+                Crossover(0, change.HighPass);
+                Crossover(126, change.LowPass);
                 Write(52, raw, ch);
             }
             return ReadInput(change.Channel).State;

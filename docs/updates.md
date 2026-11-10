@@ -24,4 +24,8 @@ signature. Windows signing and Mac notarization remain unconfigured.
 Metadata follows the [GitHub Releases API](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)
 and its [asset digest](https://docs.github.com/en/rest/releases/assets#get-a-release-asset).
 Graphical peak EQ preview uses the [RBJ/W3C equations](https://www.w3.org/TR/audio-eq-cookbook/)
-at an explicit 48 kHz. Unknown device filter types do not receive an invented curve.
+at an explicit 48 kHz. HP/LP previews use bilinear-warped Butterworth and
+Linkwitz-Riley magnitudes and phase-normalized reverse Bessel polynomials
+([normalization reference](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.besselap.html)).
+Preview normalization is not a claim about physical firmware coefficients.
+Unknown device filter types do not receive an invented curve.

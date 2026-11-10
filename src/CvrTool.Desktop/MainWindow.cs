@@ -129,10 +129,7 @@ public sealed partial class MainWindow : Window
             ("Main", "⌂"),
             ("Inputs", "◉"),
             ("Outputs", "◖"),
-            ("EQ", "≋"),
-            ("FIR", "∿"),
-            ("Presets", "☰"),
-            ("Network", "⌁")
+            ("Presets", "☰")
         }
 
         )
@@ -161,10 +158,7 @@ public sealed partial class MainWindow : Window
         {
             "Inputs" => InputsPage(),
             "Outputs" => OutputsPage(),
-            "EQ" => EqReferencePage(),
-            "FIR" => FirPage(),
             "Presets" => PresetsPage(),
-            "Network" => NetworkPage(),
             _ => MainPage()
         };
     }

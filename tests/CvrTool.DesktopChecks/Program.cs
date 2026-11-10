@@ -40,6 +40,7 @@ Layout(); Save("main-1004");
 var fourChannelSize = Tagged<Border>("input-channel-A").Bounds.Size;
 Check(window.Icon is not null, "Window icon loads from embedded application assets");
 Check(All<TextBlock>().Count(t => t.Tag?.ToString()?.StartsWith("info-") == true) == 4, "Compact UI identity header keeps source documentation out of the interface");
+Check(!Text("Changes apply immediately") && !Text("No live measurements"), "Main section footer hints are removed");
 Check(!All<GainReadout>().Any() && !All<TextBox>().Any() && Tagged<TextBlock>("gain-A").Text == "0.0 dB", "Main gains are plain text without textbox borders or edit controls");
 var mainSlider = All<Slider>().First();
 mainSlider.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Up }); Layout();
@@ -121,14 +122,7 @@ Save("main-2002"); Save("main-small", 1080, 680);
 Click("◉   Inputs"); Check(All<RoutingDial>().Count() == 4, "DSP-2002 exposes the same two-channel matrix features");
 Device("demo-1502");
 Check(All<RoutingDial>().Count() == 4, "DSP-1502 has four editable circles"); Save("routing-1502");
-Click("≋   EQ"); Check(Enumerable.Range(1, 8).All(n => Text("EQ " + n)), "Eight reference EQ bands"); Save("eq-reference");
-var firArgument = Array.IndexOf(args, "--fir");
-if (firArgument >= 0)
-{
-    using var stream = File.OpenRead(args[firArgument + 1]);
-    window.ShowFirFile(Path.GetFileName(args[firArgument + 1]), CvrTool.Application.FirFileAnalyzer.AnalyzeAsync(stream).GetAwaiter().GetResult());
-    Layout(); Save("fir-preview"); Check(Text("512 coefficients") && Text("Phase · Wrapped"), "English FIR preview includes coefficient count and phase");
-}
+Check(!All<Button>().Any(b=>b.Content?.ToString() is "≋   EQ" or "∿   FIR" or "⌁   Network"), "EQ, FIR and Network tabs are removed");
 var presetArgument = Array.IndexOf(args, "--preset");
 if (presetArgument >= 0)
 {
@@ -138,13 +132,6 @@ if (presetArgument >= 0)
     Layout(); Save("native-preset"); Check(Text("Read-only preview"), "Native preset inspection remains read-only");
     Device("demo-2002"); Check(Text("differs from"), "Native model mismatch is flagged");
 }
-Click("⌁   Network");
-All<TextBox>().Single(t => t.PlaceholderText == "Amplifier IPv4 address").Text = "192.0.2.10";
-All<TextBox>().Single(t => t.PlaceholderText == "Local interface IPv4 address").Text = "192.0.2.20";
-Click("Validate configuration"); Check(Text("LAN target prepared"), "Offline network target validates in English");
-Check(Button("Connect").IsEnabled, "Manual connection is available without scanning"); Save("network-preparation");
-Click("⌂   Main"); Click("⌁   Network"); Check(All<TextBox>().Any(t => t.Text == "192.0.2.10"), "Network draft survives navigation");
-All<TextBox>().Single(t => t.PlaceholderText == "Amplifier IPv4 address").Text = "localhost"; Click("Validate configuration"); Check(Text("Invalid configuration:"), "Hostname rejected without DNS");
 // Uniform scaling preserves design positions and card dimensions at every supported size.
 Device("demo-1004"); Click("⌂   Main");
 foreach (var (width, height) in new[] { (1008,588), (1080,720), (1680,980), (1920,1080) })
@@ -180,12 +167,21 @@ var eqEditor = window.OwnedWindows.Single();
 Press(Tagged<Button>("input-eq-1")); Check(window.OwnedWindows.Count==1 && ReferenceEquals(eqEditor,window.OwnedWindows.Single()), "Repeated EQ clicks activate the existing editor");
 var graph=eqEditor.GetLogicalDescendants().OfType<EqualizerGraph>().Single();
 graph.MoveBand(1,1000,6);
+var hpType=eqEditor.GetLogicalDescendants().OfType<ComboBox>().Single(n=>n.Tag?.ToString()=="hp-type");
+var lpType=eqEditor.GetLogicalDescendants().OfType<ComboBox>().Single(n=>n.Tag?.ToString()=="lp-type");
+Check(hpType.Items.Count==11 && lpType.Items.Count==11,"HP and LP offer all eleven reference filter choices");
+hpType.SelectedItem=CrossoverFilters.Options.Single(o=>o.ShortName=="LR-24");lpType.SelectedItem=CrossoverFilters.Options.Single(o=>o.ShortName=="BE-48");
+eqEditor.GetLogicalDescendants().OfType<CheckBox>().Single(n=>n.Tag?.ToString()=="hp-enabled").IsChecked=true;
+eqEditor.GetLogicalDescendants().OfType<CheckBox>().Single(n=>n.Tag?.ToString()=="lp-enabled").IsChecked=true;
+graph.MoveCrossover(true,80);graph.MoveCrossover(false,16000);
+Check(eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="hp-frequency").Value==80 && eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="lp-frequency").Value==16000,"Crossover graph handles synchronize cutoff fields");
 Check(eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="eq-frequency-1").Value==1000 && eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="eq-gain-1").Value==6,"Graph handles synchronize numeric EQ draft fields");
-using(var renderedEq = new RenderTargetBitmap(new PixelSize(1160,800))) { eqEditor.Measure(new Size(1160,800));eqEditor.Arrange(new Rect(0,0,1160,800));eqEditor.UpdateLayout();renderedEq.Render(eqEditor);renderedEq.Save("artifacts/input-eq-graph.png",PngBitmapEncoderOptions.Default); }
+using(var renderedEq = new RenderTargetBitmap(new PixelSize(1400,800))) { eqEditor.Measure(new Size(1400,800));eqEditor.Arrange(new Rect(0,0,1400,800));eqEditor.UpdateLayout();renderedEq.Render(eqEditor);renderedEq.Save("artifacts/input-eq-graph.png",PngBitmapEncoderOptions.Default); }
 eqEditor.GetLogicalDescendants().OfType<CheckBox>().Single(b=>b.Tag?.ToString()=="input-eq-enabled").IsChecked=false;
 eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(b=>b.Tag?.ToString()=="eq-gain-1").Value=3;
 eqEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-input-eq").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Layout();
-Check(Preset().Inputs![0] is { EqEnabled:false } processed && processed.Bands[0].GainDb == 3, "Input EQ dialog applies enable state and band edits");
+var processed=Preset().Inputs![0];
+Check(!processed.EqEnabled && processed.Bands[0].GainDb==3 && processed.HighPass is {FrequencyHz:80,FilterType:6,Enabled:true} && processed.LowPass is {FrequencyHz:16000,FilterType:9,Enabled:true},"Input EQ applies bands, HP and LP through the shared service");
 Click("◉   Inputs");
 Tagged<GainReadout>("routing-output-gain-A").Value=-4;
 Check(Preset().Outputs[0].GainDb == -4, "Inputs output gain is editable and persists");

@@ -38,7 +38,9 @@ Channels and segments are zero-based on the wire.
 
 The filter block contains ten packed 14-byte records and one global bypass
 byte. Each record: signed type, float gain, float frequency, float Q, reset
-byte. Records 1..8 are EQ; first/last are crossovers and are preserved.
+byte. Records 1..8 are EQ; first/last are HP/LP crossovers; untouched fields are preserved.
+Their signed type IDs map to BW-12, BE-12, LR-12, BW-18, BW-24, BE-24,
+LR-24, BW-36, BW-48, BE-48 and LR-48 (0 through 10).
 Negative type encodes disabled as -type-1; global bypass 0 means enabled.
 No filter type is inferred from screenshot appearance.
 

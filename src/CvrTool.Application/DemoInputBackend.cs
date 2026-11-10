@@ -17,7 +17,7 @@ public sealed partial class DemoBackend
         {
             var frequencies = new[] { 60, 132, 290, 639, 1406, 3092, 6803, 14966 };
             states = Enumerable.Range(1, device.Capabilities.OutputCount).Select(channel => new InputProcessingState(channel, 0, true,
-                frequencies.Select((frequency, band) => new EqualizerBand(band + 1, frequency, 0, 1.41)).ToArray())).ToArray();
+                frequencies.Select((frequency, band) => new EqualizerBand(band + 1, frequency, 0, 1.41)).ToArray(), new CrossoverFilter(20), new CrossoverFilter(20000))).ToArray();
             inputs.Add(id, states);
         }
         return states;

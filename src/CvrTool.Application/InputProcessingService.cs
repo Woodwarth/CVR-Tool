@@ -19,8 +19,8 @@ public sealed partial class AmplifierService
     {
         if (change.DelayMs is { } delay && (!double.IsFinite(delay) || delay is < 0 or > 100))
             throw new ArgumentOutOfRangeException(nameof(change), "Input delay must be between 0 and 100 ms.");
-        if (change.DelayMs is null && change.EqEnabled is null && change.Bands is null)
-            throw new ArgumentException("Supply delay, EQ enable state or EQ bands.");
+        if (change.DelayMs is null && change.EqEnabled is null && change.Bands is null && change.HighPass is null && change.LowPass is null)
+            throw new ArgumentException("Supply delay, EQ or crossover settings.");
         var bands = change.Bands ?? before.Bands;
         if (bands.Count != 8 || !bands.Select(b => b.Number).Order().SequenceEqual(Enumerable.Range(1, 8)))
             throw new ArgumentException("Input EQ requires exactly eight uniquely numbered bands.");
@@ -33,11 +33,18 @@ public sealed partial class AmplifierService
                 !double.IsFinite(band.Q) || band.Q is < .1 or > 20)
                 throw new ArgumentOutOfRangeException(nameof(change), "EQ ranges: 20–20,000 Hz, −18 to +18 dB, Q 0.1–20.");
         }
+        foreach (var filter in new[] { change.HighPass, change.LowPass }.OfType<CrossoverFilter>())
+            if (!double.IsFinite(filter.FrequencyHz) || filter.FrequencyHz is < 20 or > 20000 || !CrossoverFilters.Options.Any(o => o.Code == filter.FilterType))
+                throw new ArgumentOutOfRangeException(nameof(change), "Crossover cutoff must be 20–20,000 Hz with a supported type.");
+        if ((change.HighPass is not null && before.HighPass is null) || (change.LowPass is not null && before.LowPass is null))
+            throw new NotSupportedException("Crossover state has not been observed on this backend.");
         return before with
         {
             DelayMs = change.DelayMs ?? before.DelayMs,
             EqEnabled = change.EqEnabled ?? before.EqEnabled,
-            Bands = bands.OrderBy(b => b.Number).ToArray()
+            Bands = bands.OrderBy(b => b.Number).ToArray(),
+            HighPass = change.HighPass ?? before.HighPass,
+            LowPass = change.LowPass ?? before.LowPass
         };
     }
 

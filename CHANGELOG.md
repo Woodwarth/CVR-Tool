@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Add HP/LP crossover cards, cutoff handles, bypass and a combined EQ response preview.
+- Include all eleven reference choices: Butterworth 12/18/24/36/48, Bessel 12/24/48 and Linkwitz-Riley 12/24/48 dB/octave.
+- Share crossover edits through Application, MCP, local models and confirmed CVR readback.
+- Remove the two Main section footer hints and the EQ, FIR and Network tabs.
+- Keep EQ editing under Inputs and manual amplifier connections through MCP.
+
 ## 0.4.0
 
 - Check GitHub for native stable updates, verify SHA-256, stage and restart without extra software.

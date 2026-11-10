@@ -53,6 +53,15 @@ internal static class CvrPeerChecks
         check(updated.DelayMs == 10 && !updated.EqEnabled && updated.Bands[0].GainDb == 3, "Input delay and EQ use readback");
         var raw = peer.Values[(52, 0, 0, 0)];
         check(filters[..14].SequenceEqual(raw[..14]) && filters[126..140].SequenceEqual(raw[126..140]) && raw[14] == filters[14] && raw[27] == filters[27], "EQ writes preserve crossover, filter type and reset fields");
+        var bandsBeforeCrossover = raw[14..126].ToArray();
+        foreach (var option in CrossoverFilters.Options)
+        {
+            var hp = new CrossoverFilter(80, option.Code, true);
+            var lp = new CrossoverFilter(16000, option.Code, false);
+            var crossover = service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, HighPass: hp, LowPass: lp)).Id);
+            var observed = peer.Values[(52, 0, 0, 0)];
+            check(crossover.HighPass == hp && crossover.LowPass == lp && observed[0] == option.Code && observed[126] == 255 - option.Code && observed[14..126].SequenceEqual(bandsBeforeCrossover), "Crossover type/frequency/bypass readback preserves EQ: " + option.ShortName);
+        }
         check(service.RenameDevice(id, "Bench amp").Name == "Bench amp", "Device name write is read back through basic identity");
         check(service.SetControlState(id, displayLocked: true, standby: true) == new DeviceControlState(true, true), "Lock and standby round-trip");
         var readings = service.GetTelemetry(id);

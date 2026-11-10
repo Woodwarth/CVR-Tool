@@ -114,6 +114,12 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         assert after["DelayMs"] == 10 and not after["EqEnabled"] and after["Bands"][0]["GainDb"] == 3
         a.reject("apply_change", planId=stale["Id"])
         b.reject("apply_input_processing", planId=input_plan["Id"])
+        crossover = b.call("plan_input_processing", deviceId="demo-2002", channel=1,
+            highPass={"FrequencyHz":80,"FilterType":6,"Enabled":True},lowPass={"FrequencyHz":16000,"FilterType":9,"Enabled":False})
+        b.call("apply_input_processing",planId=crossover["Id"])
+        processed = a.call("get_input_processing",deviceId="demo-2002",channel=1)
+        assert processed["HighPass"] == {"FrequencyHz":80,"FilterType":6,"Enabled":True}
+        assert processed["LowPass"] == {"FrequencyHz":16000,"FilterType":9,"Enabled":False}
         a.call("rename_device", deviceId="demo-2002", name="Front amp")
         assert b.call("get_device", deviceId="demo-2002")["Name"] == "Front amp"
         a.call("set_device_controls", deviceId="demo-2002", displayLocked=True, standby=True)

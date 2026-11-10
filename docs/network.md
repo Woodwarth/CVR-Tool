@@ -6,7 +6,7 @@ controller are amplifier 45455 and controller 45454. Close other controllers
 if they already occupy the source port. No DNS, broadcast discovery, scanning,
 automatic reconnection, firmware transfer or retrying writes is implemented.
 
-Connect from the Network page or MCP `connect_amplifier`. Connection reads
+Connect through MCP `connect_amplifier`; the Network tab was removed in v0.5.0. Connection reads
 identity and all output settings before exposing the device. Only two-/four-
 channel identity layouts are accepted. An unsupported response fails instead
 of exposing simulated parameter defaults. The original offline preparation
@@ -29,7 +29,8 @@ Different firmware can reject a query; unsupported paths report errors.
 
 Device-side names currently use ASCII, 1–32 bytes. Readback confirms the current
 name; retention across a power cycle depends on firmware and is untested.
-Input filter edits preserve crossover records, type codes and reset bytes.
+Input filter edits preserve unedited crossover records, EQ type codes and reset bytes.
+Explicit HP/LP changes edit type/bypass and cutoff in records 0 and 9.
 The editor changes frequency/gain/Q/enable state, not filter type. Application
 edit ranges are conservative limits, not verified physical model specifications.
 

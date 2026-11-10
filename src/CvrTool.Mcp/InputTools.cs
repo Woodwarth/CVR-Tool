@@ -15,8 +15,8 @@ public sealed partial class AmplifierTools
     [Description("Read per-input delay, EQ enable state and eight EQ bands from the shared application session.")]
     public string GetInputProcessing(string deviceId, int channel) => Json(service.GetInputProcessing(deviceId, channel));
     [McpServerTool(Name = "plan_input_processing")]
-    [Description("Preview input delay/EQ edits. Delay in ms; EQ band fields: Number, FrequencyHz, GainDb, Q, Enabled.")]
-    public string PlanInputProcessing(string deviceId, int channel, double? delayMs = null, bool? eqEnabled = null, EqualizerBand[]? bands = null) => Json(service.PlanInputProcessing(new(deviceId, channel, delayMs, eqEnabled, bands)));
+    [Description("Preview input delay/EQ edits. Delay in ms; EQ band fields: Number, FrequencyHz, GainDb, Q, Enabled. highPass/lowPass: FrequencyHz, FilterType (0–10), Enabled.")]
+    public string PlanInputProcessing(string deviceId, int channel, double? delayMs = null, bool? eqEnabled = null, EqualizerBand[]? bands = null, CrossoverFilter? highPass = null, CrossoverFilter? lowPass = null) => Json(service.PlanInputProcessing(new(deviceId, channel, delayMs, eqEnabled, bands, highPass, lowPass)));
     [McpServerTool(Name = "apply_input_processing")]
     [Description("Apply a previously previewed input processing plan. Single-use, two-minute expiry and revision checks.")]
     public string ApplyInputProcessing(string planId) => Json(service.ApplyInputProcessing(Guid.Parse(planId)));
