@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "dotnet.defaultSolution": "CvrTool.slnx"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-dotnettools.csharp",
+      "AvaloniaTeam.vscode-avalonia",
+      "openai.chatgpt"
+    ]
+  }
+}

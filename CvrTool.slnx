@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CvrTool.Core/CvrTool.Core.csproj"/>
+    <Project Path="src/CvrTool.Application/CvrTool.Application.csproj"/>
+    <Project Path="src/CvrTool.Protocol/CvrTool.Protocol.csproj"/>
+    <Project Path="src/CvrTool.Desktop/CvrTool.Desktop.csproj"/>
+    <Project Path="src/CvrTool.Mcp/CvrTool.Mcp.csproj"/>
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CvrTool.Checks/CvrTool.Checks.csproj"/>
+    <Project Path="tests/CvrTool.NetworkChecks/CvrTool.NetworkChecks.csproj"/>
+  </Folder>
+</Solution>

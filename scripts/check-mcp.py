@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""Exercise two MCP clients against one shared owner, without a --demo gate."""
+import contextlib
+import json
+import os
+import pathlib
+import queue
+import subprocess
+import sys
+import tempfile
+import threading
+import uuid
+
+root = pathlib.Path(__file__).resolve().parent.parent
+configuration = sys.argv[1] if len(sys.argv) > 1 else "Debug"
+executable = os.environ.get("CVR_MCP_EXECUTABLE")
+base = [executable] if executable else ["dotnet", str(root / f"src/CvrTool.Mcp/bin/{configuration}/net10.0/CvrTool.Mcp.dll")]
+integrated = os.environ.get("CVR_MCP_INTEGRATED") == "1"
+session = "cvr-check-" + uuid.uuid4().hex
+
+class Client:
+    def __init__(self, errors):
+        command = base + (["--mcp"] if integrated else []) + ["--session", session]
+        self.process = subprocess.Popen(command, cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=errors, text=True, encoding="utf-8", bufsize=1)
+        self.queue = queue.Queue()
+        self.number = 0
+        def read():
+            for line in self.process.stdout:
+                self.queue.put(line)
+            self.queue.put(None)
+        threading.Thread(target=read, daemon=True).start()
+        self.request("initialize", {"protocolVersion": "2025-11-25", "capabilities": {},
+            "clientInfo": {"name": "cvr-check", "version": "0.3.0"}})
+        self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+    def send(self, value):
+        self.process.stdin.write(json.dumps(value) + "\n")
+        self.process.stdin.flush()
+    def request(self, method, params):
+        self.number += 1
+        self.send({"jsonrpc": "2.0", "id": self.number, "method": method, "params": params})
+        while True:
+            line = self.queue.get(timeout=30)
+            if line is None:
+                raise RuntimeError("MCP process exited before replying")
+            response = json.loads(line)
+            if response.get("id") == self.number:
+                if "error" in response:
+                    raise RuntimeError(str(response["error"]))
+                return response["result"]
+    def call(self, tool_name, **arguments):
+        result = self.request("tools/call", {"name": tool_name, "arguments": arguments})
+        if result.get("isError"):
+            raise RuntimeError(str(result))
+        return json.loads("".join(c.get("text", "") for c in result["content"] if c["type"] == "text"))
+    def reject(self, tool_name, **arguments):
+        assert self.request("tools/call", {"name": tool_name, "arguments": arguments}).get("isError"), tool_name
+    def close(self):
+        self.process.terminate()
+        try:
+            self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
+
+with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.ExitStack() as cleanup:
+    owner = subprocess.Popen(base + ["--host-session", "--session", session], cwd=root,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=errors)
+    def stop_owner():
+        owner.terminate()
+        try:
+            owner.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            owner.kill()
+            owner.wait()
+    cleanup.callback(stop_owner)
+    try:
+        a = Client(errors); cleanup.callback(a.close)
+        b = Client(errors); cleanup.callback(b.close)
+        names = {tool["name"] for tool in a.request("tools/list", {})["tools"]}
+        expected = {"list_devices", "get_device", "plan_channel_change", "apply_change", "export_preset",
+            "rename_device", "get_routing", "get_telemetry", "plan_routing_change", "apply_routing_change",
+            "connect_amplifier", "disconnect_amplifier", "get_device_controls", "set_device_controls", "get_input_processing", "plan_input_processing", "apply_input_processing"}
+        assert expected <= names, names
+        a.reject("connect_amplifier", address="localhost", localAddress="127.0.0.1")
+        devices = a.call("list_devices")
+        assert {len(d["Outputs"]) for d in devices} == {2, 4}
+        assert all(d["Capabilities"]["InputCount"] == len(d["Outputs"]) for d in devices)
+        for device in devices:
+            routing = a.call("get_routing", deviceId=device["Id"])
+            assert len(routing["Cells"]) == len(device["Outputs"]) ** 2
+        plan = a.call("plan_channel_change", deviceId="demo-2002", channel=2, gainDb=-6)
+        assert b.call("get_device", deviceId="demo-2002")["Outputs"][1]["GainDb"] == 0
+        a.call("apply_change", planId=plan["Id"])
+        assert b.call("get_device", deviceId="demo-2002")["Outputs"][1]["GainDb"] == -6
+        a.reject("apply_change", planId=plan["Id"])
+        route = b.call("plan_routing_change", deviceId="demo-2002", input=2, output=1, gainDb=-80, muted=False)
+        b.call("apply_routing_change", planId=route["Id"])
+        routed = a.call("get_routing", deviceId="demo-2002")
+        assert next(c for c in routed["Cells"] if c["Input"] == 2 and c["Output"] == 1)["GainDb"] == -80
+        before = a.call("get_input_processing", deviceId="demo-2002", channel=1)
+        bands = before["Bands"]
+        bands[0]["GainDb"] = 3
+        input_plan = b.call("plan_input_processing", deviceId="demo-2002", channel=1, delayMs=10, eqEnabled=False, bands=bands)
+        assert a.call("get_input_processing", deviceId="demo-2002", channel=1)["DelayMs"] == 0
+        stale = a.call("plan_channel_change", deviceId="demo-2002", channel=1, gainDb=-2)
+        b.call("apply_input_processing", planId=input_plan["Id"])
+        after = a.call("get_input_processing", deviceId="demo-2002", channel=1)
+        assert after["DelayMs"] == 10 and not after["EqEnabled"] and after["Bands"][0]["GainDb"] == 3
+        a.reject("apply_change", planId=stale["Id"])
+        b.reject("apply_input_processing", planId=input_plan["Id"])
+        a.call("rename_device", deviceId="demo-2002", name="Front amp")
+        assert b.call("get_device", deviceId="demo-2002")["Name"] == "Front amp"
+        a.call("set_device_controls", deviceId="demo-2002", displayLocked=True, standby=True)
+        assert b.call("get_device_controls", deviceId="demo-2002") == {"DisplayLocked": True, "Standby": True}
+        telemetry = a.call("get_telemetry", deviceId="demo-2002")
+        assert len(telemetry) == 2 and all(t["Voltage"] is None for t in telemetry)
+        exported = b.call("export_preset", deviceId="demo-2002")
+        assert exported["SchemaVersion"] == 3 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
+        print("PASS: MCP without demo flag, two shared clients, uniform models, channel/routing/input edits, revision conflicts, rename, controls and schema 3 export")
+    except Exception:
+        errors.seek(0)
+        print(errors.read(), file=sys.stderr)
+        raise

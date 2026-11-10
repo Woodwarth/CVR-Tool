@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "CVR Tool · Desktop Demo",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "CVR: build",
+      "program": "${workspaceFolder}/src/CvrTool.Desktop/bin/Debug/net10.0/CvrTool.Desktop.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

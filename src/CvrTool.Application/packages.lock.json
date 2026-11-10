@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "cvrtool.core": {
+        "type": "Project"
+      },
+      "cvrtool.protocol": {
+        "type": "Project",
+        "dependencies": {
+          "CvrTool.Core": "[0.1.0, )"
+        }
+      }
+    }
+  }
+}

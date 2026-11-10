@@ -1,0 +1,23 @@
+// MCP / Input processing tools
+// Purpose: inspect and edit input delay and eight-band EQ.
+// Units: milliseconds, hertz, decibels and Q; distance is a UI conversion.
+// State: preview/apply shares whole-device revisions with all other edits.
+// Scope: identical API on two- and four-channel amplifiers.
+using System.ComponentModel;
+using CvrTool.Core;
+using ModelContextProtocol.Server;
+
+namespace CvrTool.Mcp;
+
+public sealed partial class AmplifierTools
+{
+    [McpServerTool(Name = "get_input_processing")]
+    [Description("Read per-input delay, EQ enable state and eight EQ bands from the shared application session.")]
+    public string GetInputProcessing(string deviceId, int channel) => Json(service.GetInputProcessing(deviceId, channel));
+    [McpServerTool(Name = "plan_input_processing")]
+    [Description("Preview input delay/EQ edits. Delay in ms; EQ band fields: Number, FrequencyHz, GainDb, Q, Enabled.")]
+    public string PlanInputProcessing(string deviceId, int channel, double? delayMs = null, bool? eqEnabled = null, EqualizerBand[]? bands = null) => Json(service.PlanInputProcessing(new(deviceId, channel, delayMs, eqEnabled, bands)));
+    [McpServerTool(Name = "apply_input_processing")]
+    [Description("Apply a previously previewed input processing plan. Single-use, two-minute expiry and revision checks.")]
+    public string ApplyInputProcessing(string planId) => Json(service.ApplyInputProcessing(Guid.Parse(planId)));
+}

@@ -1,0 +1,84 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CVR: restore",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "restore",
+        "CvrTool.slnx",
+        "--configfile",
+        "NuGet.Config"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "CVR: build",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "CvrTool.slnx",
+        "--no-restore"
+      ],
+      "dependsOn": "CVR: restore",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "CVR: checks",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "tests/CvrTool.Checks",
+        "--no-build"
+      ],
+      "dependsOn": "CVR: build",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "CVR: network checks (loopback only)",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["run", "--project", "tests/CvrTool.NetworkChecks", "--no-build"],
+      "dependsOn": "CVR: build",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "CVR: desktop demo",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "src/CvrTool.Desktop",
+        "--no-build"
+      ],
+      "dependsOn": "CVR: build",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

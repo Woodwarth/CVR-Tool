@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../CvrTool.Core/CvrTool.Core.csproj"/>
+    <ProjectReference Include="../CvrTool.Protocol/CvrTool.Protocol.csproj"/>
+  </ItemGroup>
+</Project>
