@@ -45,9 +45,11 @@ internal static class AppUpdateLifecycle
             throw new ArgumentException("Invalid update handoff.");
         try
         {
+            Console.Error.WriteLine("CVR update: waiting for previous owner to exit.");
             using var previous = Process.GetProcessById(pid);
             if (!previous.WaitForExit(120000))
                 throw new TimeoutException("The previous app has not exited; launch the update again after closing it.");
+            Console.Error.WriteLine("CVR update: previous owner exited.");
         }
         catch (ArgumentException) { /* The previous owner has already exited. */ }
         return arguments.Skip(2).ToArray();

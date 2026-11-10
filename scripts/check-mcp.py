@@ -19,6 +19,7 @@ integrated = os.environ.get("CVR_MCP_INTEGRATED") == "1"
 handoff = None
 if os.environ.get("CVR_MCP_HANDOFF") == "1":
     handoff = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(1)"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    threading.Thread(target=handoff.wait, daemon=True).start()
     base += ["--finish-update", str(handoff.pid)]
 session = "cvr-check-" + uuid.uuid4().hex
 
