@@ -1,4 +1,4 @@
-# Validation — version 0.6.2
+# Validation — version 0.6.3
 
 Windows x64 / .NET SDK 10.0.403:
 
@@ -8,7 +8,7 @@ Windows x64 / .NET SDK 10.0.403:
 - 93 network checks: independent loopback gate/limiter payloads and aggregate
   readback, bridge pair addressing, active-low flags, immutable limits, explicit
   readback rejection, FIR fragmentation and existing network/session checks.
-- 115 desktop checks: per-output Low-Z/70V/100V editor, matched Trim/Mute blocks, gate On/Off and dB, both limiter
+- 118 desktop checks: per-output Low-Z/70V/100V editor, shared tiles/headings, A/B and C/D bridge editors, matched Trim/Mute blocks, gate On/Off and dB, both limiter
   sections, automatic timing, single editor activation and existing UI behavior.
 - Shared-session stdio MCP verifies mode, gate, RMS/peak, full presets and
   previous channel/routing/input/output operations through two shared clients.
@@ -16,6 +16,9 @@ Windows x64 / .NET SDK 10.0.403:
   alongside existing Main, Inputs, Presets, EQ and FIR rendering checks.
 - Two private native CVR exports (DSP-1004/DSP-1502) were decoded, applied to local
   models and exported byte-for-byte unchanged. Files remain outside Git.
+
+The README preview is a direct rendering of our local-demo Outputs controls;
+it contains no physical-device measurements or private captures.
 
 Release packages contain one shared runtime and exclude PDB debug symbols.
 Both integrated desktop `--mcp` and the adjacent optional MCP apphost are checked.

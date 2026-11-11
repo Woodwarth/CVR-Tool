@@ -19,6 +19,9 @@ Get-ChildItem -LiteralPath $desktopRoot -Recurse -File -Filter '*.pdb' | ForEach
     Remove-Item -LiteralPath $_.FullName
 }
 Copy-Item LICENSE,README.md,CHANGELOG.md -Destination $stage
+$previewDirectory = Join-Path $stage 'docs/images'
+New-Item -ItemType Directory -Path $previewDirectory -Force | Out-Null
+Copy-Item -LiteralPath 'docs/images/outputs.png' -Destination $previewDirectory
 $startReadme = @'
 # CVR Tool
 

@@ -150,6 +150,16 @@ modeEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=
 var dynamicsPreset=Preset();Check(dynamicsPreset.Dynamics![0].LoadMode==1 && dynamicsPreset.Dynamics[1].LoadMode==0 && !dynamicsPreset.Dynamics[0].Bridged,"Mode edits affect one output without switching bridge");
 Click("◖   Outputs");
 Check(Math.Abs(Tagged<Border>("output-trim-A").Bounds.Height-76)<.1 && Math.Abs(Tagged<ToggleButton>("mute-editor-A").Bounds.Height-76)<.1 && Math.Abs(Tagged<ToggleButton>("mute-editor-A").Bounds.Width-Tagged<Button>("output-mode-A").Bounds.Width)<1.1,"Trim and symbol-only mute align with the output blocks");
+Press(Tagged<Button>("output-bridge-A"));var bridgeEditor=window.OwnedWindows.Single();Press(Tagged<Button>("output-bridge-B"));
+Check(window.OwnedWindows.Count==1 && ReferenceEquals(bridgeEditor,window.OwnedWindows.Single()),"A/B share one stereo/bridge editor");
+bridgeEditor.GetLogicalDescendants().OfType<ComboBox>().Single(c=>c.Tag?.ToString()=="output-bridge-choice").SelectedIndex=1;
+bridgeEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-output-bridge").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
+var bridgePreset=Preset();Check(bridgePreset.Dynamics![0].Bridged && bridgePreset.Dynamics[1].Bridged && !bridgePreset.Dynamics[2].Bridged && bridgePreset.Dynamics[0].LoadMode==1,"Bridge updates A/B together, preserves C/D and retains load mode");
+Click("◖   Outputs");Press(Tagged<Button>("output-bridge-D"));bridgeEditor=window.OwnedWindows.Single();
+bridgeEditor.GetLogicalDescendants().OfType<ComboBox>().Single(c=>c.Tag?.ToString()=="output-bridge-choice").SelectedIndex=1;
+bridgeEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-output-bridge").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
+Check(Preset().Dynamics!.All(d=>d.Bridged),"C/D stereo/bridge editor operates its own pair");
+Click("◖   Outputs");
 Tagged<ToggleButton>("mute-editor-A").IsChecked=true;Layout();
 Check(Preset().Outputs[0].Muted,"Styled output mute still commits immediately");
 Click("◖   Outputs");Tagged<ToggleButton>("mute-editor-A").IsChecked=false;Layout();

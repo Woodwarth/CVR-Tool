@@ -4,13 +4,15 @@ A cross-platform desktop app with integrated MCP for CVR DSP amplifiers.
 The interface and functions follow the CVR application, with the same controls
 for two- and four-channel models.
 
+![CVR Tool Outputs view in a local demo session](docs/images/outputs.png)
+
 ## Download
 
 | Platform | Direct download | Start after extracting |
 | --- | --- | --- |
-| Windows x64 · Intel / AMD | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.6.2/CVR-Tool-0.6.2-win-x64.zip) | `START-CVR-TOOL.cmd` |
-| Windows ARM64 · Snapdragon | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.6.2/CVR-Tool-0.6.2-win-arm64.zip) | `START-CVR-TOOL.cmd` |
-| Mac · Apple Silicon | [Download archive](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.6.2/CVR-Tool-0.6.2-osx-arm64.tar.gz) | `CVR Tool.app` |
+| Windows x64 · Intel / AMD | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.6.3/CVR-Tool-0.6.3-win-x64.zip) | `START-CVR-TOOL.cmd` |
+| Windows ARM64 · Snapdragon | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.6.3/CVR-Tool-0.6.3-win-arm64.zip) | `START-CVR-TOOL.cmd` |
+| Mac · Apple Silicon | [Download archive](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.6.3/CVR-Tool-0.6.3-osx-arm64.tar.gz) | `CVR Tool.app` |
 
 [Latest release and checksums](https://github.com/Woodwarth/CVR-Tool/releases/latest).
 Extract the entire package. The runtime is included; no SDK or additional

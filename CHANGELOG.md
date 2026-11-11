@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.3
+
+- Outputs uses equal-size function tiles with one shared heading/value layout.
+- Stereo/Bridge controls at the end of every output row operate A/B or C/D
+  together, independently of the per-output Low-Z/70V/100V selection.
+- GitHub README includes a current local-demo Outputs screenshot, also bundled
+  with the package so the README image remains available offline.
+
+
 ## 0.6.2
 
 - Outputs Mode now selects Low-Z / 70V / 100V per output, using the dedicated

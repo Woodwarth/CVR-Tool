@@ -47,8 +47,9 @@ for compatibility with isolated test clients and does not share GUI state.
   RMS AttackMs is 1..2000; ReleaseMultiplier is 2..32 times attack; Automatic
   selects device timing. Peak HoldMs is 0..2000; ReleaseMs is 20..1000.
   Enabled selects the limiter; MaximumVolts is read-only and bounds thresholds.
-  LoadMode affects only the selected output. The legacy Bridged field remains
-  separate for older clients/presets and still affects an A/B or C/D pair.
+  LoadMode affects only the selected output. The Bridged field remains
+  separate and affects an A/B or C/D pair, matching the end-of-row Stereo/Bridge
+  editor in Outputs.
   Native bridge-coded modes 3–5 are preserved when read, but cannot be requested
   as new LoadMode edits. Older JSON without LoadMode preserves the active mode.
 

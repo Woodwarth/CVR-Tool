@@ -46,7 +46,7 @@ public sealed partial class MainWindow
         return row;
     }
 
-    private static ToggleButton MuteSwitch(bool initial, string name, Action<bool> changed, double width = 32, double height = 28, double glyphSize = 18)
+    private static ToggleButton MuteSwitch(bool initial, string name, Action<bool> changed, double width = 32, double height = 28, double glyphSize = 18, string? heading = null)
     {
         var button = new ToggleButton
         {
@@ -60,7 +60,7 @@ public sealed partial class MainWindow
             CornerRadius = new CornerRadius(5)
         };
         // Keep the checked state red instead of Fluent's default grey selection fill.
-        button.Template = new FuncControlTemplate<ToggleButton>((control, _) => new Border { [!Border.BackgroundProperty] = control[!BackgroundProperty], [!Border.BorderBrushProperty] = control[!BorderBrushProperty], [!Border.CornerRadiusProperty] = control[!CornerRadiusProperty], [!Border.BorderThicknessProperty] = control[!BorderThicknessProperty], Padding = new Thickness(5), Child = new ContentPresenter { [!ContentPresenter.ContentProperty] = control[!ContentProperty], HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center } });
+        button.Template = new FuncControlTemplate<ToggleButton>((control, _) => new Border { [!Border.BackgroundProperty] = control[!BackgroundProperty], [!Border.BorderBrushProperty] = control[!BorderBrushProperty], [!Border.CornerRadiusProperty] = control[!CornerRadiusProperty], [!Border.BorderThicknessProperty] = control[!BorderThicknessProperty], Padding = control.Padding, Child = new ContentPresenter { [!ContentPresenter.ContentProperty] = control[!ContentProperty], HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center } });
         void Paint()
         {
             var isMuted = button.IsChecked == true;
@@ -71,7 +71,7 @@ public sealed partial class MainWindow
                 VerticalAlignment = VerticalAlignment.Center
             };
             content.Children.Add(glyphSize == 18 ? new SpeakerGlyph(isMuted) { Width = 18, Height = 18 } : new Viewbox { Width = glyphSize, Height = glyphSize, Child = new SpeakerGlyph(isMuted) { Width = 20, Height = 18 } });
-            button.Content = content;
+            button.Content = heading is null ? content : OutputBlockContent(heading, content);
             button.Background = Brush.Parse(isMuted ? "#BE3044" : "#182129");
             button.BorderBrush = isMuted ? Brush.Parse("#ED5D6F") : Line;
             AutomationProperties.SetName(button, name + (isMuted ? " muted" : " unmuted"));
