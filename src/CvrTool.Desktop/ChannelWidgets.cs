@@ -46,13 +46,13 @@ public sealed partial class MainWindow
         return row;
     }
 
-    private static ToggleButton MuteSwitch(bool initial, string name, Action<bool> changed)
+    private static ToggleButton MuteSwitch(bool initial, string name, Action<bool> changed, double width = 32, double height = 28, double glyphSize = 18)
     {
         var button = new ToggleButton
         {
             IsChecked = initial,
-            Width = 32,
-            Height = 28,
+            Width = width,
+            Height = height,
             HorizontalAlignment = HorizontalAlignment.Center,
             HorizontalContentAlignment = HorizontalAlignment.Center,
             Padding = new Thickness(5),
@@ -70,7 +70,7 @@ public sealed partial class MainWindow
                 Spacing = 5,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            content.Children.Add(new SpeakerGlyph(isMuted) { Width = 18, Height = 18 });
+            content.Children.Add(glyphSize == 18 ? new SpeakerGlyph(isMuted) { Width = 18, Height = 18 } : new Viewbox { Width = glyphSize, Height = glyphSize, Child = new SpeakerGlyph(isMuted) { Width = 20, Height = 18 } });
             button.Content = content;
             button.Background = Brush.Parse(isMuted ? "#BE3044" : "#182129");
             button.BorderBrush = isMuted ? Brush.Parse("#ED5D6F") : Line;

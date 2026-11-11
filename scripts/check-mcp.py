@@ -127,7 +127,11 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         telemetry = a.call("get_telemetry", deviceId="demo-2002")
         assert len(telemetry) == 2 and all(t["Voltage"] is None for t in telemetry)
         exported = b.call("export_preset", deviceId="demo-2002")
-        assert exported["SchemaVersion"] == 5 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
+        assert exported["SchemaVersion"] == 6 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
+        mode_plan=a.call("plan_output_dynamics",deviceId="demo-2002",channel=1,loadMode=2)
+        a.call("apply_output_dynamics",planId=mode_plan["Id"])
+        assert b.call("get_output_dynamics",deviceId="demo-2002",channel=1)["LoadMode"]==2
+        assert b.call("get_output_dynamics",deviceId="demo-2002",channel=2)["LoadMode"]==0
         dynamics=a.call("get_output_dynamics",deviceId="demo-2002",channel=1)
         dynamics["Rms"].update(ThresholdVolts=60,AttackMs=40,ReleaseMultiplier=8,Automatic=True)
         dynamics["Peak"].update(ThresholdVolts=100,HoldMs=80,ReleaseMs=400)

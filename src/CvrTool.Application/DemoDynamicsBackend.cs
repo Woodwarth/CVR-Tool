@@ -1,5 +1,5 @@
 // Application / Local dynamics model
-// Purpose: store independent gate/limiter values and paired bridge mode.
+// Purpose: store per-output load mode, gate/limiters and legacy paired bridge.
 // Units: output volts, ms, dB and RMS release multiplier.
 // State: mutations and bulk restore share the backend revision and gate.
 // Scope: local reference values do not establish physical amplifier limits.
@@ -14,7 +14,7 @@ public sealed partial class DemoBackend
     {
         var rms = id == "demo-1502" ? 113.1f : 93.8f;
         var peak = id == "demo-1502" ? 159.9f : 132.6f;
-        return new(channel, false, false, -100, new(true, rms, 25, 16, false, rms), new(true, peak, 50, 300, peak));
+        return new(channel, false, false, -100, new(true, rms, 25, 16, false, rms), new(true, peak, 50, 300, peak), 0);
     }
     public (OutputDynamicsState State, long Revision) GetOutputDynamics(string id, int channel)
     {

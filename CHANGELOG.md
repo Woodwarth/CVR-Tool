@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.2
+
+- Outputs Mode now selects Low-Z / 70V / 100V per output, using the dedicated
+  load-mode command instead of the separate paired stereo/bridge command.
+- Trim and symbol-only Mute now match the other output processing blocks.
+- Mode is shared with MCP, device slots and JSON/native presets. Schema 6
+  adds LoadMode; schemas 2–5 retain their current or original native mode.
+- Existing bridge-coded native values are preserved without reinterpretation.
+- Compact self-contained packages and integrated MCP remain unchanged.
+
+
 ## 0.6.1
 
 - Smaller self-contained packages: one shared desktop/MCP runtime and no debug

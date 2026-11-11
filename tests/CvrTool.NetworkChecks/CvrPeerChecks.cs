@@ -62,6 +62,11 @@ internal static class CvrPeerChecks
             var observed = peer.Values[(52, 0, 0, 0)];
             check(crossover.HighPass == hp && crossover.LowPass == lp && observed[0] == option.Code && observed[126] == 255 - option.Code && observed[14..126].SequenceEqual(bandsBeforeCrossover), "Crossover type/frequency/bypass readback preserves EQ: " + option.ShortName);
         }
+        foreach(var mode in new[]{0,1,2})
+        {
+            remoteService.ApplyOutputDynamics(remoteService.PlanOutputDynamics(new(id,1,LoadMode:mode)).Id);
+            check(service.GetOutputDynamics(id,1).LoadMode==mode && service.GetOutputDynamics(id,2).LoadMode==0 && peer.Values[(49,0,0,1)][0]==mode && peer.Values[(50,0,0,1)][0]==1,"Per-output load mode uses function 49 and preserves paired bridge");
+        }
         var dyn=remoteService.GetOutputDynamics(id,1);
         var rmsState=dyn.Rms with {ThresholdVolts=50,AttackMs=40,ReleaseMultiplier=8,Automatic=true,Enabled=false};var peakState=dyn.Peak with {ThresholdVolts=90,HoldMs=150,ReleaseMs=500,Enabled=false};
         remoteService.ApplyOutputDynamics(remoteService.PlanOutputDynamics(new(id,1,Bridged:true,NoiseGateEnabled:true,NoiseGateDb:-65,Rms:rmsState,Peak:peakState)).Id);
@@ -136,7 +141,7 @@ internal static class CvrPeerChecks
             Values[(17, 0, 0, 0)] = [0];
             for (byte ch = 0; ch < 2; ch++)
             {
-                Values[(69,ch,0,1)]=[1];Values[(87,ch,0,1)]=[unchecked((byte)(sbyte)-100)];
+                Values[(49,ch,0,1)]=[0];Values[(69,ch,0,1)]=[1];Values[(87,ch,0,1)]=[unchecked((byte)(sbyte)-100)];
                 var rms=new byte[13];BinaryPrimitives.WriteInt16LittleEndian(rms,25);rms[2]=16;BitConverter.GetBytes(80f).CopyTo(rms,3);rms[8]=1;BitConverter.GetBytes(100f).CopyTo(rms,9);Values[(55,ch,0,1)]=rms;
                 var peak=new byte[13];BinaryPrimitives.WriteInt16LittleEndian(peak,50);BinaryPrimitives.WriteInt16LittleEndian(peak.AsSpan(2),300);BitConverter.GetBytes(120f).CopyTo(peak,4);BitConverter.GetBytes(140f).CopyTo(peak,9);Values[(54,ch,0,1)]=peak;
                 foreach(var (fn,offset,length) in new[]{(37,0,2),(38,2,1),(39,3,4),(46,7,1),(48,8,1)})Values[((byte)fn,ch,0,1)]=rms[offset..(offset+length)];

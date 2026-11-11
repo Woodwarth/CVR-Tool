@@ -1,14 +1,14 @@
-# Validation — version 0.6.1
+# Validation — version 0.6.2
 
 Windows x64 / .NET SDK 10.0.403:
 
-- 228 core checks: paired mode, per-output gate/limiter isolation, read-only
+- 248 core checks: per-output load mode, schema 5 migration, native mode preservation, paired legacy bridge, per-output gate/limiter isolation, read-only
   maximum voltages, timing/range checks, stale/expired plans, complete slot and
   JSON/native restoration, legacy JSON retention and existing processing checks.
-- 90 network checks: independent loopback gate/limiter payloads and aggregate
+- 93 network checks: independent loopback gate/limiter payloads and aggregate
   readback, bridge pair addressing, active-low flags, immutable limits, explicit
   readback rejection, FIR fragmentation and existing network/session checks.
-- 111 desktop checks: paired mode editor, gate On/Off and dB, both limiter
+- 115 desktop checks: per-output Low-Z/70V/100V editor, matched Trim/Mute blocks, gate On/Off and dB, both limiter
   sections, automatic timing, single editor activation and existing UI behavior.
 - Shared-session stdio MCP verifies mode, gate, RMS/peak, full presets and
   previous channel/routing/input/output operations through two shared clients.
@@ -33,7 +33,7 @@ the captured lock command; synthetic compatibility does not prove firmware
 compatibility, timing, response semantics or persistence after power loss.
 Physical profiles remain marked unverified. No scans or firmware transfers
 were performed. Native `.sd` support is limited to evidenced B-series 106118/106119 layouts.
-Mode, noise gate and limiter writes are implemented from observed function
+Load mode, legacy bridge, noise gate and limiter writes are implemented from observed function
 mappings and synthetic readback tests. Real amplifier behavior, automatic
 limiter timing and bridge/load interactions require physical validation.
 B118 files cannot store a gate threshold; B119 files retain it.

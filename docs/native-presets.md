@@ -13,8 +13,8 @@ B119 additionally stores signed gate thresholds; B118 has no threshold field.
 Source bytes retain unknown settings, load data and unused channels.
 Imported native files can therefore be saved without dropping opaque parameters.
 
-JSON schema 5 stores output dynamics, output EQ/FIR and optional original native bytes alongside
-input processing, routing and channel settings; schemas 2–4 remain readable.
+JSON schema 6 stores output dynamics, output EQ/FIR and optional original native bytes alongside
+input processing, routing and channel settings; schemas 2–5 remain readable.
 JSON without native bytes preserves the connected device's current unknown settings.
 Local-model exports synthesize a B119 header; they are not proof of compatibility
 with a physical amplifier. A physical load also checks the connected header before
@@ -29,3 +29,10 @@ volatile and do not survive application restart. Export to PC for persistence.
 
 Private sample files are never distributed. Synthetic codec/network checks and
 exact local sample round-trips do not replace physical firmware/power-cycle tests.
+
+Per-output load mode is the byte at channel offset 367: 0 Low-Z, 1 70V,
+2 100V. These are distinct from the paired bridge flags at sync offsets 34/35.
+Native bridge-coded values 3–5 remain readable and round-trip unchanged; the
+Mode editor offers only Low-Z / 70V / 100V. Schema 5 JSON without LoadMode
+recovers it from its original native bytes, or preserves the active setting
+when no native data exists. No bridge change is inferred from a load-mode edit.

@@ -49,7 +49,7 @@ public static class NativePresetCodec
             if (info.FirLength > 0)
                 firs.Add(ProcessingWire.DecodeFir(ch, file[(info.SyncLength + n * info.FirLength)..(info.SyncLength + (n + 1) * info.FirLength)], file[offset + 368] == 0));
         }
-        return new(5, info.Model, isDemo, outputs, null, routes, inputs, processing, info.FirLength > 0 ? firs : null, file.ToArray(), Enumerable.Range(1, info.Count).Select(ch => OutputDynamicsWire.DecodeNative(file[..info.SyncLength], ch)).ToArray());
+        return new(6, info.Model, isDemo, outputs, null, routes, inputs, processing, info.FirLength > 0 ? firs : null, file.ToArray(), Enumerable.Range(1, info.Count).Select(ch => OutputDynamicsWire.DecodeNative(file[..info.SyncLength], ch)).ToArray());
     }
     public static byte[] Encode(PresetDocument preset)
     {

@@ -36,6 +36,8 @@ public sealed class GainReadout : ContentControl
 
     public GainReadout()
     {
+        FontSize = 16;
+        FontWeight = FontWeight.SemiBold;
         Width = 128;
         Height = 36;
         AutomationProperties.SetName(this, "Channel gain in dB");
@@ -45,9 +47,11 @@ public sealed class GainReadout : ContentControl
     private void ShowValue()
     {
         editing = false;
-        var label = new TextBlock { Text = value.ToString("+0.0;-0.0;0.0",CultureInfo.InvariantCulture)+" dB", FontSize=16, FontWeight=FontWeight.SemiBold, HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center };
-        var edit = new Button { Tag="gain-edit",Content=label,Background=Brushes.Transparent,BorderThickness=new Thickness(0),Padding=new Thickness(0),HorizontalContentAlignment=HorizontalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Stretch };
-        ToolTip.SetTip(edit,"Click to change gain · −80 to +18 dB"); edit.Click+=(_,_)=>Edit();Content=edit;
+        var label = new TextBlock { Text = value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + " dB", Foreground = Foreground, FontSize = FontSize, FontWeight = FontWeight, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var edit = new Button { Tag = "gain-edit", Content = label, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
+        ToolTip.SetTip(edit, "Click to change gain · −80 to +18 dB");
+        edit.Click += (_, _) => Edit();
+        Content = edit;
     }
 
     private void Edit()

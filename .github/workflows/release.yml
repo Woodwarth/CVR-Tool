@@ -99,4 +99,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "$GITHUB_REF_NAME" artifacts/CVR-Tool-* artifacts/SHA256SUMS.txt --draft --title "CVR Tool $GITHUB_REF_NAME" --notes "Output stereo/bridge, noise gate and peak/RMS limiter editors, plus native presets. GitHub updates with verified native installation. Self-contained Windows x64/ARM64 and Apple Silicon packages. Physical-amplifier validation remains pending; Mac packages are not notarized."
+          gh release create "$GITHUB_REF_NAME" artifacts/CVR-Tool-* artifacts/SHA256SUMS.txt --draft --title "CVR Tool $GITHUB_REF_NAME" --notes "Per-output Low-Z/70V/100V modes and consistent Trim/Mute controls, plus native presets. GitHub updates with verified native installation. Self-contained Windows x64/ARM64 and Apple Silicon packages. Physical-amplifier validation remains pending; Mac packages are not notarized."

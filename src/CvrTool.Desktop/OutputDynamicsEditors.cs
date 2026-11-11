@@ -1,5 +1,5 @@
 // Desktop / Output dynamics editors
-// Purpose: edit paired stereo/bridge, per-channel gate and peak/RMS limiting.
+// Purpose: edit per-output Low-Z/70V/100V, per-channel gate and peak/RMS limiting.
 // Units: output volts, integer ms, dB and release/attack multiplier.
 // State: one window per device/channel/kind; plans reject concurrent changes.
 // Scope: drafts commit through Application; device maximum voltages stay read-only.
@@ -19,20 +19,19 @@ public sealed partial class MainWindow
             throw new InvalidOperationException("Output dynamics changed externally. Reopen this editor.");
         service.ApplyOutputDynamics(plan.Id);
         ReloadSession();
+        status.Text = "Output settings applied";
     }
     private void OpenModeEditor(int channel)
     {
-        var pairStart = (channel - 1) / 2 * 2 + 1;
         var editedId = deviceId;
-        if (ActivateInputEditor(editedId, pairStart, "mode"))
+        if (ActivateInputEditor(editedId, channel, "mode"))
             return;
-        var original = service.GetOutputDynamics(editedId, pairStart);
+        var original = service.GetOutputDynamics(editedId, channel);
         var panel = new StackPanel { Margin = new Thickness(24), Spacing = 18 };
-        panel.Children.Add(Heading($"Mode · Outputs {(char)('A' + pairStart - 1)}/{(char)('A' + pairStart)}"));
-        var mode = new ComboBox { ItemsSource = new[] { "Stereo", "Bridge" }, SelectedIndex = original.Bridged ? 1 : 0, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = "output-mode-choice" };
+        panel.Children.Add(Heading($"Mode · Output {(char)('A' + channel - 1)}"));
+        var mode = new ComboBox { ItemsSource = OutputLoadModes.Options, SelectedIndex = original.LoadMode is >= 0 and <= 2 ? original.LoadMode.Value : -1, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = "output-mode-choice" };
         panel.Children.Add(mode);
-        panel.Children.Add(Text("This setting applies to both outputs in the pair.", 12, Muted));
-        var message = Text("", 12, Muted);
+        var message = Text(original.LoadMode is >= 3 ? "Current device mode: " + OutputLoadModes.Label(original.LoadMode) : "", 12, Muted);
         panel.Children.Add(message);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         var apply = new Button { Content = "Apply", Tag = "apply-output-mode" };
@@ -40,11 +39,12 @@ public sealed partial class MainWindow
         actions.Children.Add(apply);
         actions.Children.Add(cancel);
         panel.Children.Add(actions);
-        var editor = EditorWindow("Output mode", panel, 480, 310);
-        apply.Click += (_, _) => { try { CommitDynamics(new(editedId, pairStart, Bridged: mode.SelectedIndex == 1), original); editor.Close(); } catch (Exception ex) { message.Text = ex.Message; } };
+        var editor = EditorWindow("Output mode", panel, 440, 280);
+        apply.Click += (_, _) => { try { if (mode.SelectedIndex < 0) throw new ArgumentException("Choose an output mode."); CommitDynamics(new(editedId, channel, LoadMode: mode.SelectedIndex), original); editor.Close(); } catch (Exception ex) { message.Text = ex.Message; } };
         cancel.Click += (_, _) => editor.Close();
-        ShowInputEditor(editor, editedId, pairStart, "mode");
+        ShowInputEditor(editor, editedId, channel, "mode");
     }
+
     private void OpenNoiseGateEditor(int channel)
     {
         var editedId = deviceId;

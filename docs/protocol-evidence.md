@@ -40,6 +40,7 @@ Channels and segments are zero-based on the wire.
 | 40/41/42 | Peak hold/release/threshold | Int16 ms / Int16 ms / float Vpeak; side 1 |
 | 46/47 | RMS/peak bypass | Byte 0 enabled, 1 bypassed; side 1 |
 | 48 | RMS automatic timing | Byte 0 automatic, 1 manual; side 1 |
+| 49 | Output load mode | Byte 0 Low-Z, 1 70V, 2 100V; per channel, side 1 |
 | 50 | Stereo/bridge pair | Byte 0 bridge, 1 stereo; channel is zero-based pair, side 1 |
 | 54/55 | Peak/RMS limiter blocks | 13 packed bytes including read-only voltage maximum |
 | 69 | Noise-gate bypass | Byte 0 enabled, 1 bypassed; side 1 |

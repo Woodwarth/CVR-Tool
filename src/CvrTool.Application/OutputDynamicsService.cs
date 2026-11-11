@@ -2,7 +2,7 @@
 // Purpose: validate edits against device voltage limits and shared revisions.
 // Units: output volts, ms, integer dB and RMS release/attack multiplier.
 // State: plans are bounded, single-use and expire after two minutes.
-// Scope: bridge changes affect A/B or C/D together; no inferred telemetry.
+// Scope: load mode is per output; legacy bridge remains paired; no inferred telemetry.
 using CvrTool.Core;
 
 namespace CvrTool.Application;
@@ -39,9 +39,12 @@ public sealed partial class AmplifierService
     {
         if (change.NoiseGateDb is not null && before.NoiseGateDb is null)
             throw new NotSupportedException("This layout does not expose a noise-gate threshold.");
+        if (change.LoadMode is < 0 or > 2)
+            throw new ArgumentOutOfRangeException(nameof(change), "Choose Low-Z, 70V or 100V.");
         var state = before with
         {
             Bridged = change.Bridged ?? before.Bridged,
+            LoadMode = change.LoadMode ?? before.LoadMode,
             NoiseGateEnabled = change.NoiseGateEnabled ?? before.NoiseGateEnabled,
             NoiseGateDb = change.NoiseGateDb ?? before.NoiseGateDb,
             Rms = change.Rms ?? before.Rms,
@@ -54,6 +57,8 @@ public sealed partial class AmplifierService
     }
     public static void ValidateDynamics(OutputDynamicsState state)
     {
+        if (state.LoadMode is < 0 or > 5)
+            throw new ArgumentOutOfRangeException(nameof(state), "Unsupported output load mode.");
         var r = state.Rms;
         var p = state.Peak;
         if (state.NoiseGateDb is < -100 or > 0 || r.AttackMs is < 1 or > 2000 || r.ReleaseMultiplier is < 2 or > 32 || p.HoldMs is < 0 or > 2000 || p.ReleaseMs is < 20 or > 1000)

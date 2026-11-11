@@ -42,16 +42,19 @@ for compatibility with isolated test clients and does not share GUI state.
   `confirmed=true`; the default refuses the operation.
 
 - `get_output_dynamics`, `plan_output_dynamics`, `apply_output_dynamics` expose
-  paired `Bridged`, per-output `NoiseGateEnabled`/`NoiseGateDb` (-100..0), and
+  per-output `LoadMode` (0 Low-Z, 1 70V, 2 100V), `NoiseGateEnabled`/`NoiseGateDb` (-100..0), and
   `Rms`/`Peak` records. Thresholds use actual output volts, not dBFS.
   RMS AttackMs is 1..2000; ReleaseMultiplier is 2..32 times attack; Automatic
   selects device timing. Peak HoldMs is 0..2000; ReleaseMs is 20..1000.
   Enabled selects the limiter; MaximumVolts is read-only and bounds thresholds.
-  Bridge affects A/B or C/D together; gates and limiters remain per output.
+  LoadMode affects only the selected output. The legacy Bridged field remains
+  separate for older clients/presets and still affects an A/B or C/D pair.
+  Native bridge-coded modes 3–5 are preserved when read, but cannot be requested
+  as new LoadMode edits. Older JSON without LoadMode preserves the active mode.
 
 Channel numbers start at 1. Physical IDs are `cvr:ADDRESS:PORT`; local models
 are `demo-1004`, `demo-2002` and `demo-1502`. Local state is volatile. Exported
-schema 5 JSON includes inputs, outputs, routing, output EQ/FIR and dynamics; schema 2–4
+schema 6 JSON includes inputs, outputs, routing, output EQ/FIR and dynamics; schema 2–5
 files remain readable. Native `.sd` supports B-series 106118/106119 layouts. Unknown readings are null, never fabricated.
 
 Plans are read-only, single-use, expire after two minutes and carry the shared
