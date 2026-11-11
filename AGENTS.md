@@ -6,9 +6,9 @@ Windows x64/ARM64 and macOS ARM64; no Intel Mac. All two-channel models share
 the same feature set; variants differ by channel count (two or four).
 
 ## Working rules
-- Upload authorization updated 2026-11-11: prepare version 0.7.0 for publication around 22:30 Europe/Berlin. Next requested release is 0.7.1 after Polarity/Mode checks, with writable display lock and standby using independent readback. Consult artifacts/publication-batch.json for the latest upload time. Minimum 30 minutes between Git upload batches; do not upload periodically without requested changes. Treat a push/tag and its resulting platform release as one publication batch. Keep all captures and private analysis local.
+- User requested publication of 0.7.3 on 2026-11-12 and a WhatsApp message to Jannis Fischer after the complete release is available. Consult artifacts/publication-batch.json. Minimum 30 minutes between Git upload batches; no periodic uploads without requested changes. Treat push/tag and resulting platform release as one publication batch. Keep captures and private analysis local.
 - Communicate in German; UI, documentation and source comments are English.
-- After each protocol step report progress as live-evidenced documented function IDs / documented function IDs; count partial evidence explicitly, never claim total unknown-protocol coverage. Current local baseline: 16/37 (43%); newly observed IDs expand the denominator.
+- After each protocol step report progress as live-evidenced documented function IDs / documented function IDs; count partial evidence explicitly, never claim total unknown-protocol coverage. Current local baseline: 18/38 (47%); newly observed IDs expand the denominator.
 - Use Chrome, never Edge. Do not generate images.
 - Read README and docs/validation.md before major changes.
 - UI and MCP call Application and share one session owner; no parallel UDP writers.
@@ -19,6 +19,7 @@ the same feature set; variants differ by channel count (two or four).
 - Never claim a build or test passed without running it.
 - Updates: docs/updates.md. Keep checks explicit and preserve old installations.
 - Source headers describe purpose, units, state and scope in approximately five lines.
+- Latest UI requests: linked metre/ms delay typing, whole-tile Trim editing, confirmed Stereo/Bridge showing only current state, .sd-only PC loading/saving, operating hours, writable output/matrix mute with readback.
 
 ## Development
 Commands: docs/code-guide.md. MCP: docs/mcp.md. Protocol: docs/network.md and
@@ -27,5 +28,5 @@ do not describe that roadmap in README. Native codec scope: docs/native-presets.
 
 ## Validation limits
 Manual CVR UDP is implemented from local protocol evidence and tested against
-synthetic loopback peers. Selected identity/settings/telemetry reads and display-lock/standby writes passed on one DSP-1004/106119; other models and macOS/Windows ARM GUI validation remain pending. Native Windows capture previously timed out; direct Avalonia
+synthetic loopback peers. Selected identity/settings/telemetry reads and display-lock/standby/Wink/output-mute/route-mute writes passed on one DSP-1004/106119; other models and macOS/Windows ARM GUI validation remain pending. Native Windows capture previously timed out; direct Avalonia
 renderings verify our controls, not the OS. No inferred healthy telemetry.

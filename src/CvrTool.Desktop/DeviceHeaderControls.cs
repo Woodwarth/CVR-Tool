@@ -93,6 +93,7 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             Spacing = 10,
+            Margin = new Thickness(0, 0, 22, 0),
             VerticalAlignment = VerticalAlignment.Center
         };
         ToggleButton Toggle(string kind, bool initial, string label, Action<bool> change)
@@ -100,7 +101,7 @@ public sealed partial class MainWindow
             var button = new ToggleButton
             {
                 Tag = "device-" + kind,
-                IsEnabled = !liveReadOnly || (kind == "lock" ? service.GetDevice(deviceId).Readings!.CanSetDisplayLock : service.GetDevice(deviceId).Readings!.CanSetStandby),
+                IsEnabled = !liveReadOnly || (kind switch { "lock" => service.GetDevice(deviceId).Readings!.CanSetDisplayLock, "wink" => service.GetDevice(deviceId).Readings!.CanSetWink, _ => service.GetDevice(deviceId).Readings!.CanSetStandby }),
                 IsChecked = initial,
                 Width = 38,
                 Height = 38,
@@ -148,6 +149,7 @@ public sealed partial class MainWindow
 
         actions.Children.Add(Toggle("lock", state.DisplayLocked, "Display lock", value => Set(locked: value)));
         actions.Children.Add(Toggle("standby", state.Standby, "Standby", value => Set(standby: value)));
+        actions.Children.Add(Toggle("wink", state.Wink == true, "Wink · Blink amplifier display", SetDeviceWink));
         return actions;
     }
 }

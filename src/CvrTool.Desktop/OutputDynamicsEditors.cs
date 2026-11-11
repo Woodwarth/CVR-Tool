@@ -45,15 +45,21 @@ public sealed partial class MainWindow
         ShowInputEditor(editor, editedId, channel, "mode");
     }
 
-    private void ToggleBridge(int channel)
+    private readonly HashSet<(string Device, int Pair)> bridgeConfirmations = new();
+    private async void ToggleBridge(int channel)
     {
+        var editedId = deviceId;
         var pairStart = (channel - 1) / 2 * 2 + 1;
+        if (!bridgeConfirmations.Add((editedId, pairStart))) return;
         try
         {
-            var current = service.GetOutputDynamics(deviceId, pairStart);
-            CommitDynamics(new(deviceId, pairStart, Bridged: !current.Bridged), current);
+            var current = service.GetOutputDynamics(editedId, pairStart);
+            var target = current.Bridged ? "Stereo" : "Bridge";
+            if (!await ConfirmPresetAction("Switch to " + target, $"Switch outputs {(char)('A' + pairStart - 1)}/{(char)('A' + pairStart)} to {target}?")) return;
+            CommitDynamics(new(editedId, pairStart, Bridged: !current.Bridged), current);
         }
         catch (Exception ex) { status.Text = ex.Message; }
+        finally { bridgeConfirmations.Remove((editedId, pairStart)); }
     }
 
     // A bridge follower cannot retain an editable output window from stereo mode.

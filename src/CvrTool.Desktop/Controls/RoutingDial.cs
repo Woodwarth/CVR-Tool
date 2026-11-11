@@ -18,6 +18,7 @@ public sealed class RoutingDial : Control
     private Point? pressed;
     private double startGain;
     private bool dragging;
+    public bool CanEditGain { get; set; } = true;
     public event Action<double>? GainChanged;
     public event Action? MuteRequested;
     public double GainDb
@@ -51,6 +52,7 @@ public sealed class RoutingDial : Control
 
     private void Adjust(double value)
     {
+        if (!CanEditGain) return;
         var next = Math.Round(Math.Clamp(value, -80, 18), 1);
         if (next == gain)
             return;
@@ -107,6 +109,7 @@ public sealed class RoutingDial : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
+        if (!CanEditGain) return;
         Adjust(gain + e.Delta.Y);
         e.Handled = true;
     }

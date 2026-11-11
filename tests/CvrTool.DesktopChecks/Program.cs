@@ -26,6 +26,13 @@ T Tagged<T>(string tag) where T : Control => All<T>().Single(c => c.Tag?.ToStrin
 Button Button(string content) => All<Button>().Single(b => b.Content?.ToString() == content);
 void Press(Button button) { button.RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Layout(); }
 void Click(string content) => Press(Button(content));
+void ConfirmBridge(string tag)
+{
+    Press(Tagged<Button>(tag));
+    var confirm = window.OwnedWindows.Single(w => w.Title!.StartsWith("Switch to "));
+    confirm.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag?.ToString() == "confirm-preset-operation").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Layout();
+}
+
 void Device(string id) => Press(Tagged<Button>(id));
 void Check(bool condition, string message) { if (!condition) throw new Exception(message); count++; Console.WriteLine("PASS: " + message); }
 bool Text(string value) => All<TextBlock>().Any(t => t.Text?.Contains(value) == true);
@@ -39,7 +46,7 @@ PresetDocument Preset() { Click("☰   Presets"); return JsonSerializer.Deserial
 Layout(); Save("main-1004");
 var fourChannelSize = Tagged<Border>("input-channel-A").Bounds.Size;
 Check(window.Icon is not null, "Window icon loads from embedded application assets");
-Check(All<TextBlock>().Count(t => t.Tag?.ToString()?.StartsWith("info-") == true) == 4, "Compact UI identity header keeps source documentation out of the interface");
+Check(All<TextBlock>().Count(t => t.Tag?.ToString()?.StartsWith("info-") == true) == 5, "Compact UI identity header keeps source documentation out of the interface");
 Check(!Text("Changes apply immediately") && !Text("No live measurements"), "Main section footer hints are removed");
 Check(!All<GainReadout>().Any() && !All<TextBox>().Any() && Tagged<TextBlock>("gain-A").Text == "0.0 dB", "Main gains are plain text without textbox borders or edit controls");
 var mainSlider = All<Slider>().First();
@@ -107,6 +114,9 @@ Press(Tagged<Button>("device-name-display")); Tagged<TextBox>("device-name").Tex
 Check(All<TextBox>().Any(t => t.Tag?.ToString() == "device-name"), "Invalid name keeps editor open"); Press(Tagged<Button>("cancel-name"));
 Device("demo-1502"); Device("demo-1004");
 Check(Tagged<Button>("device-name-display").Content is TextBlock retained && retained.Text == "Front amplifier" && Preset().Name == "Front amplifier", "Renamed device survives switching and exports");
+Check(Tagged<ToggleButton>("device-wink").IsEnabled && !Tagged<ToggleButton>("device-wink").GetLogicalDescendants().OfType<TextBlock>().Any(), "Wink is a symbol-only header control beside lock and standby");
+try { window.LoadPresetFile("not-native.json", System.Text.Encoding.UTF8.GetBytes(window.ExportSelectedPreset())); throw new Exception("JSON file accepted"); }
+catch (ArgumentException) { Check(true, "Desktop preset loading rejects JSON files"); }
 Check(Tagged<ToggleButton>("device-lock").IsEnabled && Tagged<ToggleButton>("device-standby").IsEnabled && !Tagged<ToggleButton>("device-lock").GetLogicalDescendants().OfType<TextBlock>().Any(), "Lock and standby are enabled symbol-only controls");
 Tagged<ToggleButton>("device-lock").IsChecked = true; Tagged<ToggleButton>("device-standby").IsChecked = true;
 Device("demo-1502"); Check(Tagged<ToggleButton>("device-lock").IsChecked == false && Tagged<ToggleButton>("device-standby").IsChecked == false, "Demo lock and standby isolate devices");
@@ -115,7 +125,7 @@ Tagged<ToggleButton>("device-lock").IsChecked = false; Tagged<ToggleButton>("dev
 Click("◖   Outputs"); Save("outputs");
 Press(Tagged<Button>("output-delay-A"));
 var outputDelay=window.OwnedWindows.Single();
-outputDelay.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="delay-ms").Value=4.5m;
+outputDelay.GetLogicalDescendants().OfType<TextBox>().Single(n=>n.Tag?.ToString()=="delay-ms").Text="4.5";
 outputDelay.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-delay").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Layout();
 Check(Preset().Outputs[0].DelayMs == 4.5, "Output delay applies through shared service");
 Click("◖   Outputs");
@@ -149,22 +159,32 @@ Check(modeChoice.Items.Cast<string>().SequenceEqual(new[]{"Low-Z","70V","100V"})
 modeEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-output-mode").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
 var dynamicsPreset=Preset();Check(dynamicsPreset.Dynamics![0].LoadMode==1 && dynamicsPreset.Dynamics[1].LoadMode==0 && !dynamicsPreset.Dynamics[0].Bridged,"Mode edits affect one output without switching bridge");
 Click("◖   Outputs");
-Check(Math.Abs(Tagged<Border>("output-trim-A").Bounds.Height-76)<.1 && Math.Abs(Tagged<ToggleButton>("mute-editor-A").Bounds.Height-76)<.1 && Math.Abs(Tagged<ToggleButton>("mute-editor-A").Bounds.Width-Tagged<Button>("output-mode-A").Bounds.Width)<1.1,"Trim and symbol-only mute align with the output blocks");
+Press(Tagged<Button>("output-trim-A"));
+Check(Tagged<GainReadout>("output-gain-A").GetLogicalDescendants().OfType<TextBox>().Any(), "Clicking the entire Trim tile opens its editor");
+var tileTrimEditor=Tagged<GainReadout>("output-gain-A").GetLogicalDescendants().OfType<TextBox>().Single();
+tileTrimEditor.RaiseEvent(new KeyEventArgs { RoutedEvent=InputElement.KeyDownEvent, Key=Key.Escape }); Layout();
+Check(Tagged<Button>("output-bridge-A").GetLogicalDescendants().OfType<TextBlock>().Single().Text=="Stereo", "Bridge tile displays only the current Stereo/Bridge state");
+Check(Math.Abs(Tagged<Button>("output-trim-A").Bounds.Height-76)<.1 && Math.Abs(Tagged<ToggleButton>("mute-editor-A").Bounds.Height-76)<.1 && Math.Abs(Tagged<ToggleButton>("mute-editor-A").Bounds.Width-Tagged<Button>("output-mode-A").Bounds.Width)<1.1,"Trim and symbol-only mute align with the output blocks");
 Press(Tagged<Button>("output-mode-B"));Check(window.OwnedWindows.Count==1,"Secondary output editor can be opened in stereo");
 Press(Tagged<Button>("output-bridge-A"));
-Check(window.OwnedWindows.Count==0,"Bridge toggles directly without a popup and closes the follower editor");
+var bridgePrompt=window.OwnedWindows.Single(w=>w.Title!.StartsWith("Switch to "));
+Check(!JsonSerializer.Deserialize<PresetDocument>(window.ExportSelectedPreset())!.Dynamics![0].Bridged, "Bridge does not change before explicit confirmation");
+bridgePrompt.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="cancel-preset-operation").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
+Check(!JsonSerializer.Deserialize<PresetDocument>(window.ExportSelectedPreset())!.Dynamics![0].Bridged, "Cancelling bridge confirmation preserves the pair state");
+ConfirmBridge("output-bridge-A");
+Check(window.OwnedWindows.Count==0,"Confirmed bridge change closes the follower editor");
 var bridgePreset=Preset();Check(bridgePreset.Dynamics![0].Bridged && bridgePreset.Dynamics[1].Bridged && !bridgePreset.Dynamics[2].Bridged && bridgePreset.Dynamics[0].LoadMode==1,"Bridge updates A/B together, preserves C/D and retains load mode");
 Click("◖   Outputs");
 bool OutputControlsEnabled(string channel)=>Tagged<Grid>("output-flow-"+channel).Children.Where(c=>Grid.GetColumn(c)<11).All(c=>c.IsEnabled && c.Opacity==1);
 bool OutputControlsDisabled(string channel)=>Tagged<Grid>("output-flow-"+channel).Children.Where(c=>Grid.GetColumn(c)<11).All(c=>!c.IsEnabled && c.Opacity<.5);
 Check(OutputControlsDisabled("B") && OutputControlsEnabled("A") && OutputControlsEnabled("C") && OutputControlsEnabled("D"),"Bridge greys and disables only the second output in A/B");
 Check(Tagged<Button>("output-bridge-B").IsEnabled,"Follower bridge switch remains clickable");
-Press(Tagged<Button>("output-bridge-B"));
-Check(window.OwnedWindows.Count==0 && OutputControlsEnabled("B"),"Clicking the follower bridge switch restores stereo and its controls without a popup");
+ConfirmBridge("output-bridge-B");
+Check(window.OwnedWindows.Count==0 && OutputControlsEnabled("B"),"Confirming the follower bridge switch restores stereo and its controls");
 Check(!Preset().Dynamics![0].Bridged,"Direct bridge toggle restores the paired stereo state");
-Click("◖   Outputs");Press(Tagged<Button>("output-bridge-A"));Press(Tagged<Button>("output-bridge-D"));
+Click("◖   Outputs");ConfirmBridge("output-bridge-A");ConfirmBridge("output-bridge-D");
 Check(OutputControlsDisabled("B") && OutputControlsDisabled("D") && OutputControlsEnabled("A") && OutputControlsEnabled("C"),"A/B and C/D independently disable their second outputs");
-Check(window.OwnedWindows.Count==0,"Neither bridge pair opens a popup");Save("outputs-bridge-followers");
+Check(window.OwnedWindows.Count==0,"Bridge confirmation closes after accepting the switch");Save("outputs-bridge-followers");
 Check(Preset().Dynamics!.All(d=>d.Bridged),"C/D stereo/bridge switch operates its own pair");
 Click("◖   Outputs");
 Tagged<ToggleButton>("mute-editor-A").IsChecked=true;Layout();
@@ -226,10 +246,16 @@ Press(Tagged<Button>("input-delay-1"));
 var firstDelayWindow = window.OwnedWindows.Single(); Press(Tagged<Button>("input-delay-1"));
 Check(window.OwnedWindows.Count == 1 && ReferenceEquals(firstDelayWindow, window.OwnedWindows.Single()), "Repeated delay clicks activate the existing editor");
 var delayEditor = window.OwnedWindows.Single();
-var delayMs = delayEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n => n.Tag?.ToString() == "delay-ms");
-var delayMeters = delayEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n => n.Tag?.ToString() == "delay-meters");
-delayMeters.Value = 3.43m;
-Check(Math.Abs((double)delayMs.Value! - 10) < .0001, "Metres and milliseconds stay synchronized");
+var delayMs = delayEditor.GetLogicalDescendants().OfType<TextBox>().Single(n => n.Tag?.ToString() == "delay-ms");
+var delayMeters = delayEditor.GetLogicalDescendants().OfType<TextBox>().Single(n => n.Tag?.ToString() == "delay-meters");
+delayMs.Text = "1.5";
+Check(delayMeters.Text=="0.5145", "Typing milliseconds immediately computes metres");
+delayMeters.Text = "1,5";
+Check(Math.Abs(double.Parse(delayMs.Text!,System.Globalization.CultureInfo.InvariantCulture)-1500.0/343)<.000001, "Typing comma-decimal metres immediately computes milliseconds");
+delayMs.Text="101";
+Check(!delayEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-delay").IsEnabled, "Invalid delay disables apply instead of using an old value");
+delayMeters.Text = "3.43";
+Check(Math.Abs(double.Parse(delayMs.Text!,System.Globalization.CultureInfo.InvariantCulture) - 10) < .0001, "Metres and milliseconds stay synchronized");
 delayEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-delay").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Layout();
 Check(Preset().Inputs![0].DelayMs == 10, "Delay editor commits through the shared input service");
 Click("◉   Inputs"); Press(Tagged<Button>("input-eq-1"));
@@ -275,16 +301,18 @@ Check(!All<Button>().Any(b => b.Content?.ToString() is "Manual connection" or "C
 Device(LiveDesktopFixture.LiveId); Layout();
 Check(All<Button>().Count(b => b.Tag?.ToString()?.StartsWith("demo-") == true) == 3, "All three demos remain listed beside the live device");
 Check(Tagged<TextBlock>("device-dot-" + LiveDesktopFixture.LiveId).Foreground is ISolidColorBrush liveGreen && liveGreen.Color == Color.Parse("#00CE63"), "Connected live device point is green");
+Check(Tagged<ToggleButton>("device-wink").IsEffectivelyEnabled, "Live Wink control follows evidenced capability");
 Check(Tagged<ToggleButton>("device-lock").IsEffectivelyEnabled && Tagged<ToggleButton>("device-standby").IsEffectivelyEnabled && !Tagged<Button>("device-name-display").IsEffectivelyEnabled, "Live lock and standby are enabled while DSP/name editing stays protected");
-Check(All<Slider>().All(s => !s.IsEnabled) && !Tagged<ToggleButton>("mute-output-A").IsEnabled, "Read-only main controls cannot change physical settings");
+Check(All<Slider>().All(s => !s.IsEnabled) && Tagged<ToggleButton>("mute-output-A").IsEnabled, "Live main gain stays protected while mute is available");
 Check(Tagged<Control>("channel-clip-A").GetLogicalDescendants().OfType<StatusLed>().Single().Value is null, "Input clip does not copy output clip on live devices");
 Click("ⓘ   Details");
 Check(Text("Fixture-106119-DSP-1004") && Text("Fixture preset") && Text("RMS timing") && Text("Peak timing") && Text("Routing matrix") && Text("coefficients not received"), "Live details include identity, processing, routing, dynamics and unknown FIR state");
 Click("◉   Inputs");
-Check(All<RoutingDial>().All(d => !d.IsEnabled) && Tagged<Button>("input-eq-1").IsEnabled, "Live matrix is read-only while EQ remains viewable");
+Check(All<RoutingDial>().All(d => d.IsEnabled && !d.CanEditGain) && Tagged<Button>("input-eq-1").IsEnabled, "Live matrix permits mute while gain remains protected and EQ viewable");
 Press(Tagged<Button>("input-eq-1")); var liveEq = window.OwnedWindows.Single();
 Check(liveEq.Title!.Contains("Read-only") && !liveEq.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag?.ToString() == "apply-input-eq").IsEnabled, "Live EQ viewer disables apply"); liveEq.Close();
 Click("◖   Outputs"); Check(!Tagged<Button>("output-mode-A").IsEnabled && Tagged<Button>("output-eq-A").IsEnabled, "Live output settings remain visible and protected");
+Click("☰   Presets"); Check(!All<ComboBox>().Any(), "Live preset save offers only native .sd format");
 Click("☰   Presets"); Check(Tagged<Button>("snapshot-save-pc").IsEnabled && !All<ComboBox>().Any(c => c.Tag?.ToString() == "device-preset-slot"), "Unknown device slots are not invented and known settings can be saved");
 liveFixture.Error = "Offline fixture"; window.ReloadSession(); Layout();
 Check(Tagged<TextBlock>("device-dot-" + LiveDesktopFixture.LiveId).Foreground is ISolidColorBrush liveRed && liveRed.Color == Color.Parse("#F05462"), "Disconnected live device point turns red");

@@ -51,7 +51,9 @@ public sealed partial class MainWindow
             AddColumn(row, Block("EQ", eq.EqEnabled ? "On" : "Off", "output-eq-" + output.Name, () => OpenInputEqEditor(output.Number, true)), 2);
             var gain = new GainReadout { FontSize = 12, FontWeight = FontWeight.Normal, Foreground = Accent, Width = 94, Tag = "output-gain-" + output.Name, Value = output.GainDb };
             gain.ValueChanged += value => Commit(new(deviceId, output.Number, GainDb: value));
-            AddColumn(row, new Border { Child = OutputBlockContent("Trim", gain), Tag = "output-trim-" + output.Name, Width = OutputBlockWidth, Height = OutputBlockHeight, Padding = new Thickness(6, 8), Background = Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3) }, 3);
+            var trim = Block("Trim", "", "output-trim-" + output.Name, gain.BeginEdit);
+            trim.Content = OutputBlockContent("Trim", gain);
+            AddColumn(row, trim, 3);
             AddColumn(row, Block("Delay", $"{AmplifierService.DelayMeters(output.DelayMs):0.00} m\n{output.DelayMs:0.00} ms", "output-delay-" + output.Name, () => OpenDelayEditor(output.Number, true)), 4);
             AddColumn(row, Block("Polarity", output.Inverted ? "180°" : "0°", "output-polarity-" + output.Name, () => { Commit(new(deviceId, output.Number, Inverted: !output.Inverted)); Render(); }), 5);
             AddColumn(row, Block("Limiters", "Peak / RMS", "output-limiters-" + output.Name, () => OpenLimiterEditor(output.Number)), 6);
@@ -65,8 +67,9 @@ public sealed partial class MainWindow
             AddColumn(row, mute, 9);
             AddColumn(row, Block("Output " + output.Name, "Speaker", "output-speaker-" + output.Name, () => { activeTab = "Main"; Render(); }), 10);
             var pairStart = (output.Number - 1) / 2 * 2 + 1;
-            var pair = $"{(char)('A' + pairStart - 1)}/{(char)('A' + pairStart)}";
-            AddColumn(row, Block("Stereo / Bridge", (dynamics.Bridged ? "Bridge" : "Stereo") + "\n" + pair, "output-bridge-" + output.Name, () => ToggleBridge(output.Number)), 11);
+            var bridge = Block("", "", "output-bridge-" + output.Name, () => ToggleBridge(output.Number));
+            bridge.Content = Centered(dynamics.Bridged ? "Bridge" : "Stereo", 13, Accent);
+            AddColumn(row, bridge, 11);
             var followsBridge = dynamics.Bridged && output.Number % 2 == 0;
             if (followsBridge)
             {

@@ -50,12 +50,13 @@ public sealed class GainReadout : ContentControl
         var label = new TextBlock { Text = value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + " dB", Foreground = Foreground, FontSize = FontSize, FontWeight = FontWeight, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var edit = new Button { Tag = "gain-edit", Content = label, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
         ToolTip.SetTip(edit, "Click to change gain · −80 to +18 dB");
-        edit.Click += (_, _) => Edit();
+        edit.Click += (_, _) => BeginEdit();
         Content = edit;
     }
 
-    private void Edit()
+    public void BeginEdit()
     {
+        if (editing || !IsEffectivelyEnabled) return;
         editing = true;
         var editor = new TextBox
         {

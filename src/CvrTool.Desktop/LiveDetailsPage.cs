@@ -34,8 +34,8 @@ public sealed partial class MainWindow
             root.Children.Add(Card(box));
         }
         var controls = service.GetControlState(deviceId);
-        Values("Live device · DSP read-only", ("Name", snapshot.Name), ("Firmware", data.FirmwareHeader),
-            ("MAC address", data.MacAddress ?? "—"), ("Preset", data.CurrentPreset ?? "—"),
+        Values("Live device · Limited editing", ("Name", snapshot.Name), ("Firmware", data.FirmwareHeader),
+            ("MAC address", data.MacAddress ?? "—"), ("Operating time", DeviceMetadataCodec.FormatOperatingTime(data.OperatingMinutes)), ("Preset", data.CurrentPreset ?? "—"),
             ("Settings received", data.SettingsObservedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")),
             ("Status received", data.TelemetryObservedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "—"),
             ("Connection", data.Error ?? "Connected"), ("Display lock", OnOff(controls.DisplayLocked)),
@@ -97,22 +97,21 @@ public sealed partial class MainWindow
         root.Children.Add(Heading("Presets · Read-only"));
         root.Children.Add(Text("Current preset: " + (service.GetDevice(deviceId).Readings?.CurrentPreset ?? "—"), 16));
         root.Children.Add(Text("Device slot names and FIR coefficients have not been received. Exports contain the known settings.", 13, Muted));
-        var format = new ComboBox { ItemsSource = new[] { "CVR native (.sd)", "CVR Tool JSON (.json)" }, SelectedIndex = 0, Width = 280 };
-        root.Children.Add(format);
         var save = new Button { Content = "Save to PC", Tag = "snapshot-save-pc" };
         save.Click += async (_, _) =>
         {
-            var selected = deviceId; var native = format.SelectedIndex == 0;
-            var extension = native ? "sd" : "json";
+            var selected = deviceId;
+            const string extension = "sd";
             try
             {
                 var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
                 {
                     Title = "Save received settings", SuggestedFileName = deviceName.Text + "-settings." + extension,
-                    DefaultExtension = extension, FileTypeChoices = [new(native ? "CVR native settings" : "CVR Tool JSON") { Patterns = ["*." + extension] }]
+                    DefaultExtension = extension, FileTypeChoices = [new("CVR native settings") { Patterns = ["*." + extension] }]
                 });
                 if (file is null) return;
-                var bytes = await Task.Run(() => native ? service.ExportNativePreset(selected) : System.Text.Encoding.UTF8.GetBytes(service.ExportPreset(selected)));
+                if (!file.Name.EndsWith(".sd", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Save the preset with the .sd extension.");
+                var bytes = await Task.Run(() => service.ExportNativePreset(selected));
                 await using var stream = await file.OpenWriteAsync(); stream.SetLength(0); await stream.WriteAsync(bytes);
                 status.Text = "Received settings saved to PC";
             }

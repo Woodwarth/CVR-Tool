@@ -33,6 +33,7 @@ public sealed partial class MainWindow
         var connection = new StackPanel { Spacing = 8 };
         connection.Children.Add(Value("channels", "Channels"));
         connection.Children.Add(Value("connection", "Connection"));
+        connection.Children.Add(Value("runtime", "Operating time"));
         AddColumn(grid, connection, 2);
         AddColumn(grid, deviceActions, 3);
         var card = Card(grid);
@@ -44,8 +45,9 @@ public sealed partial class MainWindow
         var device = service.GetDevice(deviceId);
         infoValues["ip"].Text = device.IsDemo ? "—" : device.Id.Split(':').ElementAtOrDefault(1) ?? "—";
         infoValues["preset"].Text = device.Readings?.CurrentPreset ?? nativePresetName ?? (device.IsDemo ? "Local settings" : "—");
+        infoValues["runtime"].Text = CvrTool.Application.DeviceMetadataCodec.FormatOperatingTime(device.Readings?.OperatingMinutes);
         infoValues["channels"].Text = device.Outputs.Count + " in / " + device.Outputs.Count + " out";
         infoValues["connection"].Text = device.IsDemo ? "Local session" : device.Readings?.ReadOnly == true ?
-            (device.Readings.Error is null ? "Live · Lock / Standby" : "Offline · Cached") : "CVR UDP · Readback";
+            (device.Readings.Error is null ? "Live · Controls / Mute" : "Offline · Cached") : "CVR UDP · Readback";
     }
 }

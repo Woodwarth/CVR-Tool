@@ -18,6 +18,7 @@ public interface IAmplifierBackend
     IReadOnlyList<OutputTelemetry> GetTelemetry(string deviceId);
     (InputProcessingState State, long Revision) GetInputProcessing(string deviceId, int channel);
     InputProcessingState ApplyInputProcessing(InputProcessingChange change, long expectedRevision);
+    DeviceControlState SetWink(string deviceId, bool enabled, long expectedRevision) => throw new NotSupportedException("Wink is unavailable on this backend.");
     DeviceControlState GetControlState(string deviceId);
     DeviceControlState SetControlState(string deviceId, bool? displayLocked, bool? standby, long expectedRevision);
 }

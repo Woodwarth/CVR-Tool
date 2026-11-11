@@ -77,31 +77,45 @@ public sealed partial class MainWindow
         var input = output ? service.GetOutputProcessing(editedId,channel) : service.GetInputProcessing(editedId, channel);
         var content = new StackPanel { Margin = new Thickness(20), Spacing = 14 };
         content.Children.Add(Heading(side+" delay · " + channel));
-        var ms = Number(0, 100, .01m, (decimal)input.DelayMs);
-        ms.Tag = "delay-ms";
-        var meters = Number(0, (decimal)AmplifierService.DelayMeters(100), .01m, (decimal)AmplifierService.DelayMeters(input.DelayMs));
-        meters.Tag = "delay-meters";
-        ms.FormatString = meters.FormatString = "0.000";
+        var ms = new TextBox { Text = input.DelayMs.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture), Tag = "delay-ms" };
+        var meters = new TextBox { Text = AmplifierService.DelayMeters(input.DelayMs).ToString("0.######", System.Globalization.CultureInfo.InvariantCulture), Tag = "delay-meters" };
+        var validation = Text("", 12, Muted);
+        var apply = new Button { Content = "Apply", Tag = "apply-delay" };
+        double? pendingMs = input.DelayMs;
         var syncing = false;
-        ms.ValueChanged += (_, _) => { if (syncing || ms.Value is null) return; syncing = true; meters.Value = (decimal)AmplifierService.DelayMeters((double)ms.Value.Value); syncing = false; };
-        meters.ValueChanged += (_, _) => { if (syncing || meters.Value is null) return; syncing = true; ms.Value = (decimal)AmplifierService.DelayMilliseconds((double)meters.Value.Value); syncing = false; };
+        void Synchronize(TextBox source, TextBox other, bool distance)
+        {
+            if (syncing) return;
+            var valid = double.TryParse(source.Text?.Replace(',', '.'), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var value) && double.IsFinite(value) && value >= 0;
+            var milliseconds = distance ? AmplifierService.DelayMilliseconds(value) : value;
+            valid = valid && milliseconds <= 100;
+            pendingMs = valid ? milliseconds : null;
+            apply.IsEnabled = valid;
+            validation.Text = valid ? "" : "Enter 0–100 ms or 0–34.3 m.";
+            if (!valid) return;
+            syncing = true;
+            try { other.Text = (distance ? milliseconds : AmplifierService.DelayMeters(milliseconds)).ToString("0.######", System.Globalization.CultureInfo.InvariantCulture); }
+            finally { syncing = false; }
+        }
+        ms.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) Synchronize(ms, meters, false); };
+        meters.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) Synchronize(meters, ms, true); };
         content.Children.Add(Field("Time · ms", ms));
         content.Children.Add(Field("Distance · m", meters));
         content.Children.Add(Text("Distance assumes 343 m/s. Delay is stored in milliseconds.", 11, Muted));
+        content.Children.Add(validation);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         content.Children.Add(actions);
-        var apply = new Button { Content = "Apply", Tag = "apply-delay" };
         var cancel = new Button { Content = "Cancel" };
         actions.Children.Add(apply);
         actions.Children.Add(cancel);
         var editor = EditorWindow(side+" delay · Channel " + channel, content, 400, 340);
         apply.Click += (_, _) =>
         {
-            if (ms.Value is null)
-                return;
+            if (pendingMs is null) return;
             try
             {
-                var change=new InputProcessingChange(editedId,channel,DelayMs:(double)ms.Value.Value);
+                var change=new InputProcessingChange(editedId,channel,DelayMs:pendingMs.Value);
                 if(output)service.ApplyOutputProcessing(service.PlanOutputProcessing(change).Id);else service.ApplyInputProcessing(service.PlanInputProcessing(change).Id);
                 Render();
                 editor.Close();

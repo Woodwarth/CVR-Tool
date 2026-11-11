@@ -13,16 +13,23 @@ are accepted. Full-sync completion uses an empty status-3 confirmation. Settings
 and telemetry have separate timestamps; offline devices keep their last data
 with an error and a red connection point. No automatic settings retries occur.
 
-The live DSP view is read-only. Display lock (17/status 1) and standby
+Live DSP editing is limited to output and routing mute. Display lock (17/status 1) and standby
 (15/status 0) are writable through the shared Desktop/MCP session. Each change
-requires independent readback. Standby transitions are asynchronous: telemetry
+requires independent readback. Wink (83/status 0, byte 0/1) blinks the display;
+function-83 queries return status 1/channel 32/segment 10/side 0 with one state
+byte. Only 0/1 are accepted; missing state disables the live Wink control. Wink
+refreshes about every five seconds, and original DSP bytes must remain intact. Standby transitions are asynchronous: telemetry
 must confirm the operational state, and native byte 32 must subsequently settle.
-The command is sent once; only reads are repeated. Other native settings must
+Output and routing mute use active-low flags and full-settings readback; routing
+gain and all unrelated native bytes must stay unchanged. The command is sent
+once; only reads are repeated. Other native settings must
 remain unchanged. Failed confirmation is an error, not an assumed success.
 
 Native settings supply channel gain, trim, mute, delay, polarity, the full
 routing matrix, input/output EQ and HP/LP, load mode, bridge, gate and limiter
-settings. Current preset, firmware, name and MAC are shown when observed.
+settings. Current preset, firmware, name and MAC are shown when observed. Function 71
+provides operating time as a uint32 little-endian minute counter at offset 74;
+metadata refreshes once a minute and unknown time stays unknown.
 Telemetry supplies voltage/current, V/I load when current is positive, per-output
 temperature/status and reported power. Uncalibrated dBFS/input clip, unread FIR
 coefficients and unqueried preset-slot names are explicitly unknown. No healthy

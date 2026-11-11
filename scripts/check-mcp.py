@@ -85,9 +85,12 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         names = {tool["name"] for tool in a.request("tools/list", {})["tools"]}
         expected = {"list_devices", "get_device", "plan_channel_change", "apply_change", "export_preset",
             "rename_device", "get_routing", "get_telemetry", "plan_routing_change", "apply_routing_change",
-            "connect_amplifier", "disconnect_amplifier", "get_device_controls", "set_device_controls", "get_input_processing", "plan_input_processing", "apply_input_processing"}
+            "connect_amplifier", "disconnect_amplifier", "get_device_controls", "set_device_controls", "set_device_wink", "get_input_processing", "plan_input_processing", "apply_input_processing"}
         assert expected <= names, names
         a.reject("connect_amplifier", address="localhost", localAddress="127.0.0.1")
+        assert a.call("set_device_wink", deviceId="demo-2002", enabled=True)["Wink"] is True
+        assert b.call("get_device_controls", deviceId="demo-2002")["Wink"] is True
+        assert b.call("set_device_wink", deviceId="demo-2002", enabled=False)["Wink"] is False
         devices = a.call("list_devices")
         assert {len(d["Outputs"]) for d in devices} == {2, 4}
         assert all(d["Capabilities"]["InputCount"] == len(d["Outputs"]) for d in devices)
@@ -127,7 +130,7 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         a.call("rename_device", deviceId="demo-2002", name="Front amp")
         assert b.call("get_device", deviceId="demo-2002")["Name"] == "Front amp"
         a.call("set_device_controls", deviceId="demo-2002", displayLocked=True, standby=True)
-        assert b.call("get_device_controls", deviceId="demo-2002") == {"DisplayLocked": True, "Standby": True, "StandbyKnown": True}
+        assert b.call("get_device_controls", deviceId="demo-2002") == {"DisplayLocked": True, "Standby": True, "StandbyKnown": True, "Wink": False}
         telemetry = a.call("get_telemetry", deviceId="demo-2002")
         assert len(telemetry) == 2 and all(t["Voltage"] is None for t in telemetry)
         exported = b.call("export_preset", deviceId="demo-2002")

@@ -33,7 +33,7 @@ static class SnapshotPeerChecks
         check(!service.GetFir(id, 1).CoefficientsKnown && service.GetFir(id, 1).Coefficients.Count == 0, "Missing FIR coefficients are explicitly unknown");
         check(service.GetDevicePresets(id).Slots.Count == 0, "Unobserved slot names are not fabricated");
         check(service.ExportNativePreset(id).SequenceEqual(peer.Sync), "Known native settings can be backed up exactly without synthesized FIR");
-        try { service.Apply(service.Plan(new(id, 1, Muted: true)).Id); throw new Exception("Read-only mutation accepted"); }
+        try { service.Apply(service.Plan(new(id, 1, GainDb: -1)).Id); throw new Exception("Read-only mutation accepted"); }
         catch (NotSupportedException) { check(true, "Read-only connection rejects settings changes before any write"); }
         var pipe = "cvr-snapshot-" + Guid.NewGuid().ToString("N");
         using var host = new SessionHost(backend, pipe);
@@ -41,9 +41,9 @@ static class SnapshotPeerChecks
         check(remote.GetDevice(id).Readings!.ReadOnly && remote.GetInputProcessing(id, 1).Bands.Count == 8, "Shared IPC exposes the same live snapshot and read-only mode");
         check(SpinWait.SpinUntil(() => peer.Confirmations > 0, 1000) && peer.Writes == 0 && peer.UnexpectedQueries == 0, "Only bulk reads, transport ACKs and empty status-3 confirmation are sent");
         check(service.GetDevice(id).Readings is { CanSetDisplayLock: true, CanSetStandby: true }, "Live mode advertises the two verified operational controls");
-        check(service.SetControlState(id, displayLocked: true) == new DeviceControlState(true, false), "Live display lock is confirmed through fresh full settings");
-        check(service.SetControlState(id, standby: true) == new DeviceControlState(true, true), "Live standby status-zero command is confirmed through full settings");
-        check(remote.SetControlState(id, displayLocked: false, standby: false) == new DeviceControlState(false, false), "Shared IPC restores both operational controls with readback");
+        check(service.SetControlState(id, displayLocked: true) == new DeviceControlState(true, false, Wink: false), "Live display lock is confirmed through fresh full settings");
+        check(service.SetControlState(id, standby: true) == new DeviceControlState(true, true, Wink: false), "Live standby status-zero command is confirmed through full settings");
+        check(remote.SetControlState(id, displayLocked: false, standby: false) == new DeviceControlState(false, false, Wink: false), "Shared IPC restores both operational controls with readback");
         var writesAfterRestore = peer.Writes;
         service.SetControlState(id, displayLocked: false, standby: false);
         check(peer.Writes == writesAfterRestore, "Already-observed control state does not send another write");
@@ -52,6 +52,38 @@ static class SnapshotPeerChecks
         catch (InvalidOperationException) { check(true, "Control transport delivery without matching full readback fails"); }
         finally { peer.IgnoreControlWrites = false; }
         check(!service.GetControlState(id).DisplayLocked, "Rejected control write retains the independently observed state");
+        check(device.Readings!.OperatingMinutes == 26259 && DeviceMetadataCodec.FormatOperatingTime(device.Readings.OperatingMinutes) == "437 h 39 min", "Extended identity exposes operating hours in evidenced minute units");
+        check(DeviceMetadataCodec.FormatOperatingTime(null) == "—", "Missing operating hours stay unknown instead of zero");
+        try { DeviceMetadataCodec.OperatingMinutes(new byte[92], "fixture"); throw new Exception("Truncated metadata accepted"); }
+        catch (NotSupportedException) { check(true, "Truncated operating-time payload is rejected"); }
+        try { DeviceMetadataCodec.OperatingMinutes(new byte[93], "different-device"); throw new Exception("Mismatched metadata accepted"); }
+        catch (NotSupportedException) { check(true, "Operating time cannot come from a mismatched firmware header"); }
+        check(service.GetDevice(id).Readings!.CanSetWink && service.GetControlState(id).Wink == false, "Bulk Wink query advertises confirmed off state");
+        var beforeWink = service.ExportNativePreset(id);
+        check(service.SetWink(id, true).Wink == true, "Wink enables through command and independent bulk readback");
+        check(service.SetWink(id, false).Wink == false && service.ExportNativePreset(id).SequenceEqual(beforeWink), "Wink disables without changing native DSP settings");
+        peer.IgnoreWinkWrites = true;
+        try { service.SetWink(id, true); throw new Exception("Unconfirmed Wink accepted"); }
+        catch (InvalidOperationException) { check(service.GetControlState(id).Wink == false, "Wink transport ACK without matching state is rejected"); }
+        finally { peer.IgnoreWinkWrites = false; }
+        check(service.GetDevice(id).Readings!.CanSetMutes, "Live profile advertises verified mute capabilities");
+        service.Apply(service.Plan(new(id, 1, Muted: false)).Id);
+        var unmutedNative = service.ExportNativePreset(id);
+        service.Apply(service.Plan(new(id, 1, Muted: true)).Id);
+        var expectedOutputMute = unmutedNative.ToArray(); expectedOutputMute[36 + 48] = 0;
+        check(service.GetDevice(id).Outputs[0].Muted && service.ExportNativePreset(id).SequenceEqual(expectedOutputMute), "Output mute changes only its active-low byte and confirms full readback");
+        service.Apply(service.Plan(new(id, 1, Muted: false)).Id);
+        check(service.ExportNativePreset(id).SequenceEqual(unmutedNative), "Output unmute restores the original native settings exactly");
+        var routeBefore = service.GetRouting(id).Cells.Single(c => c.Input == 2 && c.Output == 1);
+        service.ApplyRouting(service.PlanRouting(new(id, 2, 1, Muted: false)).Id);
+        check(!service.GetRouting(id).Cells.Single(c => c.Input == 2 && c.Output == 1).Muted && service.GetRouting(id).Cells.Single(c => c.Input == 2 && c.Output == 1).GainDb == routeBefore.GainDb, "Route mute uses output-major coordinates and preserves gain");
+        service.ApplyRouting(service.PlanRouting(new(id, 2, 1, Muted: routeBefore.Muted)).Id);
+        peer.IgnoreMuteWrites = true;
+        try { service.Apply(service.Plan(new(id, 1, Muted: true)).Id); throw new Exception("Rejected mute accepted"); }
+        catch (InvalidOperationException) { check(true, "Mute ACK/delivery without matching native state fails"); }
+        finally { peer.IgnoreMuteWrites = false; }
+        try { service.ApplyRouting(service.PlanRouting(new(id, 1, 1, GainDb: -3)).Id); throw new Exception("Live gain edit accepted"); }
+        catch (NotSupportedException) { check(true, "Enabling mute does not enable live routing gain writes"); }
         check(peer.DelayedStandbyReads > 0, "Standby readback waits for asynchronous native state without repeating writes");
         using (var secondPeer = new Peer("demo-1502"))
         {
@@ -84,7 +116,8 @@ static class SnapshotPeerChecks
         public byte[] Sync { get; }
         public int Port => ((IPEndPoint)socket.Client.LocalEndPoint!).Port;
         public int Writes, Confirmations, UnexpectedQueries;
-        public volatile bool IgnoreControlWrites;
+        public volatile bool IgnoreControlWrites, IgnoreMuteWrites, IgnoreWinkWrites;
+        private bool wink;
         private bool standby;
         private long nativeStandbyDue;
         private byte nativeStandbyValue;
@@ -111,6 +144,15 @@ static class SnapshotPeerChecks
                     var header = CvrWire.Header(received.Buffer);
                     if (header.Ack) continue;
                     var message = CvrWire.DecodeInner(received.Buffer[10..]);
+                    if (message is { Function: 83, Channel: 0, Segment: 0, Side: 0 })
+                    {
+                        if (message is { Status: 0, Body.Length: 1 })
+                        { Interlocked.Increment(ref Writes); if (!IgnoreWinkWrites) wink = message.Body[0] == 1; }
+                        else if (message is { Status: 2, Body.Length: 0 })
+                        { await Send(new(83, 1, 32, 10, 0, [(byte)(wink ? 1 : 0)]), received.RemoteEndPoint); }
+                        else Interlocked.Increment(ref UnexpectedQueries);
+                        continue;
+                    }
                     if ((message.Function == 17 && message.Status == 1) || (message.Function == 15 && message.Status == 0))
                     {
                         Interlocked.Increment(ref Writes);
@@ -121,13 +163,29 @@ static class SnapshotPeerChecks
                         }
                         continue;
                     }
+                    if (message.Status == 1 && message.Function is 10 or 12)
+                    {
+                        Interlocked.Increment(ref Writes);
+                        if (!IgnoreMuteWrites)
+                        {
+                            if (message.Function == 10) Sync[36 + message.Channel * 515 + 48] = message.Body[0];
+                            else message.Body.CopyTo(Sync, 36 + message.Channel * 515 + 24 + message.Segment * 5);
+                        }
+                        continue;
+                    }
                     if (message.Status == 1) { Interlocked.Increment(ref Writes); continue; }
                     if (message is { Function: 27, Status: 3, Body.Length: 0 })
                     { Interlocked.Increment(ref Confirmations); continue; }
-                    if (message.Status != 2 || message.Function is not (0 or 6 or 27))
+                    if (message.Status != 2 || message.Function is not (0 or 6 or 27 or 71))
                     { Interlocked.Increment(ref UnexpectedQueries); continue; }
                     await socket.SendAsync(Convert.FromHexString("03D9000000C201010100"), received.RemoteEndPoint, stop.Token);
-                    if (message.Function is 0 or 27)
+                    if (message.Function == 71)
+                    {
+                        var extended = new byte[93]; Sync[..32].CopyTo(extended, 42);
+                        BitConverter.GetBytes(26259u).CopyTo(extended, 74);
+                        await Send(new(71, 1, 32, 10, 0, extended), received.RemoteEndPoint);
+                    }
+                    else if (message.Function is 0 or 27)
                     {
                         var identity = new byte[79]; Sync[..32].CopyTo(identity, 0);
                         Encoding.ASCII.GetBytes("Live fixture").CopyTo(identity, 32);

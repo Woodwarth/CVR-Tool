@@ -4,7 +4,8 @@ Evidence: local static inspection of the installed AMP Controller and offline
 comparison with the private display-lock capture. No manufacturer source,
 binary, device identifiers or capture is included in this repository. The
 implementation is independently written from the observed wire layout.
-Physical hardware compatibility remains unverified.
+Selected operations have direct physical evidence on DSP-1004/106119; see
+Validation for the exact scope. Other models/firmware remain unverified.
 
 ## Framing
 
@@ -49,13 +50,14 @@ Channels and segments are zero-based on the wire.
 | 50 | Stereo/bridge pair | Byte 0 bridge, 1 stereo; channel is zero-based pair, side 1 |
 | 54/55 | Peak/RMS limiter blocks | 13 packed bytes including read-only voltage maximum |
 | 69 | Noise-gate bypass | Byte 0 enabled, 1 bypassed; side 1 |
+| 83 | Wink / display blinking | Status-0 command, channel/segment/side 0/0/0; byte 0 off, 1 on. Status-2 query replies status 1/channel 32/segment 10/side 0 with one byte |
 | 87 | Noise-gate threshold | Signed byte, -100..0 dB; side 1 |
 | 43 | Output FIR | 512 LE floats, optionally preceded by a 32-byte name |
 | 44 | FIR bypass | Byte 0 enabled, 1 bypassed; side 1 |
 | 52 | Input/output filter block | 141 bytes; side 0/1 |
 | 59 | Device presets | 34-byte mode/slot/name; mode 0 reads sixteen names, 1 stores, 2 recalls, 3 clears |
 | 60 | Device name write | 32 padded bytes; read back through function 0 |
-| 71 | Unassigned opening-time read | Empty status-2 request, 93-byte status-1 reply; meaning unconfirmed |
+| 71 | Extended identity / operating time | Empty status-2 request; 93-byte status-1 reply, model header at 42, LE uint32 minutes at 74 |
 
 The filter block contains ten packed 14-byte records and one global bypass
 byte. Each record: signed type, float gain, float frequency, float Q, reset
@@ -256,3 +258,19 @@ telemetry plus settled native state, rejecting unrelated native changes. No
 individual function-15 query semantics are assumed. Both operational controls
 were successfully set/restored on the real device; original native settings
 matched byte-for-byte afterwards. Current progress: 16/37 IDs (43%).
+
+Extended identity function 71 is now directly validated: the minute counter at
+offset 74 matches the user's operating-hours reference. The embedded header at
+42..73 must match the connected device; malformed/mismatched metadata is rejected.
+Direct application tests also confirm output and matrix mute writes with fresh
+full-settings readback; route gain is preserved. Only previously active paths
+were muted for testing; all native settings were restored byte-for-byte.
+Current partial live evidence: 17/37 function IDs (46%).
+
+Wink function 83 now has direct device evidence: status-0 commands 01 and 00
+are independently confirmed using status-2 queries with bulk-shaped replies
+(status 1, channel 32, segment 10, side 0, one byte). Ordinary echo-shaped query
+matching and status-3 command replies do not apply to this tested firmware.
+The test restored initial Wink off and left the complete native settings
+byte-identical. This is device state confirmation; visible blinking needs user
+observation. Progress: 18/38 documented function IDs (47%) with partial live evidence.

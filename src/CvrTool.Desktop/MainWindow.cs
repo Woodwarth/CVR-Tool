@@ -101,7 +101,7 @@ public sealed partial class MainWindow : Window
         if (!liveReadOnly && activeTab == "Details") activeTab = "Main";
         deviceName.Text = selectedDevice.Capabilities.Model;
         nameSlot.IsEnabled = !liveReadOnly;
-        deviceActions.IsEnabled = !controlWritePending && (!liveReadOnly || selectedDevice.Readings!.CanSetDisplayLock || selectedDevice.Readings.CanSetStandby);
+        deviceActions.IsEnabled = !controlWritePending && (!liveReadOnly || selectedDevice.Readings!.CanSetDisplayLock || selectedDevice.Readings.CanSetStandby || selectedDevice.Readings.CanSetWink);
         ShowDeviceName();
         RefreshDeviceInfo();
         deviceActions.Content = DeviceActions();
@@ -179,7 +179,7 @@ public sealed partial class MainWindow : Window
             "Details" => LiveDetailsPage(),
             _ => MainPage()
         };
-        if (liveReadOnly && page.Content is Control livePage) DisableLiveEdits(livePage, false);
+        if (liveReadOnly && page.Content is Control livePage) DisableLiveEdits(livePage, false, selectedDevice.Readings?.CanSetMutes == true && !controlWritePending);
     }
 
     public void ReloadSession()
@@ -203,6 +203,7 @@ public sealed partial class MainWindow : Window
     private void ApplyMute(ChannelDraft draft) => Commit(new(deviceId, draft.State.Number, Muted: draft.Muted));
     private void Commit(ChannelChange change)
     {
+        if (liveReadOnly) { CommitLiveMute(change); return; }
         try
         {
             service.Apply(service.Plan(change).Id);

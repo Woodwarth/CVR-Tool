@@ -1,5 +1,5 @@
 // Desktop / Preset management
-// Purpose: load/save native and JSON PC files and operate sixteen device preset slots.
+// Purpose: load/save native .sd PC files and operate sixteen device preset slots.
 // Units: one-based slots; file formats retain complete supported processing state.
 // State: bulk loads/reset/clear require an explicit confirmation in the product.
 // Scope: no raw JSON text view; errors and confirmed outcomes appear in the footer.
@@ -58,14 +58,13 @@ public sealed partial class MainWindow
         content.Children.Add(Card(device));
         var pc = new StackPanel { Spacing = 18 };
         pc.Children.Add(Heading("On PC"));
-        var format = new ComboBox { ItemsSource = new[] { "CVR native (.sd)", "CVR Tool JSON (.json)" }, SelectedIndex = 0, Width = 260, Tag = "preset-file-format" };
-        pc.Children.Add(Field("Save format", format));
         var files = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         files.Children.Add(Action("Load from PC", "preset-load-pc", async () =>
         {
-            var choices = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Load preset from PC", AllowMultiple = false, FileTypeFilter = [new("CVR / app preset") { Patterns = ["*.sd", "*.json"] }] });
+            var choices = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Load preset from PC", AllowMultiple = false, FileTypeFilter = [new("CVR native preset") { Patterns = ["*.sd"] }] });
             if (choices.Count != 1)
                 return;
+            if (!choices[0].Name.EndsWith(".sd", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Load a preset with the .sd extension.");
             await using var stream = await choices[0].OpenReadAsync();
             using var data = new MemoryStream();
             var buffer = new byte[8192];
@@ -85,12 +84,12 @@ public sealed partial class MainWindow
         }));
         files.Children.Add(Action("Save to PC", "preset-save-pc", async () =>
         {
-            var native = format.SelectedIndex == 0;
-            var extension = native ? "sd" : "json";
-            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "Save preset to PC", SuggestedFileName = deviceName.Text + "." + extension, DefaultExtension = extension, FileTypeChoices = [new(native ? "CVR native preset" : "CVR Tool JSON preset") { Patterns = ["*." + extension] }] });
+            const string extension = "sd";
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "Save preset to PC", SuggestedFileName = deviceName.Text + "." + extension, DefaultExtension = extension, FileTypeChoices = [new("CVR native preset") { Patterns = ["*." + extension] }] });
             if (file is null)
                 return;
-            var bytes = await Task.Run(() => native ? service.ExportNativePreset(editedId) : System.Text.Encoding.UTF8.GetBytes(service.ExportPreset(editedId)));
+            if (!file.Name.EndsWith(".sd", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Save the preset with the .sd extension.");
+            var bytes = await Task.Run(() => service.ExportNativePreset(editedId));
             await using var stream = await file.OpenWriteAsync();
             stream.SetLength(0);
             await stream.WriteAsync(bytes);

@@ -26,13 +26,26 @@ public sealed partial class DemoBackend
         }
     }
 
+    public DeviceControlState SetWink(string deviceId, bool enabled, long expectedRevision)
+    {
+        lock (gate)
+        {
+            var entry = Find(deviceId);
+            if (entry.Revision != expectedRevision) throw new InvalidOperationException("Device changed. Try Wink again.");
+            var after = GetControlState(deviceId) with { Wink = enabled };
+            controls[deviceId] = after;
+            devices[deviceId] = (entry.Device with { ObservedAt = DateTimeOffset.UtcNow }, entry.Revision + 1);
+            return after;
+        }
+    }
+
     private readonly Dictionary<string, DeviceControlState> controls = new();
     public DeviceControlState GetControlState(string deviceId)
     {
         lock (gate)
         {
             Find(deviceId);
-            return controls.GetValueOrDefault(deviceId) ?? new();
+            return controls.GetValueOrDefault(deviceId) ?? new(Wink: false);
         }
     }
 

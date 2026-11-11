@@ -38,7 +38,7 @@ for compatibility with isolated test clients and does not share GUI state.
 - `get_device_presets`, `store_device_preset`, `recall_device_preset` (slots 1–16),
   `clear_device_presets`, `factory_reset`.
 - `export_native_preset` returns base64 `.sd`; `load_preset_file` accepts base64
-  `.sd` or JSON. Bulk loads, slot writes/recalls, reset and clear require
+  native `.sd` files only. Bulk loads, slot writes/recalls, reset and clear require
   `confirmed=true`; the default refuses the operation.
 
 - `get_output_dynamics`, `plan_output_dynamics`, `apply_output_dynamics` expose
@@ -74,3 +74,6 @@ Build with .NET SDK 10, then run `python scripts/configure-mcp.py` to create
 project-local Codex/Claude configurations. Existing unrelated entries are kept.
 `python scripts/check-mcp.py Release` verifies two clients sharing one owner.
 This checks stdio MCP; live tool loading by a specific AI client is separate.
+
+`set_device_wink` enables/disables display blinking through the shared owner.
+Live writes use a separate function-83 state query and preserve DSP settings.

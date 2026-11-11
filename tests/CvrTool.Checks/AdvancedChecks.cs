@@ -31,7 +31,7 @@ static class AdvancedChecks
         check(service.GetFir(id,1).Name=="Delay","Rejected FIR leaves device unchanged");
         var json=service.ExportPreset(id);var captured=JsonSerializer.Deserialize<PresetDocument>(json)!;
         check(captured is {SchemaVersion:7,OutputProcessing.Count:4,Firs.Count:4,Inputs.Count:4,Routing.Count:16},"JSON captures full supported processing");
-        service.Apply(service.Plan(new(id,1,GainDb:-20)).Id);service.LoadPresetFile(id,"preset.json",System.Text.Encoding.UTF8.GetBytes(json));
+        service.Apply(service.Plan(new(id,1,GainDb:-20)).Id);Reject(()=>service.LoadPresetFile(id,"preset.json",System.Text.Encoding.UTF8.GetBytes(json)),"JSON file loading rejected");service.LoadPreset(id,captured);
         check(service.GetDevice(id).Outputs[0].GainDb==captured.Outputs[0].GainDb && service.GetFir(id,1).Name=="Delay","JSON restores full session");
         foreach(var slot in Enumerable.Range(1,16))service.StoreDevicePreset(id,slot,"Slot "+slot);
         check(service.GetDevicePresets(id).Slots.All(s=>s.Occupied) && service.GetDevicePresets("demo-1502").Slots.All(s=>!s.Occupied),"All sixteen slots store independently per device");

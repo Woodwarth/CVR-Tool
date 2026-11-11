@@ -32,6 +32,8 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
     private bool forceSettingsRefresh;
     private bool standbyState;
     private bool standbyKnown;
+    private uint? operatingMinutes;
+    private DateTimeOffset metadataCheckedAt;
 
     public CvrSnapshotBackend(NetworkTarget target)
     {
@@ -41,6 +43,7 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
         {
             try { client.ReadSnapshot(0); } catch (TimeoutException) { }
             ReadSettings(client);
+            ReadMetadata(client);
             ReadTelemetry(client);
             identityBody = client.ObservedIdentity;
             UpdateSnapshot();
@@ -73,6 +76,19 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
             settingsAt = DateTimeOffset.UtcNow;
             forceSettingsRefresh = false;
         }
+    }
+    private void ReadMetadata(CvrUdpClient client)
+    {
+        try
+        {
+            ReadWink(client);
+            var body = client.ReadSnapshot(71);
+            string header; lock (gate) header = Text(native[..32]);
+            var minutes = DeviceMetadataCodec.OperatingMinutes(body, header);
+            lock (gate) operatingMinutes = minutes;
+        }
+        catch (Exception ex) when (ex is IOException or TimeoutException or NotSupportedException) { }
+        finally { metadataCheckedAt = DateTimeOffset.UtcNow; }
     }
     private void ReadTelemetry(CvrUdpClient client)
     {
@@ -117,7 +133,7 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
         var currentPreset = native.Length == 2687 ? Text(native[2160..2192]) : null;
         var readings = new DeviceReadings(true, Text(native[..32]), mac,
             string.IsNullOrEmpty(currentPreset) ? null : currentPreset, settingsAt,
-            telemetryAt == default ? null : telemetryAt, power, statusCodes?.ToArray(), error, CanSetDisplayLock: true, CanSetStandby: standbyKnown);
+            telemetryAt == default ? null : telemetryAt, power, statusCodes?.ToArray(), error, CanSetDisplayLock: true, CanSetStandby: standbyKnown, CanSetMutes: true, OperatingMinutes: operatingMinutes, CanSetWink: winkState is not null);
         device = new(id, string.IsNullOrWhiteSpace(name) ? "—" : name,
             new(settings.Model, settings.Outputs.Count, settings.Outputs.Count, false), false,
             settingsAt, settings.Outputs.ToArray(), readings);
@@ -137,6 +153,8 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
                     {
                         if (forceSettingsRefresh || DateTimeOffset.UtcNow - observed >= TimeSpan.FromSeconds(5)) ReadSettings(client);
                         ReadTelemetry(client);
+                        if (winkState is not null && DateTimeOffset.UtcNow - winkCheckedAt >= TimeSpan.FromSeconds(5)) ReadWink(client);
+                        if (DateTimeOffset.UtcNow - metadataCheckedAt >= TimeSpan.FromMinutes(1)) ReadMetadata(client);
                         if (client.ObservedIdentity is { } identity) lock (gate) identityBody = identity;
                     });
                     lock (gate) { error = null; UpdateSnapshot(); }
@@ -170,15 +188,13 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
     public (FirState State, long Revision) GetFir(string deviceId, int channel)
     { lock (gate) { CheckId(deviceId); CheckChannel(channel); return (new(channel, "Unknown", [], native[36 + (channel - 1) * 515 + 368] == 0, CoefficientsKnown: false), revision); } }
     public DeviceControlState GetControlState(string deviceId)
-    { lock (gate) { CheckId(deviceId); return new(native[33] != 0, standbyState, StandbyKnown: standbyKnown); } }
+    { lock (gate) { CheckId(deviceId); return new(native[33] != 0, standbyState, StandbyKnown: standbyKnown, Wink: winkState); } }
     public DevicePresetState GetDevicePresets(string deviceId)
     { lock (gate) { CheckId(deviceId); return new([], device.Readings?.CurrentPreset); } }
     public PresetDocument CapturePreset(string deviceId)
     { lock (gate) { CheckId(deviceId); return JsonSerializer.Deserialize<PresetDocument>(JsonSerializer.Serialize(settings with { Name = device.Name }))!; } }
 
-    private static NotSupportedException ReadOnly() => new("DSP settings are read-only on this live connection. No DSP setting was written.");
-    public ChannelState Apply(ChannelChange change, long expectedRevision) => throw ReadOnly();
-    public RoutingCellState ApplyRouting(RoutingChange change, long expectedRevision) => throw ReadOnly();
+    private static NotSupportedException ReadOnly() => new("Only mute and operational controls are writable on this live connection.");
     public DeviceSnapshot Rename(string deviceId, string name, long expectedRevision) => throw ReadOnly();
     public InputProcessingState ApplyInputProcessing(InputProcessingChange change, long expectedRevision) => throw ReadOnly();
     public InputProcessingState ApplyOutputProcessing(InputProcessingChange change, long expectedRevision) => throw ReadOnly();

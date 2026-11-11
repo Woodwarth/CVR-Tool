@@ -51,6 +51,7 @@ public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend,
     public RoutingCellState ApplyRouting(RoutingChange change, long expectedRevision) => Call<RoutingCellState>("apply-routing", new { Change = change, Revision = expectedRevision });
     public DeviceSnapshot Rename(string deviceId, string name, long expectedRevision) => Call<DeviceSnapshot>("rename", new { Id = deviceId, Name = name, Revision = expectedRevision });
     public IReadOnlyList<OutputTelemetry> GetTelemetry(string deviceId) => Call<OutputTelemetry[]>("telemetry", new { Id = deviceId });
+    public DeviceControlState SetWink(string id, bool enabled, long revision) => Call<DeviceControlState>("wink", new { Id = id, Enabled = enabled, Revision = revision });
     public DeviceControlState GetControlState(string deviceId) => Call<DeviceControlState>("controls", new { Id = deviceId });
     public DeviceControlState SetControlState(string deviceId, bool? displayLocked, bool? standby, long expectedRevision) => Call<DeviceControlState>("set-controls", new { Id = deviceId, Locked = displayLocked, Standby = standby, Revision = expectedRevision });
     public (InputProcessingState State, long Revision) GetInputProcessing(string deviceId, int channel)

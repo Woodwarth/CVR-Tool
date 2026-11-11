@@ -22,6 +22,9 @@ public sealed partial class AmplifierTools
     [McpServerTool(Name = "get_telemetry")]
     [Description("Read per-output telemetry. Null fields mean unknown, not measured zero or healthy status.")]
     public string GetTelemetry(string deviceId) => Json(service.GetTelemetry(deviceId));
+    [McpServerTool(Name = "set_device_wink")]
+    [Description("Enable or disable amplifier display blinking through the shared owner, with independent live state readback.")]
+    public string SetDeviceWink(string deviceId, bool enabled) => Json(service.SetWink(deviceId, enabled));
     [McpServerTool(Name = "get_device_controls")]
     [Description("Read display-lock and standby states through the shared device backend.")]
     public string GetDeviceControls(string deviceId) => Json(service.GetControlState(deviceId));

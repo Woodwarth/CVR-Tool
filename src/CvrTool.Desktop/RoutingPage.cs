@@ -50,11 +50,14 @@ public sealed partial class MainWindow
                 {
                     GainDb = state.GainDb,
                     Muted = state.Muted,
-                    Tag = $"route-dial-{input}-{output}"
+                    Tag = $"route-dial-{input}-{output}",
+                    CanEditGain = !liveReadOnly
                 };
                 Avalonia.Automation.AutomationProperties.SetName(dial, $"Source {input} to output {(char)('A' + output - 1)} gain and mute");
                 void Change(double? gainDb = null, bool? muted = null)
                 {
+                    if (liveReadOnly && muted is { } desired && gainDb is null)
+                    { CommitLiveRouteMute(state.Input, state.Output, desired); return; }
                     try
                     {
                         current = service.ApplyRouting(service.PlanRouting(new(deviceId, state.Input, state.Output, gainDb, muted)).Id);

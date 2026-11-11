@@ -18,7 +18,7 @@ public static class DeviceProfiles
     public static DeviceCapabilities Dsp1502 { get; } = new("DSP-1502", 2, 2, false);
 }
 
-public sealed record DeviceControlState(bool DisplayLocked = false, bool Standby = false, bool StandbyKnown = true);
+public sealed record DeviceControlState(bool DisplayLocked = false, bool Standby = false, bool StandbyKnown = true, bool? Wink = null);
 
 public sealed record DeviceSnapshot(
     string Id,

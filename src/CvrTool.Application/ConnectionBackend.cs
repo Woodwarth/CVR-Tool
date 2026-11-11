@@ -116,6 +116,8 @@ public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, I
         lock (gate)
             return Backend(change.DeviceId).ApplyInputProcessing(change, revision);
     }
+    public DeviceControlState SetWink(string id, bool enabled, long revision)
+    { lock (gate) return Backend(id).SetWink(id, enabled, revision); }
     public DeviceControlState GetControlState(string id)
     {
         lock (gate)

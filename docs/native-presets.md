@@ -1,6 +1,7 @@
 # Native presets (.sd)
 
-The Presets page loads/saves original CVR `.sd` and CVR Tool JSON files. There
+The Presets page loads and saves only original CVR `.sd` files. The file-loading
+API also rejects other extensions; structured MCP JSON interchange remains. There
 is no raw text view. Native support is intentionally limited to the evidenced
 B-series firmware headers 106118 and 106119, with two or four channels. Unknown
 versions, inconsistent lengths, wrong models and invalid values are rejected.

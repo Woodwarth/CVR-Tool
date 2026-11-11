@@ -75,7 +75,9 @@ public sealed partial class AmplifierService
     {
         if (data.Length > NativePresetCodec.MaximumBytes)
             throw new InvalidDataException("Preset exceeds 1 MiB.");
-        var preset = Path.GetExtension(name).Equals(".sd", StringComparison.OrdinalIgnoreCase) ? NativePresetCodec.Decode(data) : System.Text.Json.JsonSerializer.Deserialize<PresetDocument>(data, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true, MaxDepth = 32 }) ?? throw new InvalidDataException("Invalid JSON preset.");
+        if (!Path.GetExtension(name).Equals(".sd", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Preset files must use the .sd extension.");
+        var preset = NativePresetCodec.Decode(data);
         return LoadPreset(id, preset);
     }
 }

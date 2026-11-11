@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.3
+
+- Linked metre/millisecond delay editing and whole-tile Trim interaction.
+- Stereo/Bridge shows the current mode and asks for confirmation before switching.
+- PC preset loading and saving use only native .sd files.
+- Operating time from verified extended device identity appears in the header/details.
+- Wink blinks the amplifier display with independently queried state; the header
+  controls move left and use a waving-hand symbol for Wink.
+- Live output and matrix mute writes use fresh settings and independent readback;
+  physical tests restored the original settings byte-for-byte.
+
 ## 0.7.1
 
 - Automatic CVR discovery on the wired amplifier LAN, alongside all demo devices.

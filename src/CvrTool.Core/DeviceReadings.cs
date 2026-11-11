@@ -16,4 +16,7 @@ public sealed record DeviceReadings(
     IReadOnlyList<int>? StatusCodes,
     string? Error = null,
     bool CanSetDisplayLock = false,
-    bool CanSetStandby = false);
+    bool CanSetStandby = false,
+    bool CanSetMutes = false,
+    uint? OperatingMinutes = null,
+    bool CanSetWink = false);

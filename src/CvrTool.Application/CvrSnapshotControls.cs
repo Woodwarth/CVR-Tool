@@ -31,7 +31,7 @@ public sealed partial class CvrSnapshotBackend
                 lock (gate)
                 {
                     error = null; UpdateSnapshot();
-                    return new(native[33] != 0, standbyState, StandbyKnown: standbyKnown);
+                    return new(native[33] != 0, standbyState, StandbyKnown: standbyKnown, Wink: winkState);
                 }
             }
             catch (Exception ex)

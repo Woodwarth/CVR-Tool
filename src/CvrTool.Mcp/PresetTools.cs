@@ -16,7 +16,7 @@ public sealed partial class AmplifierTools
 
     [McpServerTool(Name = "export_native_preset"), Description("Return a B-series 118/119 CVR .sd backup as base64; preserves opaque native settings.")]
     public string ExportNativePreset(string deviceId) => Json(new { FileName = "preset.sd", Base64 = Convert.ToBase64String(service.ExportNativePreset(deviceId)) });
-    [McpServerTool(Name = "load_preset_file"), Description("Replace processing from a base64 .sd or app JSON file. Model/topology must match. Requires confirmed=true.")]
+    [McpServerTool(Name = "load_preset_file"), Description("Replace processing from a base64 native .sd file. Model/topology must match. Requires confirmed=true.")]
     public string LoadPresetFile(string deviceId, string fileName, string base64, bool confirmed = false)
     {
         RequireConfirmation(confirmed);

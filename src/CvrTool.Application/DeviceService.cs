@@ -10,6 +10,7 @@ namespace CvrTool.Application;
 public sealed partial class AmplifierService
 {
     public IReadOnlyList<OutputTelemetry> GetTelemetry(string id) => backend.GetTelemetry(id);
+    public DeviceControlState SetWink(string id, bool enabled) => backend.SetWink(id, enabled, backend.GetChannel(id, 1).Revision);
     public DeviceControlState GetControlState(string id) => backend.GetControlState(id);
     public DeviceControlState SetControlState(string id, bool? displayLocked = null, bool? standby = null)
     {

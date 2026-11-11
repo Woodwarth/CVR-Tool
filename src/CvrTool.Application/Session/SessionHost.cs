@@ -98,6 +98,7 @@ public sealed class SessionHost : IDisposable
             "routing" => backend.GetRouting(Id()),
             "input" => InputSnapshot(Id(), Channel()),
             "telemetry" => backend.GetTelemetry(Id()),
+            "wink" => backend.SetWink(Id(), args.GetProperty("Enabled").GetBoolean(), Revision()),
             "controls" => backend.GetControlState(Id()),
             "apply-channel" => backend.Apply(Change<ChannelChange>(), Revision()),
             "apply-routing" => backend.ApplyRouting(Change<RoutingChange>(), Revision()),
@@ -106,7 +107,7 @@ public sealed class SessionHost : IDisposable
             "set-controls" => backend.SetControlState(Id(), args.GetProperty("Locked").Deserialize<bool?>(), args.GetProperty("Standby").Deserialize<bool?>(), Revision()),
             _ => throw new ArgumentException("Unknown session operation.")
         };
-        if (request.Method.StartsWith("apply-", StringComparison.Ordinal) || request.Method is "rename" or "set-controls" or "connect" or "disconnect" or "store-preset" or "recall-preset" or "factory-reset" or "clear-presets")
+        if (request.Method.StartsWith("apply-", StringComparison.Ordinal) || request.Method is "wink" or "rename" or "set-controls" or "connect" or "disconnect" or "store-preset" or "recall-preset" or "factory-reset" or "clear-presets")
             Changed?.Invoke();
         return result;
     }

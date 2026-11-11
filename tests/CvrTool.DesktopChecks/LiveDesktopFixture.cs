@@ -16,7 +16,7 @@ sealed class LiveDesktopFixture : IAmplifierBackend, IAdvancedAmplifierBackend
     public DeviceSnapshot GetDevice(string id) => id != LiveId ? demo.GetDevice(id) : demo.GetDevice("demo-1004") with
     {
         Id = LiveId, Name = "Live fixture", IsDemo = false,
-        Readings = new(true, "Fixture-106119-DSP-1004", "02:00:00:00:00:01", "Fixture preset", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 25, [8,8,8,8], Error, CanSetDisplayLock:true, CanSetStandby:true)
+        Readings = new(true, "Fixture-106119-DSP-1004", "02:00:00:00:00:01", "Fixture preset", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 25, [8,8,8,8], Error, CanSetDisplayLock:true, CanSetStandby:true, CanSetMutes:true, OperatingMinutes:26259, CanSetWink:true)
     };
     public IReadOnlyList<DeviceSnapshot> ListDevices() => demo.ListDevices().Append(GetDevice(LiveId)).ToArray();
     public (ChannelState State,long Revision) GetChannel(string id,int channel) => demo.GetChannel(Map(id),channel);

@@ -31,7 +31,7 @@ public sealed class CvrUdpClient : IDisposable
 
     public byte[] ReadSnapshot(byte function)
     {
-        if (function is not (0 or 6 or 27)) throw new ArgumentException("Only observed bulk reads are supported.");
+        if (function is not (0 or 6 or 27 or 71 or 83)) throw new ArgumentException("Only observed bulk reads are supported.");
         return Exchange(function, 0, 0, 0, [], 2, 1, observedBulk: true).GetAwaiter().GetResult();
     }
 
@@ -139,7 +139,7 @@ public sealed class CvrUdpClient : IDisposable
                 ObserveIdentity(message);
                 if (observedBulk)
                 {
-                    var validLength = function == 0 ? message.Body.Length is 75 or 79 :
+                    var validLength = function == 83 ? message.Body.Length == 1 : function == 71 ? message.Body.Length == 93 : function == 0 ? message.Body.Length is 75 or 79 :
                         function == 27 ? message.Body.Length is 2232 or 2687 :
                         message.Body.Length is 32 or 56 or 72 or 76 or 88 or 92 or 96;
                     var responseChannel = function == 0 ? 3 : 32;
