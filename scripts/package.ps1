@@ -29,7 +29,7 @@ The desktop executable supports --mcp for integrated stdio MCP. Start the GUI
 first, then connect your MCP client with that argument. Both use one session.
 The separate executable in mcp/ is an alternative client of the same session.
 For headless ownership use --host-session. Manual CVR targets are configured
-in Network or with connect_amplifier. No network discovery or firmware updates.
+with the integrated MCP tool connect_amplifier. No network discovery or firmware updates.
 Updates: choose Updates > Check for updates > Download and restart in the app.
 Packages are verified and installed in your user profile; previous versions stay.
 Export local session settings before restarting. Version 0.3.0 requires one manual

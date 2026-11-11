@@ -51,7 +51,7 @@ public sealed partial class MainWindow
             content.Children.Add(Text(label, 13));
             content.Children.Add(plot);
             var ticks = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,*") };
-            var labels = plot.Logarithmic ? new[] { "20 Hz", "100 Hz", "1 kHz", "10 kHz", "24 kHz" } : new[] { "0 ms", "2.66 ms", "5.32 ms", "7.98 ms", "10.65 ms" };
+            var labels = plot.Logarithmic ? new[] { "20 Hz", "118 Hz", "693 Hz", "4.08 kHz", "24 kHz" } : new[] { "0 ms", "2.66 ms", "5.32 ms", "7.98 ms", "10.65 ms" };
             for (var n = 0; n < 5; n++)
                 AddColumn(ticks, Text(labels[n], 10, Muted), n);
             content.Children.Add(ticks);
