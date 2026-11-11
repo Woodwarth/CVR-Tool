@@ -2,6 +2,9 @@
 
 ## 0.6.1
 
+- Smaller self-contained packages: one shared desktop/MCP runtime and no debug
+  symbols in downloads. The integrated `--mcp` command stays unchanged.
+
 - Outputs: stereo/bridge switching for each A/B or C/D pair.
 - Per-output noise gate with On/Off and editable threshold (-100 to 0 dB).
 - Peak/RMS limiter editors with enable, output-voltage thresholds and timing;

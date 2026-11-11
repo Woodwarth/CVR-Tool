@@ -3,8 +3,12 @@
 Start the desktop app first. Configure the MCP client with the absolute desktop
 executable path and `args: ["--mcp"]`. Windows executable:
 `desktop/CvrTool.Desktop.exe`; Mac: `CVR Tool.app/Contents/MacOS/CvrTool.Desktop`.
-The optional separate `mcp/CvrTool.Mcp` executable (Windows: `.exe`) takes no
-arguments and uses the same session. No demo flag or SDK/runtime is required.
+From v0.6.1, the optional `CvrTool.Mcp` executable lives beside the desktop
+executable (`desktop/` on Windows; `Contents/MacOS/` inside the Mac app). It
+takes no extra arguments and shares the included runtime. Earlier packages
+had a separate `mcp/` directory; update that path if using the optional apphost.
+The recommended desktop path with `--mcp` is unchanged. No demo flag or
+SDK/runtime is required.
 Stdout contains only MCP messages; logs use stderr. There is no HTTP listener.
 
 For a headless owner, run either executable with `--host-session`. Start a

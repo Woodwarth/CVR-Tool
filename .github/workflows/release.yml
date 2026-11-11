@@ -60,6 +60,19 @@ jobs:
           $env:DOTNET_MULTILEVEL_LOOKUP = '0'
           python scripts/check-mcp.py Release
           if ($LASTEXITCODE -ne 0) { throw 'Packaged executable test failed' }
+      - name: Test shared-runtime MCP apphost
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $version = [string]$props.Project.PropertyGroup.Version
+          $binary = if ($IsWindows) { 'desktop/CvrTool.Mcp.exe' } else { 'CVR Tool.app/Contents/MacOS/CvrTool.Mcp' }
+          $env:CVR_MCP_INTEGRATED = '0'
+          $env:CVR_MCP_HANDOFF = '0'
+          $env:CVR_MCP_EXECUTABLE = Join-Path $PWD "artifacts/update-install-check/versions/$version/${{ matrix.rid }}/$binary"
+          $env:DOTNET_ROOT = Join-Path $PWD 'artifacts/no-installed-runtime'
+          $env:DOTNET_MULTILEVEL_LOOKUP = '0'
+          python scripts/check-mcp.py Release
+          if ($LASTEXITCODE -ne 0) { throw 'Shared-runtime MCP apphost test failed' }
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: cvr-tool-${{ matrix.rid }}

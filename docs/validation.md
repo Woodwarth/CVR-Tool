@@ -17,6 +17,8 @@ Windows x64 / .NET SDK 10.0.403:
 - Two private native CVR exports (DSP-1004/DSP-1502) were decoded, applied to local
   models and exported byte-for-byte unchanged. Files remain outside Git.
 
+Release packages contain one shared runtime and exclude PDB debug symbols.
+Both integrated desktop `--mcp` and the adjacent optional MCP apphost are checked.
 Release jobs additionally extract their real self-contained package through
 the updater and run integrated MCP from the installed copy. This checks ZIP
 on both Windows architectures and tar.gz/file permissions on Apple Silicon.

@@ -14,7 +14,8 @@ for two- and four-channel models.
 
 [Latest release and checksums](https://github.com/Woodwarth/CVR-Tool/releases/latest).
 Extract the entire package. The runtime is included; no SDK or additional
-software is required. Windows packages are unsigned; Mac is ad-hoc signed,
+software is required. Desktop and integrated MCP share one bundled runtime.
+Windows packages are unsigned; Mac is ad-hoc signed,
 not notarized. No Intel Mac build.
 
 From v0.4.0, choose **Updates → Check for updates → Download and restart**
