@@ -104,7 +104,7 @@ public sealed partial class DemoBackend : IAdvancedAmplifierBackend
                 Outputs = preset.Outputs.ToArray()
             }, revision);
             if (preset.Inputs is not null)
-                inputs[id] = preset.Inputs.ToArray();
+                inputs[id] = preset.Inputs.Select(input=>input with {GainDb=input.GainDb ?? GetInputProcessing(id,input.Channel).State.GainDb}).ToArray();
             if (preset.Routing is not null)
                 routing[id] = preset.Routing.ToArray();
             foreach (var state in preset.OutputProcessing ?? [])

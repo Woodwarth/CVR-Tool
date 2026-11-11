@@ -30,7 +30,7 @@ static class AdvancedChecks
         Reject(()=>service.SetFir(id,new(1,"rate",new double[]{1},true,44100)),"FIR rejects incompatible sample rate");
         check(service.GetFir(id,1).Name=="Delay","Rejected FIR leaves device unchanged");
         var json=service.ExportPreset(id);var captured=JsonSerializer.Deserialize<PresetDocument>(json)!;
-        check(captured is {SchemaVersion:6,OutputProcessing.Count:4,Firs.Count:4,Inputs.Count:4,Routing.Count:16},"JSON captures full supported processing");
+        check(captured is {SchemaVersion:7,OutputProcessing.Count:4,Firs.Count:4,Inputs.Count:4,Routing.Count:16},"JSON captures full supported processing");
         service.Apply(service.Plan(new(id,1,GainDb:-20)).Id);service.LoadPresetFile(id,"preset.json",System.Text.Encoding.UTF8.GetBytes(json));
         check(service.GetDevice(id).Outputs[0].GainDb==captured.Outputs[0].GainDb && service.GetFir(id,1).Name=="Delay","JSON restores full session");
         foreach(var slot in Enumerable.Range(1,16))service.StoreDevicePreset(id,slot,"Slot "+slot);

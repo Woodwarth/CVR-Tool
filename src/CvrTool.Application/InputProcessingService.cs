@@ -17,10 +17,12 @@ public sealed partial class AmplifierService
 
     public static InputProcessingState MergeInput(InputProcessingState before, InputProcessingChange change)
     {
+        if(change.GainDb is { } gain && (!double.IsFinite(gain) || gain is < -80 or >18))throw new ArgumentOutOfRangeException(nameof(change),"Input gain must be between -80 and +18 dB.");
+        if(change.GainDb is not null && before.GainDb is null)throw new NotSupportedException("Input gain has not been observed on this backend.");
         if (change.DelayMs is { } delay && (!double.IsFinite(delay) || delay is < 0 or > 100))
             throw new ArgumentOutOfRangeException(nameof(change), "Input delay must be between 0 and 100 ms.");
-        if (change.DelayMs is null && change.EqEnabled is null && change.Bands is null && change.HighPass is null && change.LowPass is null)
-            throw new ArgumentException("Supply delay, EQ or crossover settings.");
+        if (change.DelayMs is null && change.EqEnabled is null && change.Bands is null && change.HighPass is null && change.LowPass is null && change.GainDb is null)
+            throw new ArgumentException("Supply gain, delay, EQ or crossover settings.");
         var bands = change.Bands ?? before.Bands;
         if (bands.Count != 8 || !bands.Select(b => b.Number).Order().SequenceEqual(Enumerable.Range(1, 8)))
             throw new ArgumentException("Input EQ requires exactly eight uniquely numbered bands.");
@@ -40,6 +42,7 @@ public sealed partial class AmplifierService
             throw new NotSupportedException("Crossover state has not been observed on this backend.");
         return before with
         {
+            GainDb = change.GainDb ?? before.GainDb,
             DelayMs = change.DelayMs ?? before.DelayMs,
             EqEnabled = change.EqEnabled ?? before.EqEnabled,
             Bands = bands.OrderBy(b => b.Number).ToArray(),

@@ -20,6 +20,43 @@ internal static class CvrPeerChecks
         // Capture-derived display-lock fixture, excluding all addresses and device identifiers.
         var locked = CvrWire.Encode(new(17, 1, 0, 0, 0, [1]));
         check(Convert.ToHexString(locked) == "03D90000010E000100005511010000000000000001000E76", "Display lock framing matches the observed command bytes");
+        var unlocked=CvrWire.Encode(new(17,1,0,0,0,[0]));
+        check(Convert.ToHexString(unlocked)=="03D90000010E000100005511010000000000000000000E75","Display unlock framing matches the controlled physical capture");
+        // Device/model identifiers and padding are removed from this framing-only fixture.
+        var fixedAck=Convert.FromHexString("03D9000000C201010100");
+        check(CvrWire.Header(fixedAck)==(0,450,1,true),"Observed fixed D1004 ACK framing is accepted without assuming an address echo");
+        foreach(var mutation in new[]{(Offset:8,Value:(byte)0),(Offset:5,Value:(byte)193),(Offset:7,Value:(byte)2),(Offset:0,Value:(byte)0)})
+        {
+            var invalid=fixedAck.ToArray();invalid[mutation.Offset]=mutation.Value;
+            try{CvrWire.Header(invalid);throw new Exception("Invalid fixed ACK accepted");}
+            catch(InvalidDataException){check(true,"Fixed ACK exception does not relax malformed/data packet validation");}
+        }
+        try{CvrWire.Header(fixedAck.Concat(new byte[]{0}).ToArray());throw new Exception("Trailing ACK byte accepted");}
+        catch(InvalidDataException){check(true,"Fixed ACK must contain exactly its ten-byte header");}
+        check(Convert.ToHexString(CvrWire.Encode(new(9,1,0,0,0,BitConverter.GetBytes(4f))))=="03D900000111000100005509010000000000000000008040001130","Input A 4 dB command matches the controlled capture exactly");
+        check(Convert.ToHexString(CvrWire.Encode(new(9,1,0,0,0,BitConverter.GetBytes(4.5f))))=="03D900000111000100005509010000000000000000009040001140","Input A 4.5 dB command matches the controlled capture exactly");
+        check(Convert.ToHexString(CvrWire.Encode(new(9, 1, 0, 0, 1, BitConverter.GetBytes(-.5f)))) == "03D9000001110001000055090100000000000001000000BF001130", "Output A -0.5 dB trim command matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(9, 1, 0, 0, 1, BitConverter.GetBytes(0f)))) == "03D900000111000100005509010000000000000100000000001171", "Output A zero trim command matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(10, 1, 0, 0, 1, [0]))) == "03D90000010E00010000550A010000000000000100000E6F", "Output A mute matches the user-confirmed active-low capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(10, 1, 0, 0, 1, [1]))) == "03D90000010E00010000550A010000000000000101000E70", "Output A unmute matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(14, 1, 0, 0, 1, BitConverter.GetBytes(8.89f)))) == "03D90000011100010000550E0100000000000001713D0E41001173", "Output A 8.89 ms delay matches the user-confirmed output control capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(14, 1, 0, 0, 1, BitConverter.GetBytes(0f)))) == "03D90000011100010000550E010000000000000100000000001176", "Output A zero delay matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(14, 1, 0, 0, 0, BitConverter.GetBytes(8.89f)))) == "03D90000011100010000550E0100000000000000713D0E41001172", "Input A 8.89 ms delay uses side zero and matches the capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(14, 1, 0, 0, 0, BitConverter.GetBytes(0f)))) == "03D90000011100010000550E010000000000000000000000001175", "Input A zero delay matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(12, 1, 0, 0, 0, [0, 0, 0, 0, 0]))) == "03D90000011200010000550C01000000000000000000000000001274", "Route 1-A mute matches the controlled active-low capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(12, 1, 0, 0, 0, [0, 0, 0, 0, 1]))) == "03D90000011200010000550C01000000000000000000000001001275", "Route 1-A unmute matches the controlled capture without changing gain");
+        check(Convert.ToHexString(CvrWire.Encode(new(12, 1, 0, 1, 0, [0, 0, 0, 191, 1]))) == "03D90000011200010000550C0100010000000000000000BF01001235", "Captured Input 2 to Output A gain uses output channel zero and input segment one");
+        check(Convert.ToHexString(CvrWire.Encode(new(12, 1, 0, 1, 0, [205, 204, 76, 62, 0]))) == "03D90000011200010000550C0100010000000000CDCC4C3E00001298", "Captured off-diagonal re-mute preserves the final +0.2 dB mouse value");
+        check(Convert.ToHexString(CvrWire.Encode(new(36, 1, 0, 0, 0, [1]))) == "03D90000010E000100005524010000000000000001000E89", "Input EQ bypass matches the controlled off command");
+        check(Convert.ToHexString(CvrWire.Encode(new(36, 1, 0, 0, 0, [0]))) == "03D90000010E000100005524010000000000000000000E88", "Input EQ enable matches the controlled on command");
+        check(Convert.ToHexString(CvrWire.Encode(new(32, 1, 0, 5, 0, BitConverter.GetBytes(1250f)))) == "03D900000111000100005520010005000000000000409C440011AC", "Input 1 EQ5 1250 Hz frequency matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(32, 1, 0, 5, 0, BitConverter.GetBytes(1200f)))) == "03D900000111000100005520010005000000000000009644001166", "Input 1 EQ5 1200 Hz frequency matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(31, 1, 0, 5, 0, BitConverter.GetBytes(4.5f)))) == "03D90000011100010000551F01000500000000000000904000115B", "Input 1 EQ5 gain +4.5 dB matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(31, 1, 0, 5, 0, BitConverter.GetBytes(5f)))) == "03D90000011100010000551F01000500000000000000A04000116B", "Input 1 EQ5 gain +5 dB matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(34, 1, 0, 5, 0, BitConverter.GetBytes(3.5f)))) == "03D90000011100010000552201000500000000000000604000112E", "Input 1 EQ5 Q 3.5 matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(34, 1, 0, 5, 0, BitConverter.GetBytes(4f)))) == "03D90000011100010000552201000500000000000000804000114E", "Input 1 EQ5 Q 4 matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(30, 1, 0, 5, 0, [255]))) == "03D90000010E00010000551E0100050000000000FF000E86", "Input EQ5 Peak bypass matches the controlled FF command");
+        check(Convert.ToHexString(CvrWire.Encode(new(30, 1, 0, 5, 0, [0]))) == "03D90000010E00010000551E010005000000000000000E87", "Input EQ5 Peak enable matches the controlled zero command");
         var corrupt = locked[10..];
         corrupt[^1] ^= 1;
         try
@@ -38,13 +75,28 @@ internal static class CvrPeerChecks
         var remoteService = new AmplifierService(new SessionBackend(pipe));
         check(remoteService.GetDevice(id).Id == id, "Connected peer is accessible through shared-session IPC");
         check(!device.IsDemo && device.Outputs.Count == 2 && device.Outputs[0].GainDb == -12, "Physical backend reads identity and settings instead of simulation defaults");
+        check(!device.Outputs[0].Muted && !device.Outputs[1].Muted, "Output wire value 1 decodes as unmuted");
+        service.Apply(service.Plan(new(id, 1, Muted: true)).Id);
+        check(peer.Values[(10, 0, 0, 1)][0] == 0 && service.GetDevice(id).Outputs[0].Muted && !service.GetDevice(id).Outputs[1].Muted, "Mute sends zero and isolates the selected output");
+        service.Apply(service.Plan(new(id, 1, Muted: false)).Id);
+        check(peer.Values[(10, 0, 0, 1)][0] == 1 && !service.GetDevice(id).Outputs[0].Muted, "Unmute sends one with independent readback");
         var plan = service.Plan(new(id, 1, GainDb: -6, Muted: false, DelayMs: 2.5, Inverted: true));
         check(service.GetDevice(id).Outputs[0].GainDb == -12, "LAN plan performs no writes");
         check(remoteService.Apply(remoteService.Plan(new(id, 2, GainDb: -7)).Id).GainDb == -7, "Shared-session client writes to the same UDP owner");
         plan = service.Plan(new(id, 1, GainDb: -6, Muted: false, DelayMs: 2.5, Inverted: true));
         check(service.Apply(plan.Id) is { GainDb: -6, Muted: false, DelayMs: 2.5, Inverted: true }, "Output writes are confirmed by independent reads");
         service.ApplyRouting(service.PlanRouting(new(id, 2, 1, GainDb: -3, Muted: false)).Id);
-        check(service.GetRouting(id).Cells.Single(c => c.Input == 2 && c.Output == 1) is { GainDb: -3, Muted: false } && peer.Values[(12, 1, 0, 0)][4] == 0, "Matrix wire orientation is input/channel and output/segment");
+        check(service.GetRouting(id).Cells.Single(c => c.Input == 2 && c.Output == 1) is { GainDb: -3, Muted: false } && peer.Values[(12, 0, 1, 0)][4] == 1, "Matrix wire orientation is output/channel and input/segment");
+        check(BitConverter.ToSingle(peer.Values[(12, 1, 0, 0)]) == 0, "Off-diagonal edit does not write the transposed route");
+        var untouchedRoute = service.GetRouting(id).Cells.Single(c => c.Input == 1 && c.Output == 2);
+        service.ApplyRouting(service.PlanRouting(new(id, 2, 1, Muted: true)).Id);
+        check(peer.Values[(12, 0, 1, 0)][4] == 0 && service.GetRouting(id).Cells.Single(c => c.Input == 2 && c.Output == 1) is { Muted: true, GainDb: -3 }, "Route mute sends zero and preserves gain");
+        check(service.GetRouting(id).Cells.Single(c => c.Input == 1 && c.Output == 2) == untouchedRoute, "Route mute preserves unrelated cells");
+        service.ApplyRouting(service.PlanRouting(new(id, 2, 1, Muted: false)).Id);
+        check(peer.Values[(12, 0, 1, 0)][4] == 1 && !service.GetRouting(id).Cells.Single(c => c.Input == 2 && c.Output == 1).Muted, "Route unmute sends one and verifies readback");
+        var outputBeforeInputGain=service.GetDevice(id).Outputs[0].GainDb;
+        remoteService.ApplyInputProcessing(remoteService.PlanInputProcessing(new(id,1,GainDb:4)).Id);
+        check(service.GetInputProcessing(id,1).GainDb==4 && BitConverter.ToSingle(peer.Values[(9,0,0,0)])==4 && service.GetDevice(id).Outputs[0].GainDb==outputBeforeInputGain,"Input gain writes/readback use side 0 and preserve output side 1 through shared IPC");
         var input = service.GetInputProcessing(id, 1);
         var bands = input.Bands.Select(b => b with { GainDb = b.Number == 1 ? 3 : b.GainDb }).ToArray();
         var filters = peer.Values[(52, 0, 0, 0)].ToArray();
@@ -53,6 +105,65 @@ internal static class CvrPeerChecks
         check(updated.DelayMs == 10 && !updated.EqEnabled && updated.Bands[0].GainDb == 3, "Input delay and EQ use readback");
         var raw = peer.Values[(52, 0, 0, 0)];
         check(filters[..14].SequenceEqual(raw[..14]) && filters[126..140].SequenceEqual(raw[126..140]) && raw[14] == filters[14] && raw[27] == filters[27], "EQ writes preserve crossover, filter type and reset fields");
+        check(peer.Values[(36, 0, 0, 0)][0] == 1 && peer.Values[(52, 0, 0, 0)][140] == 1, "Input EQ bypass uses function 36 and confirms the aggregate flag");
+        var beforeEnable = peer.Values[(52, 0, 0, 0)].ToArray();
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, EqEnabled: true)).Id);
+        check(peer.Values[(36, 0, 0, 0)][0] == 0 && peer.Values[(52, 0, 0, 0)][..140].SequenceEqual(beforeEnable[..140]) && peer.Values[(52, 0, 0, 0)][140] == 0, "EQ-only enable preserves every filter record");
+        peer.IgnoreEqBypassAggregate = true;
+        try { service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, EqEnabled: false)).Id); throw new Exception("EQ bypass mismatch accepted"); }
+        catch (InvalidOperationException) { check(true, "EQ bypass without matching aggregate readback fails"); }
+        finally { peer.IgnoreEqBypassAggregate = false; }
+        var beforeFrequency = service.GetInputProcessing(id, 1);
+        var beforeFrequencyRaw = peer.Values[(52, 0, 0, 0)].ToArray();
+        var frequencyBands = beforeFrequency.Bands.Select(b => b.Number == 5 ? b with { FrequencyHz = 1250 } : b).ToArray();
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: frequencyBands)).Id);
+        var expectedFrequencyRaw = beforeFrequencyRaw.ToArray(); BitConverter.GetBytes(1250f).CopyTo(expectedFrequencyRaw, 5 * 14 + 5);
+        check(BitConverter.ToSingle(peer.Values[(32, 0, 5, 0)]) == 1250 && peer.Values[(52, 0, 0, 0)].SequenceEqual(expectedFrequencyRaw), "Frequency-only edit uses function 32 and preserves every unrelated filter byte");
+        check(service.GetInputProcessing(id, 2).Bands[4].FrequencyHz == 100, "Frequency edit isolates other inputs");
+        peer.IgnoreEqFrequencyAggregate = true;
+        try { service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: beforeFrequency.Bands)).Id); throw new Exception("EQ frequency mismatch accepted"); }
+        catch (InvalidOperationException) { check(true, "Targeted frequency write without aggregate readback fails"); }
+        finally { peer.IgnoreEqFrequencyAggregate = false; }
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: beforeFrequency.Bands)).Id);
+        var beforeBandGain = service.GetInputProcessing(id, 1);
+        var beforeBandGainRaw = peer.Values[(52, 0, 0, 0)].ToArray();
+        var gainBands = beforeBandGain.Bands.Select(b => b.Number == 5 ? b with { GainDb = 4.5 } : b).ToArray();
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: gainBands)).Id);
+        var expectedGainRaw = beforeBandGainRaw.ToArray(); BitConverter.GetBytes(4.5f).CopyTo(expectedGainRaw, 5 * 14 + 1);
+        check(BitConverter.ToSingle(peer.Values[(31, 0, 5, 0)]) == 4.5 && peer.Values[(52, 0, 0, 0)].SequenceEqual(expectedGainRaw), "Gain-only edit uses function 31 and preserves frequency, Q and other filter bytes");
+        check(service.GetInputProcessing(id, 2).Bands[4].GainDb == 0, "Band gain edit isolates other input channels");
+        peer.IgnoreEqGainAggregate = true;
+        try { service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: beforeBandGain.Bands)).Id); throw new Exception("Band gain mismatch accepted"); }
+        catch (InvalidOperationException) { check(true, "Targeted band gain without aggregate readback fails"); }
+        finally { peer.IgnoreEqGainAggregate = false; }
+        var combinedBands = beforeBandGain.Bands.Select(b => b.Number == 5 ? b with { GainDb = 5, FrequencyHz = 1200, Q = 4 } : b).ToArray();
+        var combinedResult = service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: combinedBands)).Id);
+        check(combinedResult.Bands[4] is { GainDb: 5, FrequencyHz: 1200, Q: 4 } && BitConverter.ToSingle(peer.Values[(31, 0, 5, 0)]) == 5 && BitConverter.ToSingle(peer.Values[(32, 0, 5, 0)]) == 1200, "Combined gain/frequency/Q edit verifies each targeted field in sequence");
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: beforeBandGain.Bands)).Id);
+        var beforeQ = service.GetInputProcessing(id, 1);
+        var beforeQRaw = peer.Values[(52, 0, 0, 0)].ToArray();
+        var qBands = beforeQ.Bands.Select(b => b.Number == 5 ? b with { Q = 3.5 } : b).ToArray();
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: qBands)).Id);
+        var expectedQRaw = beforeQRaw.ToArray(); BitConverter.GetBytes(3.5f).CopyTo(expectedQRaw, 5 * 14 + 9);
+        check(BitConverter.ToSingle(peer.Values[(34, 0, 5, 0)]) == 3.5 && peer.Values[(52, 0, 0, 0)].SequenceEqual(expectedQRaw), "Q-only edit uses function 34 and preserves gain, frequency and filter bytes");
+        check(service.GetInputProcessing(id, 2).Bands[4].Q == 1, "Q edit isolates other input channels");
+        peer.IgnoreEqQAggregate = true;
+        try { service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: beforeQ.Bands)).Id); throw new Exception("Q mismatch accepted"); }
+        catch (InvalidOperationException) { check(true, "Targeted Q write without aggregate readback fails"); }
+        finally { peer.IgnoreEqQAggregate = false; }
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: beforeQ.Bands)).Id);
+        var beforeBandBypass = service.GetInputProcessing(id, 1);
+        var beforeBandBypassRaw = peer.Values[(52, 0, 0, 0)].ToArray();
+        var bypassBands = beforeBandBypass.Bands.Select(b => b.Number == 5 ? b with { Enabled = false } : b).ToArray();
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: bypassBands)).Id);
+        var expectedBandBypassRaw = beforeBandBypassRaw.ToArray(); expectedBandBypassRaw[5 * 14] = 255;
+        check(peer.Values[(30, 0, 5, 0)][0] == 255 && peer.Values[(52, 0, 0, 0)].SequenceEqual(expectedBandBypassRaw), "Peak bypass uses function 30 and preserves all other filter bytes");
+        peer.IgnoreEqBandBypassAggregate = true;
+        try { service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: beforeBandBypass.Bands)).Id); throw new Exception("Band bypass mismatch accepted"); }
+        catch (InvalidOperationException) { check(true, "Peak bypass without matching aggregate readback fails"); }
+        finally { peer.IgnoreEqBandBypassAggregate = false; }
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Bands: beforeBandBypass.Bands)).Id);
+        check(peer.Values[(30, 0, 5, 0)][0] == 0 && service.GetInputProcessing(id, 1).Bands[4].Enabled, "Peak enable restores the original filter with readback");
         var bandsBeforeCrossover = raw[14..126].ToArray();
         foreach (var option in CrossoverFilters.Options)
         {
@@ -128,7 +239,7 @@ internal static class CvrPeerChecks
         private readonly Task listener;
         public int Port => ((IPEndPoint)socket.Client.LocalEndPoint!).Port;
         public readonly System.Collections.Concurrent.ConcurrentDictionary<(byte, byte, byte, byte), byte[]> Values = new();
-        public volatile bool IgnoreWrites, DropReplies, IgnoreDynamicsAggregate;
+        public volatile bool IgnoreWrites, DropReplies, IgnoreDynamicsAggregate, IgnoreEqBypassAggregate, IgnoreEqFrequencyAggregate, IgnoreEqGainAggregate, IgnoreEqQAggregate, IgnoreEqBandBypassAggregate;
         public Peer()
         {
             var basic = new byte[75];
@@ -146,6 +257,7 @@ internal static class CvrPeerChecks
                 var peak=new byte[13];BinaryPrimitives.WriteInt16LittleEndian(peak,50);BinaryPrimitives.WriteInt16LittleEndian(peak.AsSpan(2),300);BitConverter.GetBytes(120f).CopyTo(peak,4);BitConverter.GetBytes(140f).CopyTo(peak,9);Values[(54,ch,0,1)]=peak;
                 foreach(var (fn,offset,length) in new[]{(37,0,2),(38,2,1),(39,3,4),(46,7,1),(48,8,1)})Values[((byte)fn,ch,0,1)]=rms[offset..(offset+length)];
                 foreach(var (fn,offset,length) in new[]{(40,0,2),(41,2,2),(42,4,4),(47,8,1)})Values[((byte)fn,ch,0,1)]=peak[offset..(offset+length)];
+                Values[(9,ch,0,0)]=BitConverter.GetBytes(0f);
                 Values[(9, ch, 0, 1)] = BitConverter.GetBytes(-12f);
                 Values[(10, ch, 0, 1)] = [1];
                 Values[(14, ch, 0, 1)] = BitConverter.GetBytes(0f);
@@ -159,6 +271,7 @@ internal static class CvrPeerChecks
                     BitConverter.GetBytes(1f).CopyTo(eq, band * 14 + 9);
                     eq[band * 14 + 13] = 3;
                 }
+                eq[5 * 14] = 0; // Captured Peak type for the targeted bypass fixture.
                 Values[(52, ch, 0, 0)] = eq;
                 Values[(52, ch, 0, 1)] = eq.ToArray();
                 Values[(44, ch, 0, 1)] = [1];
@@ -201,6 +314,36 @@ internal static class CvrPeerChecks
                             else
                             {
                                 Values[key]=request;
+                                if (function == 30 && !IgnoreEqBandBypassAggregate)
+                                {
+                                    var filters = Values[(52, channel, 0, side)].ToArray();
+                                    filters[segment * 14] = request[0];
+                                    Values[(52, channel, 0, side)] = filters;
+                                }
+                                if (function == 34 && !IgnoreEqQAggregate)
+                                {
+                                    var filters = Values[(52, channel, 0, side)].ToArray();
+                                    request.CopyTo(filters, segment * 14 + 9);
+                                    Values[(52, channel, 0, side)] = filters;
+                                }
+                                if (function == 31 && !IgnoreEqGainAggregate)
+                                {
+                                    var filters = Values[(52, channel, 0, side)].ToArray();
+                                    request.CopyTo(filters, segment * 14 + 1);
+                                    Values[(52, channel, 0, side)] = filters;
+                                }
+                                if (function == 32 && !IgnoreEqFrequencyAggregate)
+                                {
+                                    var filters = Values[(52, channel, 0, side)].ToArray();
+                                    request.CopyTo(filters, segment * 14 + 5);
+                                    Values[(52, channel, 0, side)] = filters;
+                                }
+                                if (function == 36 && !IgnoreEqBypassAggregate)
+                                {
+                                    var filters = Values[(52, channel, 0, side)].ToArray();
+                                    filters[140] = request[0];
+                                    Values[(52, channel, 0, side)] = filters;
+                                }
                                 var rmsMap=new Dictionary<byte,int>{{37,0},{38,2},{39,3},{46,7},{48,8}};var peakMap=new Dictionary<byte,int>{{40,0},{41,2},{42,4},{47,8}};
                                 if(!IgnoreDynamicsAggregate && rmsMap.TryGetValue(function,out var ro)){var raw=Values[(55,channel,0,1)].ToArray();request.CopyTo(raw,ro);Values[(55,channel,0,1)]=raw;}
                                 if(!IgnoreDynamicsAggregate && peakMap.TryGetValue(function,out var po)){var raw=Values[(54,channel,0,1)].ToArray();request.CopyTo(raw,po);Values[(54,channel,0,1)]=raw;}

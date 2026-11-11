@@ -14,6 +14,7 @@ public sealed partial class AmplifierService
     public InputProcessingState GetOutputProcessing(string id, int channel) => Advanced.GetOutputProcessing(id, channel).State;
     public InputProcessingPlan PlanOutputProcessing(InputProcessingChange change)
     {
+        if(change.GainDb is not null)throw new ArgumentException("Output trim uses channel gain, not input processing gain.");
         var (before, revision) = Advanced.GetOutputProcessing(change.DeviceId, change.Channel);
         var after = MergeInput(before, change);
         var frozen = change with
@@ -85,7 +86,7 @@ public static class PresetOperations
     {
         var device = basic.GetDevice(id);
         var count = device.Outputs.Count;
-        return new(6, device.Capabilities.Model, device.IsDemo, device.Outputs, device.Name, basic.GetRouting(id).Cells,
+        return new(7, device.Capabilities.Model, device.IsDemo, device.Outputs, device.Name, basic.GetRouting(id).Cells,
             Enumerable.Range(1, count).Select(c => basic.GetInputProcessing(id, c).State).ToArray(),
             Enumerable.Range(1, count).Select(c => advanced.GetOutputProcessing(id, c).State).ToArray(),
             Enumerable.Range(1, count).Select(c => advanced.GetFir(id, c).State).ToArray(), native?.ToArray(), Enumerable.Range(1, count).Select(c => advanced.GetOutputDynamics(id, c).State).ToArray());
@@ -96,13 +97,15 @@ public static class PresetOperations
         var count = device.Outputs.Count;
         if (preset.NativeData is not null)
         {
-            var nativeDynamics = NativePresetCodec.Decode(preset.NativeData).Dynamics!;
+            var nativePreset=NativePresetCodec.Decode(preset.NativeData);
+            var nativeDynamics = nativePreset.Dynamics!;
             preset = preset with
             {
+                Inputs=preset.Inputs is null ? nativePreset.Inputs : preset.Inputs.Select(input=>input with {GainDb=input.GainDb ?? nativePreset.Inputs!.Single(n=>n.Channel==input.Channel).GainDb}).ToArray(),
                 Dynamics = preset.Dynamics is null ? nativeDynamics : preset.Dynamics.Select(d => d with { LoadMode = d.LoadMode ?? nativeDynamics.Single(n => n.Channel == d.Channel).LoadMode }).ToArray()
             };
         }
-        if (preset.SchemaVersion is < 2 or > 6 || preset.Model != device.Capabilities.Model || preset.Outputs.Count != count || !preset.Outputs.Select(c => c.Number).Order().SequenceEqual(Enumerable.Range(1, count)))
+        if (preset.SchemaVersion is < 2 or > 7 || preset.Model != device.Capabilities.Model || preset.Outputs.Count != count || !preset.Outputs.Select(c => c.Number).Order().SequenceEqual(Enumerable.Range(1, count)))
             throw new ArgumentException("Preset model or channel topology does not match the selected device.");
         foreach (var state in preset.Outputs)
             AmplifierService.Merge(state, new(device.Id, state.Number, state.GainDb, state.Muted, state.DelayMs, state.Inverted));
@@ -116,7 +119,7 @@ public static class PresetOperations
             {
                 if (state.Bands.Any(b => b.FilterType is < 0 or > 127))
                     throw new ArgumentException("Invalid preset EQ type.");
-                AmplifierService.MergeInput(state, new(device.Id, state.Channel, state.DelayMs, state.EqEnabled, state.Bands, state.HighPass, state.LowPass));
+                AmplifierService.MergeInput(state, new(device.Id, state.Channel, state.DelayMs, state.EqEnabled, state.Bands, state.HighPass, state.LowPass,state.GainDb));
             }
         }
         if (preset.Routing is not null)

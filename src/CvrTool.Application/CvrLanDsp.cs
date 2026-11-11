@@ -18,7 +18,7 @@ public sealed partial class CvrLanBackend
             throw new NotSupportedException("Unsupported CVR input filter format.");
         var bands = Enumerable.Range(1, 8).Select(n => new EqualizerBand(n, Float(raw, n * 14 + 5), Float(raw, n * 14 + 1), Float(raw, n * 14 + 9), unchecked((sbyte)raw[n * 14]) >= 0, raw[n * 14] < 128 ? raw[n * 14] : 255 - raw[n * 14])).ToArray();
         CrossoverFilter Crossover(int offset) => new(Float(raw, offset + 5), raw[offset] < 128 ? raw[offset] : 255 - raw[offset], raw[offset] < 128);
-        return (new(channel, delay, raw[140] == 0, bands, Crossover(0), Crossover(126)), raw);
+        return (new(channel, delay, raw[140] == 0, bands, Crossover(0), Crossover(126),Float(Read(9,ch,side:0))), raw);
     }
     public (InputProcessingState State, long Revision) GetInputProcessing(string deviceId, int channel)
     {
@@ -38,12 +38,13 @@ public sealed partial class CvrLanBackend
             Expected(expectedRevision);
             var after = AmplifierService.MergeInput(before.State, change);
             var ch = Channel(change.Channel, true);
+            if(change.GainDb is not null)Write(9,FloatBytes(after.GainDb!.Value),ch,side:0);
             if (change.DelayMs is not null)
                 Write(14, FloatBytes(after.DelayMs), ch);
-            if (change.Bands is not null || change.EqEnabled is not null || change.HighPass is not null || change.LowPass is not null)
+            var expectedFilters = before.Raw[..140];
+            if (change.Bands is not null || change.HighPass is not null || change.LowPass is not null)
             {
                 var raw = before.Raw.ToArray();
-                raw[140] = (byte)(after.EqEnabled ? 0 : 1);
                 if (change.Bands is not null)
                     foreach (var band in after.Bands)
                     {
@@ -64,11 +65,66 @@ public sealed partial class CvrLanBackend
                 }
                 Crossover(0, change.HighPass);
                 Crossover(126, change.LowPass);
-                Write(52, raw, ch);
+                var targetedBands = change.Bands is not null && change.HighPass is null && change.LowPass is null &&
+                    after.Bands.All(band =>
+                    {
+                        var original = before.State.Bands.Single(b => b.Number == band.Number);
+                        return (band with { FrequencyHz = original.FrequencyHz, GainDb = original.GainDb, Q = original.Q, Enabled = original.Enabled }) == original &&
+                            (band.Enabled == original.Enabled || band.FilterType == 0);
+                    });
+                if (targetedBands)
+                {
+                    var expected = before.Raw.ToArray();
+                    foreach (var band in after.Bands)
+                    {
+                        var original = before.State.Bands.Single(b => b.Number == band.Number);
+                        // The observed type/bypass command is proven for Peak (type 0).
+                        if (band.Enabled != original.Enabled)
+                        {
+                            expected[band.Number * 14] = (byte)(band.Enabled ? 0 : 255);
+                            WriteInputFilterParameter(30, [expected[band.Number * 14]], ch, (byte)band.Number, expected);
+                        }
+                        if (band.FrequencyHz != original.FrequencyHz)
+                        {
+                            FloatBytes(band.FrequencyHz).CopyTo(expected, band.Number * 14 + 5);
+                            WriteInputFilterParameter(32, FloatBytes(band.FrequencyHz), ch, (byte)band.Number, expected);
+                        }
+                        if (band.GainDb != original.GainDb)
+                        {
+                            FloatBytes(band.GainDb).CopyTo(expected, band.Number * 14 + 1);
+                            WriteInputFilterParameter(31, FloatBytes(band.GainDb), ch, (byte)band.Number, expected);
+                        }
+                        if (band.Q != original.Q)
+                        {
+                            FloatBytes(band.Q).CopyTo(expected, band.Number * 14 + 9);
+                            WriteInputFilterParameter(34, FloatBytes(band.Q), ch, (byte)band.Number, expected);
+                        }
+                    }
+                }
+                else
+                    Write(52, raw, ch);
+                expectedFilters = raw[..140];
+            }
+            if (change.EqEnabled is not null)
+            {
+                var expected = new byte[141];
+                expectedFilters.CopyTo(expected, 0);
+                expected[140] = (byte)(after.EqEnabled ? 0 : 1);
+                WriteInputFilterParameter(36, [expected[140]], ch, 0, expected);
             }
             return ReadInput(change.Channel).State;
         }
     }
+    // Targeted input EQ writes are confirmed through the complete filter block.
+    // Individual function-30/31/32/34/36 queries and transport ACKs are not readback proof.
+    private void WriteInputFilterParameter(byte function, byte[] body, byte channel, byte segment, byte[] expected)
+    {
+        revision++;
+        client.Write(function, body, channel, segment);
+        if (!Read(52, channel).SequenceEqual(expected))
+            throw new InvalidOperationException("Input EQ parameter readback differs. Refresh settings before retrying.");
+    }
+
     public IReadOnlyList<OutputTelemetry> GetTelemetry(string deviceId)
     {
         lock (gate)

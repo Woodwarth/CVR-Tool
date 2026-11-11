@@ -26,6 +26,8 @@ public sealed partial class MainWindow
         for (var i = 0; i < channels.Count; i++)
         {
             var draft = channels[i];
+            var input = service.GetInputProcessing(deviceId, draft.State.Number);
+            var inputGain = input.GainDb;
             var data = telemetry.Single(t => t.Channel == draft.State.Number);
             var strip = new Grid
             {
@@ -41,14 +43,15 @@ public sealed partial class MainWindow
             };
             var face = new FaderFace
             {
-                Value = draft.Gain,
+                Value = inputGain ?? 0,
                 IsHitTestVisible = false
             };
             var slider = new Slider
             {
                 Minimum = -80,
                 Maximum = 18,
-                Value = draft.Gain,
+                Value = inputGain ?? 0,
+                IsEnabled = inputGain is not null,
                 SmallChange = .5,
                 Orientation = Orientation.Vertical,
                 Opacity = 0
@@ -59,7 +62,7 @@ public sealed partial class MainWindow
             overlay.Children.Add(slider);
             fader.Children.Add(overlay);
             AddColumn(fader, new ChannelMeter(data.LevelDbFs) { Width = 24, Height = MeterHeight, Tag = "channel-meter-" + draft.State.Name }, 1);
-            var gain = Centered(draft.Gain.ToString("0.0") + " dB", 15);
+            var gain = Centered(inputGain is { } knownGain ? knownGain.ToString("0.0")+" dB" : "—",15);
             gain.Tag = "gain-" + draft.State.Name;
             slider.GotFocus += (_, _) =>
             {
@@ -71,14 +74,32 @@ public sealed partial class MainWindow
                 face.HasFocus = false;
                 face.InvalidateVisual();
             };
-            // Both input methods commit through the shared service; no separate Apply button.
+            // Commit through the shared service and display only its verified result.
+            var updatingGain = false;
             slider.ValueChanged += (_, _) =>
             {
-                draft.Gain = slider.Value;
-                gain.Text = slider.Value.ToString("0.0") + " dB";
-                face.Value = slider.Value;
-                face.InvalidateVisual();
-                Commit(new(deviceId, draft.State.Number, GainDb: slider.Value));
+                if (updatingGain) return;
+                updatingGain = true;
+                try
+                {
+                    var plan = service.PlanInputProcessing(new(deviceId, draft.State.Number, GainDb: slider.Value));
+                    var after = service.ApplyInputProcessing(plan.Id);
+                    inputGain = after.GainDb;
+                    status.Text = $"Input {draft.State.Name} gain applied";
+                }
+                catch (Exception ex)
+                {
+                    status.Text = ex.Message;
+                }
+                finally
+                {
+                    slider.Value = inputGain ?? 0;
+                    slider.IsEnabled = inputGain is not null;
+                    gain.Text = inputGain is { } value ? value.ToString("0.0") + " dB" : "—";
+                    face.Value = inputGain ?? 0;
+                    face.InvalidateVisual();
+                    updatingGain = false;
+                }
             };
             Grid.SetRow(fader, 1);
             strip.Children.Add(fader);

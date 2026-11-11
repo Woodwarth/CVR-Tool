@@ -117,7 +117,7 @@ public sealed partial class CvrLanBackend : IAmplifierBackend, IDisposable
     {
         var wire = Channel(channel);
         return new(channel, ((char)('A' + channel - 1)).ToString(), Float(Read(9, wire, side: 1)),
-            Flag(Read(10, wire, side: 1)), Float(Read(14, wire, side: 1)), Flag(Read(18, wire, side: 1)));
+            !Flag(Read(10, wire, side: 1)), Float(Read(14, wire, side: 1)), Flag(Read(18, wire, side: 1)));
     }
     public (ChannelState State, long Revision) GetChannel(string deviceId, int channel)
     {
@@ -140,7 +140,7 @@ public sealed partial class CvrLanBackend : IAmplifierBackend, IDisposable
             if (change.GainDb is not null)
                 Write(9, FloatBytes(after.GainDb), ch, side: 1);
             if (change.Muted is not null)
-                Write(10, [(byte)(after.Muted ? 1 : 0)], ch, side: 1);
+                Write(10, [(byte)(after.Muted ? 0 : 1)], ch, side: 1);
             if (change.DelayMs is not null)
                 Write(14, FloatBytes(after.DelayMs), ch, side: 1);
             if (change.Inverted is not null)
@@ -162,10 +162,11 @@ public sealed partial class CvrLanBackend : IAmplifierBackend, IDisposable
     }
     private RoutingCellState ReadRoute(int input, int output)
     {
-        var body = Read(12, Channel(input, true), Channel(output));
+        // Captured off-diagonal route: channel=output, segment=input.
+        var body = Read(12, Channel(output), Channel(input, true));
         if (body.Length != 5)
             throw new InvalidDataException("Invalid CVR route response.");
-        return new(input, output, Float(body), Flag(body[4..]));
+        return new(input, output, Float(body), !Flag(body[4..]));
     }
     public RoutingCellState ApplyRouting(RoutingChange change, long expectedRevision)
     {
@@ -175,7 +176,7 @@ public sealed partial class CvrLanBackend : IAmplifierBackend, IDisposable
             var before = ReadRoute(change.Input, change.Output);
             Expected(expectedRevision);
             var after = AmplifierService.MergeRouting(before, change);
-            Write(12, [.. FloatBytes(after.GainDb), (byte)(after.Muted ? 1 : 0)], Channel(change.Input, true), Channel(change.Output));
+            Write(12, [.. FloatBytes(after.GainDb), (byte)(after.Muted ? 0 : 1)], Channel(change.Output), Channel(change.Input, true));
             return ReadRoute(change.Input, change.Output);
         }
     }

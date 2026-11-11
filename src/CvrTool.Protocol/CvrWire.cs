@@ -47,6 +47,10 @@ public static class CvrWire
         if (packet.Length < 10 || BinaryPrimitives.ReadUInt16LittleEndian(packet) != 55555)
             throw new InvalidDataException("Invalid CVR packet header.");
         int count = packet[4], last = BinaryPrimitives.ReadUInt16LittleEndian(packet.AsSpan(5)), index = packet[7];
+        // Observed D1004 transport ACK: fixed 0/450/1 fields, not an echoed fragment.
+        // Accept its framing only; it does not identify a command or prove write success.
+        if(packet.Length==10 && packet[8]==1 && count==0 && last==450 && index==1)
+            return (count,last,index,true);
         if (count is < 1 or > 64 || last is < 1 or > 450 || index < 1 || index > count || packet[8] > 1 ||
             packet.Length != (packet[8] == 1 ? 10 : 10 + (index == count ? last : 450)))
             throw new InvalidDataException("Invalid CVR fragment bounds.");

@@ -13,8 +13,11 @@ B119 additionally stores signed gate thresholds; B118 has no threshold field.
 Source bytes retain unknown settings, load data and unused channels.
 Imported native files can therefore be saved without dropping opaque parameters.
 
-JSON schema 6 stores output dynamics, output EQ/FIR and optional original native bytes alongside
-input processing, routing and channel settings; schemas 2–5 remain readable.
+JSON schema 7 stores independent input gain alongside output dynamics, output EQ/FIR,
+optional original native bytes, input processing, routing and channel settings;
+schemas 2–6 remain readable. Missing legacy input gains are recovered from
+original native bytes when present, otherwise the active input gains are retained.
+Native input gain is float32 at channel offset 369; output trim uses offset 44.
 JSON without native bytes preserves the connected device's current unknown settings.
 Local-model exports synthesize a B119 header; they are not proof of compatibility
 with a physical amplifier. A physical load also checks the connected header before
@@ -36,3 +39,13 @@ Native bridge-coded values 3–5 remain readable and round-trip unchanged; the
 Mode editor offers only Low-Z / 70V / 100V. Schema 5 JSON without LoadMode
 recovers it from its original native bytes, or preserves the active setting
 when no native data exists. No bridge change is inferred from a load-mode edit.
+
+Native output mute at channel offset 48 is active-low: 0 muted, 1 unmuted.
+App JSON continues to express `Muted: true` for a muted output. Earlier exports
+used inverted native output mute semantics; importing native bytes now follows
+the observed CVR convention. A separate controlled matrix test also establishes active-low route flags:
+0 muted, 1 enabled. Native route flags now follow that convention; App JSON
+retains true=muted. The controlled off-diagonal test and independent full sync establish output-major
+native route storage: output record `36 + (output-1)*515`, route gain at
+`24 + (input-1)*5`, followed by its active-low flag. Both import and export
+now follow this order; earlier native route mapping was transposed.

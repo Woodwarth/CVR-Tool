@@ -103,6 +103,10 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         b.call("apply_routing_change", planId=route["Id"])
         routed = a.call("get_routing", deviceId="demo-2002")
         assert next(c for c in routed["Cells"] if c["Input"] == 2 and c["Output"] == 1)["GainDb"] == -80
+        input_gain=b.call("plan_input_processing",deviceId="demo-2002",channel=1,gainDb=4.5)
+        b.call("apply_input_processing",planId=input_gain["Id"])
+        assert a.call("get_input_processing",deviceId="demo-2002",channel=1)["GainDb"]==4.5
+        assert a.call("get_device",deviceId="demo-2002")["Outputs"][0]["GainDb"]==0
         before = a.call("get_input_processing", deviceId="demo-2002", channel=1)
         bands = before["Bands"]
         bands[0]["GainDb"] = 3
@@ -127,7 +131,7 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         telemetry = a.call("get_telemetry", deviceId="demo-2002")
         assert len(telemetry) == 2 and all(t["Voltage"] is None for t in telemetry)
         exported = b.call("export_preset", deviceId="demo-2002")
-        assert exported["SchemaVersion"] == 6 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
+        assert exported["SchemaVersion"] == 7 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
         mode_plan=a.call("plan_output_dynamics",deviceId="demo-2002",channel=1,loadMode=2)
         a.call("apply_output_dynamics",planId=mode_plan["Id"])
         assert b.call("get_output_dynamics",deviceId="demo-2002",channel=1)["LoadMode"]==2

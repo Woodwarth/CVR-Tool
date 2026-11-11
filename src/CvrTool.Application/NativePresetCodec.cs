@@ -41,15 +41,16 @@ public static class NativePresetCodec
         {
             var offset = 36 + n * 515;
             var ch = n + 1;
-            outputs.Add(new(ch, ((char)('A' + n)).ToString(), ProcessingWire.Float(file, offset + 44), file[offset + 48] != 0, ProcessingWire.Float(file, offset + 54), file[offset + 58] != 0));
-            inputs.Add(ProcessingWire.DecodeEq(ch, ProcessingWire.Float(file, offset + 50), file[(offset + 85)..(offset + 226)]));
+            outputs.Add(new(ch, ((char)('A' + n)).ToString(), ProcessingWire.Float(file, offset + 44), file[offset + 48] == 0, ProcessingWire.Float(file, offset + 54), file[offset + 58] != 0));
+            inputs.Add(ProcessingWire.DecodeEq(ch, ProcessingWire.Float(file, offset + 50), file[(offset + 85)..(offset + 226)]) with {GainDb=ProcessingWire.Float(file,offset+369)});
             processing.Add(ProcessingWire.DecodeEq(ch, ProcessingWire.Float(file, offset + 54), file[(offset + 226)..(offset + 367)]));
-            for (var output = 0; output < info.Count; output++)
-                routes.Add(new(ch, output + 1, ProcessingWire.Float(file, offset + 24 + output * 5), file[offset + 28 + output * 5] != 0));
+            // Each output record contains one five-byte route entry per input.
+            for (var input = 0; input < info.Count; input++)
+                routes.Add(new(input + 1, ch, ProcessingWire.Float(file, offset + 24 + input * 5), file[offset + 28 + input * 5] == 0));
             if (info.FirLength > 0)
                 firs.Add(ProcessingWire.DecodeFir(ch, file[(info.SyncLength + n * info.FirLength)..(info.SyncLength + (n + 1) * info.FirLength)], file[offset + 368] == 0));
         }
-        return new(6, info.Model, isDemo, outputs, null, routes, inputs, processing, info.FirLength > 0 ? firs : null, file.ToArray(), Enumerable.Range(1, info.Count).Select(ch => OutputDynamicsWire.DecodeNative(file[..info.SyncLength], ch)).ToArray());
+        return new(7, info.Model, isDemo, outputs, null, routes, inputs, processing, info.FirLength > 0 ? firs : null, file.ToArray(), Enumerable.Range(1, info.Count).Select(ch => OutputDynamicsWire.DecodeNative(file[..info.SyncLength], ch)).ToArray());
     }
     public static byte[] Encode(PresetDocument preset)
     {
@@ -88,20 +89,22 @@ public static class NativePresetCodec
             var offset = 36 + n * 515;
             var output = preset.Outputs.Single(c => c.Number == n + 1);
             ProcessingWire.Put(sync, offset + 44, output.GainDb);
-            sync[offset + 48] = (byte)(output.Muted ? 1 : 0);
+            // Output mute is active-low; routing and polarity have independent flags.
+            sync[offset + 48] = (byte)(output.Muted ? 0 : 1);
             ProcessingWire.Put(sync, offset + 54, output.DelayMs);
             sync[offset + 58] = (byte)(output.Inverted ? 1 : 0);
             if (preset.Inputs?.SingleOrDefault(c => c.Channel == n + 1) is { } input)
             {
+                if(input.GainDb is { } gain)ProcessingWire.Put(sync,offset+369,gain);
                 ProcessingWire.Put(sync, offset + 50, input.DelayMs);
                 ProcessingWire.EncodeEq(input, sync[(offset + 85)..(offset + 226)]).CopyTo(sync, offset + 85);
             }
             if (preset.OutputProcessing?.SingleOrDefault(c => c.Channel == n + 1) is { } eq)
                 ProcessingWire.EncodeEq(eq, sync[(offset + 226)..(offset + 367)]).CopyTo(sync, offset + 226);
-            foreach (var route in preset.Routing?.Where(r => r.Input == n + 1) ?? [])
+            foreach (var route in preset.Routing?.Where(r => r.Output == n + 1) ?? [])
             {
-                ProcessingWire.Put(sync, offset + 24 + (route.Output - 1) * 5, route.GainDb);
-                sync[offset + 28 + (route.Output - 1) * 5] = (byte)(route.Muted ? 1 : 0);
+                ProcessingWire.Put(sync, offset + 24 + (route.Input - 1) * 5, route.GainDb);
+                sync[offset + 28 + (route.Input - 1) * 5] = (byte)(route.Muted ? 0 : 1);
             }
             if (preset.Firs?.SingleOrDefault(f => f.Channel == n + 1) is { } fir)
                 sync[offset + 368] = (byte)(fir.Enabled ? 0 : 1);
@@ -116,6 +119,10 @@ public static class NativePresetCodec
             }
             OutputDynamicsWire.EncodeNative(sync, state);
         }
+        // A sync-only source has no FIR payload; preserve that absence on export.
+        if (preset.NativeData is { } syncOnly && Inspect(syncOnly).FirLength == 0 &&
+            (preset.Firs is null || preset.Firs.Count == 0))
+            return sync;
         using var data = new MemoryStream();
         data.Write(sync);
         for (var n = 0; n < count; n++)

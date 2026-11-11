@@ -44,10 +44,10 @@ Check(!Text("Changes apply immediately") && !Text("No live measurements"), "Main
 Check(!All<GainReadout>().Any() && !All<TextBox>().Any() && Tagged<TextBlock>("gain-A").Text == "0.0 dB", "Main gains are plain text without textbox borders or edit controls");
 var mainSlider = All<Slider>().First();
 mainSlider.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Up }); Layout();
-Check(Preset().Outputs[0].GainDb == .5, "Main arrow-up changes gain by 0.5 dB");
+Check(Preset().Inputs![0].GainDb == .5 && Preset().Outputs[0].GainDb==0, "Main arrow-up changes gain by 0.5 dB");
 Click("⌂   Main"); mainSlider = All<Slider>().First();
 mainSlider.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Down }); Layout();
-Check(Preset().Outputs[0].GainDb == 0, "Main arrow-down changes gain by 0.5 dB"); Click("⌂   Main");
+Check(Preset().Inputs![0].GainDb == 0, "Main arrow-down changes gain by 0.5 dB"); Click("⌂   Main");
 Check(All<Slider>().Count() == 4, "Four channel faders on Main");
 Check(All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("channel-meter-") == true) == 4 && All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("channel-clip-") == true) == 4, "Every channel fader has a meter and clip status");
 Check(All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("telemetry-") == true) == 16, "Four measurements per output");
@@ -74,10 +74,10 @@ foreach (var name in new[] { "A", "B", "C", "D" })
     Check(inputMeter.Bounds.Size == outputMeter.Bounds.Size && inputMeter.Bounds.Height == 280 && Math.Abs(inputPoint.Y - outputPoint.Y) < .1 && flagPoint.X > outputPoint.X + outputMeter.Bounds.Width && flagPoint.Y >= outputPoint.Y && flagPoint.Y + flags.Bounds.Height <= outputPoint.Y + outputMeter.Bounds.Height, "Matched meter size/alignment and adjacent statuses: " + name);
 }
 All<Slider>().First().Value = -6;
-Check(Preset().Outputs[0].GainDb == -6, "Numeric gain applies immediately and exports");
+Check(Preset().Inputs![0].GainDb == -6 && Preset().Outputs[0].GainDb==0, "Numeric input gain applies immediately and exports");
 Click("⌂   Main"); All<Slider>().First().Value = -9; Tagged<ToggleButton>("mute-output-A").IsChecked = false;
 Check(Tagged<ToggleButton>("mute-output-A").Background is ISolidColorBrush neutral && neutral.Color == Color.Parse("#182129") && Tagged<ToggleButton>("mute-output-A").BorderBrush is ISolidColorBrush neutralBorder && neutralBorder.Color == Color.Parse("#46525D"), "Unmuted button uses neutral colors without a red border");
-var preset = Preset(); Check(preset.Outputs[0] is { GainDb: -9, Muted: false }, "Slider gain applies immediately and mute preserves it");
+var preset = Preset(); Check(preset.Inputs![0].GainDb==-9 && preset.Outputs[0] is { GainDb: 0, Muted: false }, "Slider gain applies immediately and mute preserves it");
 Click("◉   Inputs"); Save("routing-1004");
 Check(All<RoutingDial>().Count() == 16 && !All<NumericUpDown>().Any() && !All<TextBox>().Any() && !All<ToggleButton>().Any(b => b.Tag?.ToString()?.StartsWith("route-") == true), "Matrix has circles only: no external gain fields or mute buttons");
 foreach (var dial in All<RoutingDial>().ToArray())
