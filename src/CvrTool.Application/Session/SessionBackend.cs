@@ -9,7 +9,7 @@ using CvrTool.Core;
 
 namespace CvrTool.Application;
 
-public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend, IConnectionBackend
+public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend
 {
     private T Call<T>(string method, object arguments) where T : class => CallAsync<T>(method, arguments).GetAwaiter().GetResult();
     private async Task<T> CallAsync<T>(string method, object arguments) where T : class
@@ -63,5 +63,16 @@ public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend,
         return (read.State, read.Revision);
     }
     public InputProcessingState ApplyInputProcessing(InputProcessingChange change, long expectedRevision) => Call<InputProcessingState>("apply-input", new { Change = change, Revision = expectedRevision });
+    public (InputProcessingState State,long Revision) GetOutputProcessing(string id,int channel) {var result=Call<Revisioned<InputProcessingState>>("output-processing",new {Id=id,Channel=channel});return(result.State,result.Revision);}
+    public InputProcessingState ApplyOutputProcessing(InputProcessingChange change,long revision)=>Call<InputProcessingState>("apply-output-processing",new{Change=change,Revision=revision});
+    public (FirState State,long Revision) GetFir(string id,int channel) {var result=Call<Revisioned<FirState>>("fir",new {Id=id,Channel=channel});return(result.State,result.Revision);}
+    public FirState ApplyFir(string id,FirState state,long revision)=>Call<FirState>("apply-fir",new{Id=id,State=state,Revision=revision});
+    public PresetDocument CapturePreset(string id)=>Call<PresetDocument>("capture-preset",new{Id=id});
+    public DeviceSnapshot ApplyPreset(string id,PresetDocument preset,long revision)=>Call<DeviceSnapshot>("apply-preset",new{Id=id,Preset=preset,Revision=revision});
+    public DevicePresetState GetDevicePresets(string id)=>Call<DevicePresetState>("preset-slots",new{Id=id});
+    public DeviceOperationResult StoreDevicePreset(string id,int slot,string name,long revision)=>Call<DeviceOperationResult>("store-preset",new{Id=id,Slot=slot,Name=name,Revision=revision});
+    public DeviceOperationResult RecallDevicePreset(string id,int slot,long revision)=>Call<DeviceOperationResult>("recall-preset",new{Id=id,Slot=slot,Revision=revision});
+    public DeviceOperationResult FactoryReset(string id,long revision)=>Call<DeviceOperationResult>("factory-reset",new{Id=id,Revision=revision});
+    public DeviceOperationResult ClearDevicePresets(string id,long revision)=>Call<DeviceOperationResult>("clear-presets",new{Id=id,Revision=revision});
 }
 

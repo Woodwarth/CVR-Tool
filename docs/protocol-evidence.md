@@ -16,7 +16,8 @@ The decoder bounds counts to 64 and validates exact datagram lengths.
 
 Inner header: 0x55, function, status, channel, segment, four little-endian link
 bits, input/output side byte. Link is a channel mask, not a transaction ID.
-Status 0 is a response, 1 a write, 2 a request. Trailer: big-endian total inner
+Status 0 is a response or a command requesting semantic acknowledgement,
+1 a write, 2 a request and 3 a semantic command acknowledgement. Trailer: big-endian total inner
 length (two bytes), then sum of preceding inner bytes modulo 256.
 Channels and segments are zero-based on the wire.
 
@@ -33,7 +34,12 @@ Channels and segments are zero-based on the wire.
 | 15 | Standby | Byte 0/1; other states rejected |
 | 17 | Display lock | Byte 0/1; command matches captured frame |
 | 18 | Output polarity | Byte 0/1 |
-| 52 | Input filter block | 141 bytes |
+| 16 | Factory reset | Command body byte 1; semantic ACK required |
+| 27 | Full sync | B118/B119: 2232/2687 bytes |
+| 43 | Output FIR | 512 LE floats, optionally preceded by a 32-byte name |
+| 44 | FIR bypass | Byte 0 enabled, 1 bypassed; side 1 |
+| 52 | Input/output filter block | 141 bytes; side 0/1 |
+| 59 | Device presets | 34-byte mode/slot/name; mode 0 reads sixteen names, 1 stores, 2 recalls, 3 clears |
 | 60 | Device name write | 32 padded bytes; read back through function 0 |
 
 The filter block contains ten packed 14-byte records and one global bypass
@@ -47,3 +53,9 @@ No filter type is inferred from screenshot appearance.
 The test suite includes a synthetic display-lock fixture and an independently
 built UDP peer, readback rejection and timeouts. These demonstrate software
 behavior, not physical-amplifier compatibility or persistence after power loss.
+
+Large writes use 450-byte fragments with bounded counts and matching transport
+ACKs for each fragment. A missing ACK reports a potentially partial write; no
+automatic retries are made. Transport delivery is never taken as write success.
+FIR/sync changes use independent readback; preset commands require status-3
+acknowledgement and subsequent names/settings reads. See [native presets](native-presets.md).

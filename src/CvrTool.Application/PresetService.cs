@@ -12,16 +12,8 @@ public sealed partial class AmplifierService
 {
     public string ExportPreset(string deviceId)
     {
-        var device = backend.GetDevice(deviceId);
-        IReadOnlyList<RoutingCellState>? routing = null;
-        try
-        {
-            routing = backend.GetRouting(deviceId).Cells;
-        }
-        catch (NotSupportedException)
-        {
-        }
-
-        return JsonSerializer.Serialize(new PresetDocument(3, device.Capabilities.Model, device.IsDemo, device.Outputs, device.Name, routing, Enumerable.Range(1, device.Outputs.Count).Select(c => GetInputProcessing(deviceId, c)).ToArray()), new JsonSerializerOptions { WriteIndented = true });
+        if(backend is IAdvancedAmplifierBackend advanced)return JsonSerializer.Serialize(advanced.CapturePreset(deviceId),new JsonSerializerOptions{WriteIndented=true});
+        var device=backend.GetDevice(deviceId);
+        return JsonSerializer.Serialize(new PresetDocument(3,device.Capabilities.Model,device.IsDemo,device.Outputs,device.Name,backend.GetRouting(deviceId).Cells,Enumerable.Range(1,device.Outputs.Count).Select(c=>GetInputProcessing(deviceId,c)).ToArray()),new JsonSerializerOptions{WriteIndented=true});
     }
 }

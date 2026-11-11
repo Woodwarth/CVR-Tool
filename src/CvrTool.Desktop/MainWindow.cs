@@ -37,7 +37,6 @@ public sealed partial class MainWindow : Window
     };
     private readonly ContentControl nameSlot = new(), deviceActions = new();
     private string deviceId = "demo-1004", activeTab = "Main";
-    private NativePresetInspection? nativePreset;
     private string? nativePresetName;
     private List<ChannelDraft> channels = [];
     // Window composition

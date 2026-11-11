@@ -13,20 +13,22 @@ namespace CvrTool.Desktop;
 
 public sealed partial class MainWindow
 {
-    private void OpenInputEqEditor(int channel)
+    private void OpenInputEqEditor(int channel, bool output=false)
     {
         var editedId = deviceId;
-        if (ActivateInputEditor(editedId, channel, "eq"))
+        var side=output ? "Output" : "Input";
+        var kind=output ? "output-eq" : "eq";
+        if (ActivateInputEditor(editedId, channel, kind))
             return;
-        var input = service.GetInputProcessing(editedId, channel);
+        var input = (output ? service.GetOutputProcessing(editedId,channel) : service.GetInputProcessing(editedId, channel));
         var draft = input.Bands.ToArray();
         var content = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 14 };
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        header.Children.Add(Heading("Input EQ · Channel " + channel));
+        header.Children.Add(Heading(side+" EQ · Channel " + channel));
         var enabled = new CheckBox { Content = input.EqEnabled ? "EQ On" : "EQ Off", IsChecked = input.EqEnabled, Tag = "input-eq-enabled" };
         AddColumn(header, enabled, 1);
         content.Children.Add(header);
-        var graph = new EqualizerGraph { HighPass = input.HighPass, LowPass = input.LowPass, Bands = draft, EqEnabled = input.EqEnabled, Tag = "input-eq-graph", Height = 340 };
+        var graph = new EqualizerGraph { HighPass = input.HighPass, LowPass = input.LowPass, Bands = draft, EqEnabled = input.EqEnabled, Tag = output ? "output-eq-graph" : "input-eq-graph", Height = 340 };
         Grid.SetRow(graph, 1);
         content.Children.Add(graph);
         var cards = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("*", 10))), ColumnSpacing = 8 };
@@ -151,7 +153,7 @@ public sealed partial class MainWindow
         Grid.SetRow(footer, 3);
         content.Children.Add(footer);
         var canvas = new Viewbox { Child = new Border { Width = 1360, Height = 760, Child = content }, Stretch = Avalonia.Media.Stretch.Uniform };
-        var editor = EditorWindow("Input EQ · Channel " + channel, canvas, 1400, 800);
+        var editor = EditorWindow(side+" EQ · Channel " + channel, canvas, 1400, 800);
         editor.MinWidth = 1008;
         editor.MinHeight = 590;
         var screen = Screens.ScreenFromWindow(this);
@@ -169,16 +171,17 @@ public sealed partial class MainWindow
             }
             try
             {
-                var plan = service.PlanInputProcessing(new(editedId, channel, EqEnabled: enabled.IsChecked == true, Bands: draft, HighPass: highPass != input.HighPass ? highPass : null, LowPass: lowPass != input.LowPass ? lowPass : null));
+                var change=new InputProcessingChange(editedId,channel,EqEnabled:enabled.IsChecked==true,Bands:draft,HighPass:highPass!=input.HighPass ? highPass : null,LowPass:lowPass!=input.LowPass ? lowPass : null);
+                var plan=output ? service.PlanOutputProcessing(change) : service.PlanInputProcessing(change);
                 if (plan.Before.EqEnabled != input.EqEnabled || !plan.Before.Bands.SequenceEqual(input.Bands) || plan.Before.HighPass != input.HighPass || plan.Before.LowPass != input.LowPass)
-                    throw new InvalidOperationException("Input EQ changed externally. Reopen the editor before applying.");
-                service.ApplyInputProcessing(plan.Id);
+                    throw new InvalidOperationException("EQ changed externally. Reopen the editor before applying.");
+                if(output)service.ApplyOutputProcessing(plan.Id);else service.ApplyInputProcessing(plan.Id);
                 Render();
                 editor.Close();
             }
             catch (Exception ex) { message.Text = ex.Message; }
         };
         cancel.Click += (_, _) => editor.Close();
-        ShowInputEditor(editor, editedId, channel, "eq");
+        ShowInputEditor(editor, editedId, channel, kind);
     }
 }

@@ -15,7 +15,7 @@ public interface IConnectionBackend
     DisconnectionResult Disconnect(string deviceId);
 }
 
-public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, IDisposable
+public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend, IDisposable
 {
     private readonly DemoBackend local = new();
     private readonly Dictionary<string, CvrLanBackend> peers = new();
@@ -109,6 +109,17 @@ public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, I
         lock (gate)
             return Backend(id).SetControlState(id, locked, standby, revision);
     }
+    public (InputProcessingState State,long Revision) GetOutputProcessing(string id,int channel) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetOutputProcessing(id,channel); }
+    public InputProcessingState ApplyOutputProcessing(InputProcessingChange change,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(change.DeviceId)).ApplyOutputProcessing(change,revision); }
+    public (FirState State,long Revision) GetFir(string id,int channel) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetFir(id,channel); }
+    public FirState ApplyFir(string id,FirState state,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).ApplyFir(id,state,revision); }
+    public PresetDocument CapturePreset(string id) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).CapturePreset(id); }
+    public DeviceSnapshot ApplyPreset(string id,PresetDocument preset,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).ApplyPreset(id,preset,revision); }
+    public DevicePresetState GetDevicePresets(string id) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetDevicePresets(id); }
+    public DeviceOperationResult StoreDevicePreset(string id,int slot,string name,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).StoreDevicePreset(id,slot,name,revision); }
+    public DeviceOperationResult RecallDevicePreset(string id,int slot,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).RecallDevicePreset(id,slot,revision); }
+    public DeviceOperationResult FactoryReset(string id,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).FactoryReset(id,revision); }
+    public DeviceOperationResult ClearDevicePresets(string id,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).ClearDevicePresets(id,revision); }
     public void Dispose()
     {
         lock (gate)

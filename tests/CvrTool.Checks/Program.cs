@@ -42,7 +42,7 @@ var copy = service.GetDevice("demo-1004");
 ((ChannelState[])copy.Outputs)[0] = copy.Outputs[0] with { GainDb = 18 };
 Check(service.GetDevice("demo-1004").Outputs[0].GainDb == -6, "Defensive snapshot");
 var preset = JsonSerializer.Deserialize<PresetDocument>(service.ExportPreset("demo-2002"))!;
-Check(preset.SchemaVersion == 3 && preset.Outputs.Count == 2 && preset.IsDemo, "Preset export");
+Check(preset.SchemaVersion == 4 && preset.Outputs.Count == 2 && preset.IsDemo, "Preset export");
 var clock = new ManualClock();
 var timed = new AmplifierService(new DemoBackend(), clock);
 var expiring = timed.Plan(new("demo-1004", 1, Muted: false));
@@ -165,6 +165,7 @@ if (firArgument >= 0 && firArgument + 1 < args.Length)
     var inspection = await FirFileAnalyzer.AnalyzeAsync(stream);
     Console.WriteLine($"LOCAL FIR: {inspection.Coefficients.Count} coefficients, {inspection.NonZeroCount} nonzero, {inspection.SampleRate} Hz preview");
 }
+AdvancedChecks.Run(Check);
 CrossoverChecks.Run(Check);
 await UpdateChecks.RunAsync(Check);
 await UpdateChecks.StageNativePackage(args);

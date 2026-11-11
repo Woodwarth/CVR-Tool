@@ -1,14 +1,29 @@
 # Native presets (.sd)
 
-The local inspector is read-only. It reports file size, SHA-256, a model hint
-and recognized text markers; it does not decode or import amplifier parameters.
-JSON export is a separate schema 3 application snapshot, not a native .sd file.
+The Presets page loads/saves original CVR `.sd` and CVR Tool JSON files. There
+is no raw text view. Native support is intentionally limited to the evidenced
+B-series firmware headers 106118 and 106119, with two or four channels. Unknown
+versions, inconsistent lengths, wrong models and invalid values are rejected.
 
-Private DSP-1004 and DSP-1502 exports were inspected locally. They remain
-outside source control along with screenshots and FIR reference files. Model
-text or screenshot appearance does not establish binary parameter encoding.
+The native codec reads a 2232/2687-byte sync block, four fixed 515-byte records,
+and optional 2048/2080-byte FIR blocks per active output plus the 16-byte footer.
+EQ, delays, gains, routing, polarity, mute and FIR map to shared application state.
+Source bytes retain unknown settings, limiter/load/mode data and unused channels.
+Imported native files can therefore be saved without dropping opaque parameters.
 
-Before implementing native import, compare controlled single-parameter exports
-and establish all field widths, byte order, checksums, versions and limits.
-Reject unknown formats and model mismatches. Never copy unverified bytes to
-hardware or publish private reference files.
+JSON schema 4 stores output EQ/FIR and optional original native bytes alongside
+input processing, routing and channel settings; schema 2/3 remains readable.
+JSON without native bytes preserves the connected device's current unknown settings.
+Local-model exports synthesize a B119 header; they are not proof of compatibility
+with a physical amplifier. A physical load also checks the connected header before
+writing and requires independent sync/FIR readback. Failed multi-block writes may
+be partial; refresh the device before retrying.
+
+Presets on a device use sixteen slots. Save replaces one slot; Load replaces active
+processing. Clear removes all slots while retaining active processing. Factory
+Reset restores device settings and may clear presets. The desktop asks explicitly
+before these operations; MCP requires `confirmed=true`. Local-model slots are
+volatile and do not survive application restart. Export to PC for persistence.
+
+Private sample files are never distributed. Synthetic codec/network checks and
+exact local sample round-trips do not replace physical firmware/power-cycle tests.

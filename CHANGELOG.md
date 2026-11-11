@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+- Outputs signal flow with independent graphical EQ/HP/LP and FIR editor.
+- FIR import/export/remove, enable state and impulse/frequency/phase previews.
+- Sixteen device presets, PC load/save in CVR .sd and app JSON, clear and reset.
+- Native B118/B119 preservation of settings outside the editable controls.
+- Larger Inputs environment and plain click-to-edit output gains.
+- Shared UI/MCP support for output processing and preset operations.
+- Synthetic and local-file validation; physical amplifier checks remain pending.
+
+
 ## 0.5.0
 
 - Add HP/LP crossover cards, cutoff handles, bypass and a combined EQ response preview.

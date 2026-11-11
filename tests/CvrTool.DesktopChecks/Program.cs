@@ -35,7 +35,7 @@ void Save(string name, int width = 1680, int height = 960)
     using var image = new RenderTargetBitmap(new PixelSize(width, height)); image.Render(root);
     image.Save(Path.Combine("artifacts", name + ".png"), PngBitmapEncoderOptions.Default);
 }
-PresetDocument Preset() { Click("☰   Presets"); return JsonSerializer.Deserialize<PresetDocument>(All<TextBox>().Single(t => t.IsReadOnly).Text!)!; }
+PresetDocument Preset() { Click("☰   Presets"); return JsonSerializer.Deserialize<PresetDocument>(window.ExportSelectedPreset())!; }
 Layout(); Save("main-1004");
 var fourChannelSize = Tagged<Border>("input-channel-A").Bounds.Size;
 Check(window.Icon is not null, "Window icon loads from embedded application assets");
@@ -113,8 +113,35 @@ Device("demo-1502"); Check(Tagged<ToggleButton>("device-lock").IsChecked == fals
 Device("demo-1004"); Check(Tagged<ToggleButton>("device-lock").IsChecked == true && Tagged<ToggleButton>("device-standby").IsChecked == true, "Demo lock and standby survive device switching");
 Tagged<ToggleButton>("device-lock").IsChecked = false; Tagged<ToggleButton>("device-standby").IsChecked = false;
 Click("◖   Outputs"); Save("outputs");
-All<NumericUpDown>().Skip(1).First().Value = 4.5m; Press(All<Button>().First(b => b.Content?.ToString() == "Apply"));
+Press(Tagged<Button>("output-delay-A"));
+var outputDelay=window.OwnedWindows.Single();
+outputDelay.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="delay-ms").Value=4.5m;
+outputDelay.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-delay").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Layout();
 Check(Preset().Outputs[0].DelayMs == 4.5, "Output delay applies through shared service");
+Click("◖   Outputs");
+Press(Tagged<Button>("output-eq-A"));var outputEq=window.OwnedWindows.Single();Press(Tagged<Button>("output-eq-A"));
+Check(window.OwnedWindows.Count==1 && ReferenceEquals(outputEq,window.OwnedWindows.Single()),"Output EQ reuses its channel editor");
+Check(outputEq.GetLogicalDescendants().OfType<ComboBox>().Count(c=>c.Tag?.ToString() is "hp-type" or "lp-type")==2,"Output EQ includes HP and LP controls");
+outputEq.GetLogicalDescendants().OfType<EqualizerGraph>().Single().MoveBand(2,2000,-5);
+outputEq.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-input-eq").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
+Check(Preset().OutputProcessing![0].Bands[1].GainDb==-5 && Preset().Inputs![0].Bands[1].GainDb==0,"Output EQ applies independently of input EQ");
+Click("◖   Outputs");Press(Tagged<Button>("output-fir-A"));var firWindow=window.OwnedWindows.Single();Press(Tagged<Button>("output-fir-A"));
+Check(window.OwnedWindows.Count==1 && firWindow.GetLogicalDescendants().OfType<ResponsePlot>().Count()==3,"FIR has one editor with impulse, frequency and phase plots");
+Check(firWindow.GetLogicalDescendants().OfType<Button>().Count(b=>b.Tag?.ToString() is "fir-import" or "fir-export" or "fir-remove")==3,"FIR exposes import, export and remove controls");
+firWindow.GetLogicalDescendants().OfType<CheckBox>().Single(b=>b.Tag?.ToString()=="fir-enabled").IsChecked=true;
+using(var renderedFir=new RenderTargetBitmap(new PixelSize(1140,780))) {firWindow.Measure(new Size(1140,780));firWindow.Arrange(new Rect(0,0,1140,780));firWindow.UpdateLayout();renderedFir.Render(firWindow);renderedFir.Save("artifacts/output-fir.png",PngBitmapEncoderOptions.Default);}
+firWindow.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-fir").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
+Check(Preset().Firs![0].Enabled,"FIR enable applies through the shared service");
+Click("☰   Presets");Save("presets");
+Check(!All<TextBox>().Any(t=>t.IsReadOnly) && All<Button>().Count(b=>b.Tag?.ToString()?.StartsWith("preset-")==true)==6 && Tagged<ComboBox>("device-preset-slot").Items.Count==16,"Presets has six actions and sixteen slots without a raw text view");
+Press(Tagged<Button>("preset-factory-reset"));var confirmation=window.OwnedWindows.Single();
+confirmation.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="cancel-preset-operation").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
+Check(Preset().Firs![0].Enabled,"Cancelling factory reset leaves processing unchanged");
+Click("◉   Inputs");var gainReadout=Tagged<GainReadout>("routing-output-gain-A");
+Check(!gainReadout.GetLogicalDescendants().OfType<TextBox>().Any(),"Inputs gain starts as plain text");
+Press(gainReadout.GetLogicalDescendants().OfType<Button>().Single());var gainEditor=gainReadout.GetLogicalDescendants().OfType<TextBox>().Single();gainEditor.Text="-7.5";
+gainEditor.RaiseEvent(new KeyEventArgs {RoutedEvent=InputElement.KeyDownEvent,Key=Key.Enter});Layout();
+Check(Preset().Outputs[0].GainDb==-7.5 && !gainReadout.GetLogicalDescendants().OfType<TextBox>().Any(),"Click-to-edit gain saves and returns to plain text");
 Device("demo-2002"); Click("⌂   Main");
 Check(All<Slider>().Count() == 2 && All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("telemetry-") == true) == 8, "Two-output model has independent measurements");
 Check(Tagged<Border>("input-channel-A").Bounds.Size == fourChannelSize && Tagged<Border>("output-channel-A").Bounds.Size == fourChannelSize, "Two- and four-channel models retain identical group dimensions");
@@ -127,10 +154,8 @@ var presetArgument = Array.IndexOf(args, "--preset");
 if (presetArgument >= 0)
 {
     Device("demo-1004");
-    using var stream = File.OpenRead(args[presetArgument + 1]);
-    window.ShowNativePreset(Path.GetFileName(args[presetArgument + 1]), CvrTool.Application.NativePresetInspector.InspectAsync(stream).GetAwaiter().GetResult());
-    Layout(); Save("native-preset"); Check(Text("Read-only preview"), "Native preset inspection remains read-only");
-    Device("demo-2002"); Check(Text("differs from"), "Native model mismatch is flagged");
+    window.LoadPresetFile(Path.GetFileName(args[presetArgument+1]),File.ReadAllBytes(args[presetArgument+1]));
+    Layout(); Save("native-preset"); Check(Preset().OutputProcessing?.Count==4, "Native preset loads full output processing");
 }
 // Uniform scaling preserves design positions and card dimensions at every supported size.
 Device("demo-1004"); Click("⌂   Main");
@@ -151,7 +176,7 @@ foreach (var (width, height) in new[] { (1008,588), (1080,720), (1680,980), (192
 }
 Check(window.MinWidth == 1008 && window.MinHeight == 588, "Minimum window size limits excessive shrinking");
 Layout(); Click("◉   Inputs");
-Check(Text("Input processing") && Text("Delay") && Text("EQ") && Text("Volume A"), "Routing environment includes editable processing and output gain");
+Check(Text("Delay") && Text("EQ") && Text("Volume A"), "Routing environment includes editable processing and output gain");
 Press(Tagged<Button>("input-delay-1"));
 var firstDelayWindow = window.OwnedWindows.Single(); Press(Tagged<Button>("input-delay-1"));
 Check(window.OwnedWindows.Count == 1 && ReferenceEquals(firstDelayWindow, window.OwnedWindows.Single()), "Repeated delay clicks activate the existing editor");
@@ -186,7 +211,7 @@ Click("◉   Inputs");
 Tagged<GainReadout>("routing-output-gain-A").Value=-4;
 Check(Preset().Outputs[0].GainDb == -4, "Inputs output gain is editable and persists");
 Click("◉   Inputs");
-Check(!All<TextBlock>().Any(t=>t.Text is "Output A" or "Output B" or "Output C" or "Output D") && Tagged<Control>("routing-environment").Bounds.Width < 800, "Compact matrix removes left output labels and unused column spacing");
+Check(!All<TextBlock>().Any(t=>t.Text is "Output A" or "Output B" or "Output C" or "Output D") && Tagged<Control>("routing-environment").Bounds.Width < 1250, "Compact matrix removes left output labels and unused column spacing");
 Save("routing-editable-inputs");
 Press(Tagged<Button>("software-updates")); var updateDialog=window.OwnedWindows.Single(); Press(Tagged<Button>("software-updates"));
 Check(window.OwnedWindows.Count==1 && ReferenceEquals(updateDialog,window.OwnedWindows.Single()), "Only one software update dialog is opened");

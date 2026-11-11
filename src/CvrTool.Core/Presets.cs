@@ -12,4 +12,7 @@ public sealed record PresetDocument(
     IReadOnlyList<ChannelState> Outputs,
     string? Name = null,
     IReadOnlyList<RoutingCellState>? Routing = null,
-    IReadOnlyList<InputProcessingState>? Inputs = null);
+    IReadOnlyList<InputProcessingState>? Inputs = null,
+    IReadOnlyList<InputProcessingState>? OutputProcessing = null,
+    IReadOnlyList<FirState>? Firs = null,
+    byte[]? NativeData = null);

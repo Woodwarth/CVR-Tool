@@ -31,12 +31,10 @@ public sealed partial class MainWindow
             Spacing = 12
         };
         content.Children.Add(Heading($"Inputs · {deviceName.Text}"));
-        content.Children.Add(Text($"{routing.InputCount} × {routing.OutputCount} routing matrix · Shared application session.", 13, Muted));
-        content.Children.Add(Text("Drag or scroll a dial to change gain · Click to mute · −80 to +18 dB · Gain is retained while muted.", 13, Muted));
         var matrix = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("84", routing.InputCount))),
-            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("84", routing.OutputCount))),
+            ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("130", routing.InputCount))),
+            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("110", routing.OutputCount))),
             ColumnSpacing = 8,
             RowSpacing = 8
         };
@@ -88,13 +86,13 @@ public sealed partial class MainWindow
         };
         var sourceProcessing = new Grid
         {
-            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("84", routing.InputCount))),
+            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("110", routing.InputCount))),
             RowSpacing = 8,
             Margin = new Thickness(0, 19)
         };
         var outputLevels = new Grid
         {
-            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("84", routing.OutputCount))),
+            RowDefinitions = new RowDefinitions("32," + string.Join(",", Enumerable.Repeat("110", routing.OutputCount))),
             RowSpacing = 8,
             Margin = new Thickness(0, 19)
         };
@@ -127,7 +125,7 @@ public sealed partial class MainWindow
             outputLevels.Children.Add(block);
         }
 
-        var connections = new RoutingConnections(routing.OutputCount, 101, 92)
+        var connections = new RoutingConnections(routing.OutputCount, 114, 118)
         {
             IsHitTestVisible = false
         };
@@ -137,7 +135,6 @@ public sealed partial class MainWindow
         AddColumn(environment, Card(matrix), 1);
         AddColumn(environment, outputLevels, 2);
         content.Children.Add(new ScrollViewer { Content = environment, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled });
-        content.Children.Add(Text("Click Delay to edit metres/ms, EQ to edit input filters, or the output gain readout to adjust level.", 12, Muted));
         return content;
     }
 

@@ -62,6 +62,18 @@ internal static class CvrPeerChecks
             var observed = peer.Values[(52, 0, 0, 0)];
             check(crossover.HighPass == hp && crossover.LowPass == lp && observed[0] == option.Code && observed[126] == 255 - option.Code && observed[14..126].SequenceEqual(bandsBeforeCrossover), "Crossover type/frequency/bypass readback preserves EQ: " + option.ShortName);
         }
+        var outputBands=remoteService.GetOutputProcessing(id,1).Bands.Select(b=>b with {GainDb=b.Number==2 ? -5 : 0}).ToArray();
+        remoteService.ApplyOutputProcessing(remoteService.PlanOutputProcessing(new(id,1,DelayMs:7,Bands:outputBands,LowPass:new(18000,6,true))).Id);
+        check(service.GetOutputProcessing(id,1).Bands[1].GainDb==-5 && service.GetInputProcessing(id,1).Bands[0].GainDb==3 && service.GetDevice(id).Outputs[0].DelayMs==7,"Output EQ side selection and delay readback work through IPC");
+        var taps=Enumerable.Range(0,512).Select(n=>n==123 ? .5 : 0).ToArray();
+        var storedFir=remoteService.SetFir(id,new(1,"Synthetic FIR",taps,true));
+        check(storedFir.Enabled && storedFir.Coefficients.Count==512 && storedFir.Coefficients[123]==.5 && storedFir.Name=="Synthetic FIR" && peer.Values[(43,0,0,1)].Length==2080,"512-tap FIR upload fragments and independent readback round-trip");
+        check(service.GetFir(id,2) is {Enabled:false,Name:""},"FIR changes isolate other outputs");
+        check(remoteService.GetDevicePresets(id).Slots.Count==16,"Fragmented 512-byte preset names are reassembled through IPC");
+        check(remoteService.StoreDevicePreset(id,16,"Last slot").Confirmed && service.GetDevicePresets(id).Slots[15].Name=="Last slot","Preset command semantic ACK and slot-16 name readback are required");
+        check(remoteService.RecallDevicePreset(id,16).Confirmed,"Preset recall requires semantic acknowledgement");
+        check(remoteService.ClearDevicePresets(id).Confirmed && service.GetDevicePresets(id).Slots.All(s=>!s.Occupied),"Clear verifies all sixteen names empty");
+        check(remoteService.FactoryReset(id).Confirmed,"Factory reset requires semantic acknowledgement and settings refresh");
         check(service.RenameDevice(id, "Bench amp").Name == "Bench amp", "Device name write is read back through basic identity");
         check(service.SetControlState(id, displayLocked: true, standby: true) == new DeviceControlState(true, true), "Lock and standby round-trip");
         var readings = service.GetTelemetry(id);
@@ -125,9 +137,13 @@ internal static class CvrPeerChecks
                     eq[band * 14 + 13] = 3;
                 }
                 Values[(52, ch, 0, 0)] = eq;
+                Values[(52, ch, 0, 1)] = eq.ToArray();
+                Values[(44, ch, 0, 1)] = [1];
+                var fir=new byte[2080];BitConverter.GetBytes(1f).CopyTo(fir,32);Values[(43,ch,0,1)]=fir;
                 for (byte output = 0; output < 2; output++)
                     Values[(12, ch, output, 0)] = [0, 0, 0, 0, 1];
             }
+            Values[(59,0,0,0)]=new byte[512];
             var telemetry = new byte[32];
             BitConverter.GetBytes(40f).CopyTo(telemetry, 4);
             BitConverter.GetBytes(5f).CopyTo(telemetry, 12);
@@ -137,53 +153,57 @@ internal static class CvrPeerChecks
         }
         private async Task Listen()
         {
+            byte[][]? pending=null;
             try
             {
-                while (!stop.IsCancellationRequested)
+                while(!stop.IsCancellationRequested)
                 {
-                    var received = await socket.ReceiveAsync(stop.Token);
-                    var packet = received.Buffer;
-                    if (packet.Length < 23 || packet[8] == 1)
-                        continue;
-                    byte function = packet[11], state = packet[12], channel = packet[13], segment = packet[14], side = packet[19];
-                    var key = (function, channel, segment, side);
-                    if (state == 1)
+                    var received=await socket.ReceiveAsync(stop.Token);var packet=received.Buffer;
+                    if(packet.Length<10 || packet[8]==1)continue;
+                    var count=packet[4];var index=packet[7];
+                    if(count>1)
                     {
-                        if (!IgnoreWrites)
+                        var ack=packet[..10];ack[8]=1;await socket.SendAsync(ack,received.RemoteEndPoint,stop.Token);
+                        pending ??=new byte[count][];pending[index-1]=packet[10..];
+                        if(pending.Any(f=>f is null))continue;
+                        packet=new byte[10].Concat(pending.SelectMany(f=>f)).ToArray();pending=null;
+                    }
+                    byte function=packet[11],state=packet[12],channel=packet[13],segment=packet[14],side=packet[19];
+                    var key=(function,channel,segment,side);var request=packet[20..^3];byte[]? body=null;byte responseState=0;
+                    if(state==1)
+                    {
+                        if(!IgnoreWrites)
                         {
-                            if (function == 60)
-                            {
-                                var basic = Values[(0, 0, 0, 0)].ToArray();
-                                packet.AsSpan(20, 32).CopyTo(basic.AsSpan(32));
-                                Values[(0, 0, 0, 0)] = basic;
-                            }
-                            else
-                                Values[key] = packet[20..^3];
+                            if(function==60){var basic=Values[(0,0,0,0)].ToArray();request.CopyTo(basic,32);Values[(0,0,0,0)]=basic;}
+                            else Values[key]=request;
                         }
                         continue;
                     }
-                    if (DropReplies || !Values.TryGetValue(key, out var body))
-                        continue;
-                    // Independent fixture builder, deliberately not using production Encode.
-                    var reply = new byte[23 + body.Length];
-                    reply[0] = 3;
-                    reply[1] = 217;
-                    reply[2] = 202;
-                    reply[4] = reply[7] = 1;
-                    reply[9] = 0x21;
-                    BinaryPrimitives.WriteUInt16LittleEndian(reply.AsSpan(5), (ushort)(13 + body.Length));
-                    reply[10] = 85;
-                    reply[11] = function;
-                    reply[13] = channel;
-                    reply[14] = segment;
-                    reply[19] = side;
-                    body.CopyTo(reply, 20);
-                    BinaryPrimitives.WriteUInt16BigEndian(reply.AsSpan(reply.Length - 3), (ushort)(13 + body.Length));
-                    reply[^1] = unchecked((byte)reply.Skip(10).Take(reply.Length - 11).Sum(b => b));
-                    await socket.SendAsync(reply, received.RemoteEndPoint, stop.Token);
+                    if(state==0)
+                    {
+                        if(function==59)
+                        {
+                            var names=Values[(59,0,0,0)].ToArray();
+                            if(request[0]==1)request[2..34].CopyTo(names,request[1]*32);
+                            if(request[0]==3)Array.Clear(names);
+                            Values[(59,0,0,0)]=names;
+                        }
+                        body=[];responseState=3;
+                    }
+                    else Values.TryGetValue(key,out body);
+                    if(DropReplies || body is null)continue;
+                    // Independent inner/fragment construction; no production codec used.
+                    var inner=new byte[13+body.Length];inner[0]=85;inner[1]=function;inner[2]=responseState;inner[3]=channel;inner[4]=segment;inner[9]=side;body.CopyTo(inner,10);
+                    BinaryPrimitives.WriteUInt16BigEndian(inner.AsSpan(inner.Length-3),(ushort)inner.Length);inner[^1]=unchecked((byte)inner[..^1].Sum(b=>b));
+                    var fragments=(inner.Length+449)/450;var last=inner.Length-(fragments-1)*450;
+                    for(var n=0;n<fragments;n++)
+                    {
+                        var chunk=inner.Skip(n*450).Take(450).ToArray();var reply=new byte[10+chunk.Length];reply[0]=3;reply[1]=217;reply[2]=202;reply[4]=(byte)fragments;reply[7]=(byte)(n+1);reply[9]=0x21;
+                        BinaryPrimitives.WriteUInt16LittleEndian(reply.AsSpan(5),(ushort)last);chunk.CopyTo(reply,10);await socket.SendAsync(reply,received.RemoteEndPoint,stop.Token);
+                    }
                 }
             }
-            catch (OperationCanceledException) { }
+            catch(OperationCanceledException) { }
         }
         public void Dispose()
         {

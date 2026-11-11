@@ -1,120 +1,128 @@
-// Desktop / Presets — file dialogs, native inspection and demo JSON export.
-// Purpose: present focused controls and forward edits to Application.
-// Input: user events and authoritative device snapshots.
-// State: local drafts never replace the shared backend.
-// Scope: UI rendering does not establish physical hardware capability.
+// Desktop / Preset management
+// Purpose: load/save native and JSON PC files and operate sixteen device preset slots.
+// Units: one-based slots; file formats retain complete supported processing state.
+// State: bulk loads/reset/clear require an explicit confirmation in the product.
+// Scope: no raw JSON text view; errors and confirmed outcomes appear in the footer.
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using CvrTool.Application;
+using CvrTool.Core;
 
 namespace CvrTool.Desktop;
 
 public sealed partial class MainWindow
 {
+    private int selectedPresetSlot = 1;
     private Control PresetsPage()
     {
-        var panel = new Grid
+        var editedId = deviceId;
+        var presets = service.GetDevicePresets(editedId);
+        var content = new StackPanel { Spacing = 24 };
+        content.Children.Add(Heading("Presets · " + deviceName.Text));
+        var device = new StackPanel { Spacing = 18 };
+        device.Children.Add(Heading("On Device"));
+        var selection = new Grid { ColumnDefinitions = new ColumnDefinitions("2*,2*,*"), ColumnSpacing = 20 };
+        var slot = new ComboBox { ItemsSource = presets.Slots, SelectedIndex = selectedPresetSlot - 1, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = "device-preset-slot", ItemTemplate = new FuncDataTemplate<DevicePresetSlot>((s, _) => new TextBlock { Text = $"{s?.Number:00} · {s?.Name}" }) };
+        var name = new TextBox { Text = presets.Slots[selectedPresetSlot - 1].Occupied ? presets.Slots[selectedPresetSlot - 1].Name : "Preset " + selectedPresetSlot, MaxLength = 32, Tag = "device-preset-name" };
+        slot.SelectionChanged += (_, _) => { if (slot.SelectedItem is DevicePresetSlot selected) { selectedPresetSlot = selected.Number; name.Text = selected.Occupied ? selected.Name : "Preset " + selected.Number; } };
+        AddColumn(selection, Field("Preset slot · 1–16", slot), 0);
+        AddColumn(selection, Field("Preset name", name), 1);
+        AddColumn(selection, Field("Current preset", Text(presets.CurrentName ?? "—", 14, Accent)), 2);
+        device.Children.Add(selection);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        Button Action(string label, string tag, Func<Task> action, bool danger = false)
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,*"),
-            RowSpacing = 18
-        };
-        panel.Children.Add(Heading("Presets · Local files"));
-        var toolbar = new WrapPanel
-        {
-            Orientation = Orientation.Horizontal,
-        };
-        var export = new Button
-        {
-            Content = "Save preset as JSON",
-            Background = Brush.Parse("#007F7D")
-        };
-        export.Click += async (_, _) =>
-        {
-            try
-            {
-                var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "Save preset", SuggestedFileName = deviceName.Text + "-preset.json", DefaultExtension = "json", FileTypeChoices = [new FilePickerFileType("JSON preset") { Patterns = ["*.json"] }] });
-                if (file is null)
-                    return;
-                await using var stream = await file.OpenWriteAsync();
-                stream.SetLength(0);
-                await using var writer = new System.IO.StreamWriter(stream);
-                await writer.WriteAsync(service.ExportPreset(deviceId));
-                status.Text = "Preset saved · " + file.Name;
-            }
-            catch (Exception ex)
-            {
-                status.Text = "Export failed: " + ex.Message;
-            }
-        };
-        var inspect = new Button
-        {
-            Content = "Inspect native preset (.sd)"
-        };
-        inspect.Click += async (_, _) =>
-        {
-            try
-            {
-                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Inspect native preset locally", AllowMultiple = false, FileTypeFilter = [new FilePickerFileType("AMP Controller preset") { Patterns = ["*.sd"] }] });
-                if (files.Count != 1)
-                    return;
-                await using var stream = await files[0].OpenReadAsync();
-                ShowNativePreset(files[0].Name, await NativePresetInspector.InspectAsync(stream));
-            }
-            catch (Exception ex)
-            {
-                status.Text = "Preset inspection failed: " + ex.Message;
-            }
-        };
-        export.Margin = new Thickness(0, 0, 12, 6);
-        inspect.Margin = new Thickness(0, 0, 12, 6);
-        toolbar.Children.Add(export);
-        toolbar.Children.Add(inspect);
-        Grid.SetRow(toolbar, 1);
-        panel.Children.Add(toolbar);
-        var info = new StackPanel
-        {
-            Spacing = 8
-        };
-        if (nativePreset is { } report)
-        {
-            info.Children.Add(Text(nativePresetName ?? "Native preset", 16, weight: FontWeight.SemiBold));
-            info.Children.Add(Text($"Model hint: {report.ModelHint ?? "not detected"} · {report.ByteLength:N0} bytes · Read-only preview", 13, Accent));
-            info.Children.Add(Text("SHA-256: " + report.Sha256, 11, Muted));
-            info.Children.Add(Text(report.Markers.Count == 0 ? "No known text markers found." : string.Join(" · ", report.Markers.Select(m => $"{m.Text} at offset {m.Offset}")), 12, Muted));
-            if (report.ModelHint is { } hint && hint != deviceName.Text)
-                info.Children.Add(Text("Model hint differs from the selected device.", 13, Brush.Parse("#F0BD71")));
+            var button = new Button { Content = label, Tag = tag, Padding = new Thickness(18, 12), Background = Brush.Parse(danger ? "#762A37" : "#007F7D") };
+            button.Click += async (_, _) => { button.IsEnabled = false; try { await action(); } catch (Exception ex) { status.Text = ex.Message; } finally { button.IsEnabled = true; } };
+            return button;
         }
-        else
-            info.Children.Add(Text("Inspect native presets locally; the original file remains unchanged.", 13, Muted));
-        info.Children.Add(Text(".sd parameters are not decoded yet. No parameters are imported. JSON below contains the current application snapshot.", 12, Muted));
-        Grid.SetRow(info, 2);
-        panel.Children.Add(info);
-        var preview = new TextBox
+        async Task RunDevice(string operation, Func<DeviceOperationResult> run, string question)
         {
-            Text = service.ExportPreset(deviceId),
-            IsReadOnly = true,
-            MaxHeight = 480,
-            AcceptsReturn = true,
-            FontFamily = new FontFamily("Cascadia Code, Consolas, monospace"),
-            FontSize = 13,
-            Padding = new Thickness(18)
-        };
-        ScrollViewer.SetHorizontalScrollBarVisibility(preview, Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
-        ScrollViewer.SetVerticalScrollBarVisibility(preview, Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
-        Grid.SetRow(preview, 3);
-        panel.Children.Add(preview);
-        return Card(panel);
+            if (!await ConfirmPresetAction(operation, question))
+                return;
+            status.Text = operation + "…";
+            var result = await Task.Run(run);
+            channels = service.GetDevice(editedId).Outputs.Select(c => new ChannelDraft(c)).ToList();
+            Render();
+            status.Text = result.Message;
+        }
+        actions.Children.Add(Action("Load from Device", "preset-load-device", () => RunDevice("Load from Device", () => service.RecallDevicePreset(editedId, selectedPresetSlot), "Replace current processing with the selected device preset?")));
+        actions.Children.Add(Action("Save to Device", "preset-save-device", () => { var number = selectedPresetSlot; var presetName = name.Text ?? ""; return RunDevice("Save to Device", () => service.StoreDevicePreset(editedId, number, presetName), "Store current processing in this slot? An existing preset in the slot will be replaced."); }));
+        actions.Children.Add(Action("Factory Reset", "preset-factory-reset", () => RunDevice("Factory Reset", () => service.FactoryReset(editedId), "Restore this device's factory settings? Current processing and device presets may be cleared."), true));
+        actions.Children.Add(Action("Clear All Preset", "preset-clear-all", () => RunDevice("Clear All Preset", () => service.ClearDevicePresets(editedId), "Permanently clear all sixteen stored device presets? Current processing stays active."), true));
+        device.Children.Add(actions);
+        content.Children.Add(Card(device));
+        var pc = new StackPanel { Spacing = 18 };
+        pc.Children.Add(Heading("On PC"));
+        var format = new ComboBox { ItemsSource = new[] { "CVR native (.sd)", "CVR Tool JSON (.json)" }, SelectedIndex = 0, Width = 260, Tag = "preset-file-format" };
+        pc.Children.Add(Field("Save format", format));
+        var files = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        files.Children.Add(Action("Load from PC", "preset-load-pc", async () =>
+        {
+            var choices = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "Load preset from PC", AllowMultiple = false, FileTypeFilter = [new("CVR / app preset") { Patterns = ["*.sd", "*.json"] }] });
+            if (choices.Count != 1)
+                return;
+            await using var stream = await choices[0].OpenReadAsync();
+            using var data = new MemoryStream();
+            var buffer = new byte[8192];
+            int length;
+            while ((length = await stream.ReadAsync(buffer)) > 0)
+            {
+                if (data.Length + length > NativePresetCodec.MaximumBytes)
+                    throw new InvalidDataException("Preset exceeds 1 MiB.");
+                data.Write(buffer, 0, length);
+            }
+            if (!await ConfirmPresetAction("Load from PC", "Replace current device processing with " + choices[0].Name + "?"))
+                return;
+            await Task.Run(() => service.LoadPresetFile(editedId, choices[0].Name, data.ToArray()));
+            nativePresetName = choices[0].Name;
+            ReloadSession();
+            status.Text = "Preset loaded · " + choices[0].Name;
+        }));
+        files.Children.Add(Action("Save to PC", "preset-save-pc", async () =>
+        {
+            var native = format.SelectedIndex == 0;
+            var extension = native ? "sd" : "json";
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "Save preset to PC", SuggestedFileName = deviceName.Text + "." + extension, DefaultExtension = extension, FileTypeChoices = [new(native ? "CVR native preset" : "CVR Tool JSON preset") { Patterns = ["*." + extension] }] });
+            if (file is null)
+                return;
+            var bytes = await Task.Run(() => native ? service.ExportNativePreset(editedId) : System.Text.Encoding.UTF8.GetBytes(service.ExportPreset(editedId)));
+            await using var stream = await file.OpenWriteAsync();
+            stream.SetLength(0);
+            await stream.WriteAsync(bytes);
+            status.Text = "Preset saved · " + file.Name;
+        }));
+        pc.Children.Add(files);
+        content.Children.Add(Card(pc));
+        return content;
     }
-
-    public void ShowNativePreset(string name, NativePresetInspection inspection)
+    private async Task<bool> ConfirmPresetAction(string title, string text)
     {
-        nativePresetName = System.IO.Path.GetFileName(name);
-        nativePreset = inspection;
-        activeTab = "Presets";
-        status.Text = "Preset inspected locally · No parameters applied · No network access";
-        Render();
+        var panel = new StackPanel { Margin = new Thickness(24), Spacing = 20 };
+        panel.Children.Add(Heading(title));
+        var description = Text(text, 14, Muted);
+        description.TextWrapping = TextWrapping.Wrap;
+        panel.Children.Add(description);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        var confirm = new Button { Content = title, Tag = "confirm-preset-operation" };
+        var cancel = new Button { Content = "Cancel", Tag = "cancel-preset-operation" };
+        buttons.Children.Add(confirm);
+        buttons.Children.Add(cancel);
+        panel.Children.Add(buttons);
+        var dialog = EditorWindow(title, panel, 560, 240);
+        confirm.Click += (_, _) => dialog.Close(true);
+        cancel.Click += (_, _) => dialog.Close(false);
+        return await dialog.ShowDialog<bool>(this);
+    }
+    public string ExportSelectedPreset() => service.ExportPreset(deviceId);
+    public void LoadPresetFile(string name, byte[] bytes)
+    {
+        service.LoadPresetFile(deviceId, name, bytes);
+        nativePresetName = Path.GetFileName(name);
+        ReloadSession();
     }
 }

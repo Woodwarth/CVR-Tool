@@ -28,10 +28,19 @@ for compatibility with isolated test clients and does not share GUI state.
   Crossover type IDs: 0 BW-12, 1 BE-12, 2 LR-12, 3 BW-18, 4 BW-24,
   5 BE-24, 6 LR-24, 7 BW-36, 8 BW-48, 9 BE-48, 10 LR-48.
 
+- `get_output_processing`, `plan_output_processing`, `apply_output_processing`
+  use the same EQ/crossover fields as inputs.
+- `get_output_fir`, `set_output_fir`: 1–512 finite taps at 48 kHz.
+- `get_device_presets`, `store_device_preset`, `recall_device_preset` (slots 1–16),
+  `clear_device_presets`, `factory_reset`.
+- `export_native_preset` returns base64 `.sd`; `load_preset_file` accepts base64
+  `.sd` or JSON. Bulk loads, slot writes/recalls, reset and clear require
+  `confirmed=true`; the default refuses the operation.
+
 Channel numbers start at 1. Physical IDs are `cvr:ADDRESS:PORT`; local models
 are `demo-1004`, `demo-2002` and `demo-1502`. Local state is volatile. Exported
-schema 3 JSON includes inputs, outputs and routing; native `.sd` import remains
-unimplemented. Unknown readings are null, never fabricated.
+schema 4 JSON includes inputs, outputs, routing, output EQ and FIR; schema 2/3
+files remain readable. Native `.sd` supports B-series 106118/106119 layouts. Unknown readings are null, never fabricated.
 
 Plans are read-only, single-use, expire after two minutes and carry the shared
 device revision. Any session write invalidates earlier plans for that device.

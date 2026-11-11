@@ -1,4 +1,4 @@
-// Desktop / Gain readout — compact dB value with step controls and click-to-edit precision entry.
+// Desktop / Gain readout — plain dB value with click-to-edit precision entry.
 // Purpose: present focused controls and forward edits to Application.
 // Input: user events and authoritative device snapshots.
 // State: local drafts never replace the shared backend.
@@ -45,56 +45,9 @@ public sealed class GainReadout : ContentControl
     private void ShowValue()
     {
         editing = false;
-        var row = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("24,*,24")
-        };
-        Button Step(string caption) => new()
-        {
-            Content = caption,
-            Padding = new Thickness(0),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            HorizontalContentAlignment = HorizontalAlignment.Center
-        };
-        var down = Step("−");
-        var up = Step("+");
-        down.Tag = "gain-step-down";
-        up.Tag = "gain-step-up";
-        down.Click += (_, _) => Value = Math.Max(-80, Math.Round(Value - .1, 1));
-        up.Click += (_, _) => Value = Math.Min(18, Math.Round(Value + .1, 1));
-        var label = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        label.Children.Add(new TextBlock { Text = value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture), FontSize = 14, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        label.Children.Add(new TextBlock { Text = "dB", FontSize = 10, Foreground = Brush.Parse("#96A5AE"), VerticalAlignment = VerticalAlignment.Center });
-        var edit = new Button
-        {
-            Tag = "gain-edit",
-            Content = label,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(0),
-            HorizontalContentAlignment = HorizontalAlignment.Center
-        };
-        ToolTip.SetTip(edit, "Click to enter gain · −80 to +18 dB");
-        edit.Click += (_, _) => Edit();
-        row.Children.Add(down);
-        Grid.SetColumn(edit, 1);
-        row.Children.Add(edit);
-        Grid.SetColumn(up, 2);
-        row.Children.Add(up);
-        Content = new Border
-        {
-            Child = row,
-            Background = Brush.Parse("#101B23"),
-            BorderBrush = Brush.Parse("#46525D"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6)
-        };
+        var label = new TextBlock { Text = value.ToString("+0.0;-0.0;0.0",CultureInfo.InvariantCulture)+" dB", FontSize=16, FontWeight=FontWeight.SemiBold, HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center };
+        var edit = new Button { Tag="gain-edit",Content=label,Background=Brushes.Transparent,BorderThickness=new Thickness(0),Padding=new Thickness(0),HorizontalContentAlignment=HorizontalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Stretch };
+        ToolTip.SetTip(edit,"Click to change gain · −80 to +18 dB"); edit.Click+=(_,_)=>Edit();Content=edit;
     }
 
     private void Edit()

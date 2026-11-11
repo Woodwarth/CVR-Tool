@@ -21,7 +21,7 @@ the same feature set; variants differ by channel count (two or four).
 ## Development
 Commands: docs/code-guide.md. MCP: docs/mcp.md. Protocol: docs/network.md and
 docs/protocol-evidence.md. Future measurement orchestration: docs/architecture.md;
-do not describe that roadmap in README. Native preset inspection is not decoding.
+do not describe that roadmap in README. Native codec scope: docs/native-presets.md; unknown layouts must be rejected.
 
 ## Validation limits
 Manual CVR UDP is implemented from local protocol evidence and tested against

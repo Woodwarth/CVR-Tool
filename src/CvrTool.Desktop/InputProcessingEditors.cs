@@ -63,14 +63,15 @@ public sealed partial class MainWindow
         Icon = Branding.WindowIcon(),
         WindowStartupLocation = WindowStartupLocation.CenterOwner
     };
-    private void OpenDelayEditor(int channel)
+    private void OpenDelayEditor(int channel,bool output=false)
     {
         var editedId = deviceId;
-        if (ActivateInputEditor(editedId, channel, "delay"))
+        var kind=output ? "output-delay" : "delay";var side=output ? "Output" : "Input";
+        if (ActivateInputEditor(editedId, channel, kind))
             return;
-        var input = service.GetInputProcessing(editedId, channel);
+        var input = output ? service.GetOutputProcessing(editedId,channel) : service.GetInputProcessing(editedId, channel);
         var content = new StackPanel { Margin = new Thickness(20), Spacing = 14 };
-        content.Children.Add(Heading("Input delay · " + channel));
+        content.Children.Add(Heading(side+" delay · " + channel));
         var ms = Number(0, 100, .01m, (decimal)input.DelayMs);
         ms.Tag = "delay-ms";
         var meters = Number(0, (decimal)AmplifierService.DelayMeters(100), .01m, (decimal)AmplifierService.DelayMeters(input.DelayMs));
@@ -88,20 +89,21 @@ public sealed partial class MainWindow
         var cancel = new Button { Content = "Cancel" };
         actions.Children.Add(apply);
         actions.Children.Add(cancel);
-        var editor = EditorWindow("Input delay · Channel " + channel, content, 400, 340);
+        var editor = EditorWindow(side+" delay · Channel " + channel, content, 400, 340);
         apply.Click += (_, _) =>
         {
             if (ms.Value is null)
                 return;
             try
             {
-                service.ApplyInputProcessing(service.PlanInputProcessing(new(editedId, channel, DelayMs: (double)ms.Value.Value)).Id);
+                var change=new InputProcessingChange(editedId,channel,DelayMs:(double)ms.Value.Value);
+                if(output)service.ApplyOutputProcessing(service.PlanOutputProcessing(change).Id);else service.ApplyInputProcessing(service.PlanInputProcessing(change).Id);
                 Render();
                 editor.Close();
             }
             catch (Exception ex) { status.Text = ex.Message; }
         };
         cancel.Click += (_, _) => editor.Close();
-        ShowInputEditor(editor, editedId, channel, "delay");
+        ShowInputEditor(editor, editedId, channel, kind);
     }
 }

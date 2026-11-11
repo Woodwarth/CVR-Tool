@@ -73,9 +73,22 @@ public sealed class SessionHost : IDisposable
         int Channel() => args.GetProperty("Channel").GetInt32();
         long Revision() => args.GetProperty("Revision").GetInt64();
         T Change<T>() => args.GetProperty("Change").Deserialize<T>() ?? throw new ArgumentException("Change missing.");
+        var advanced=backend as IAdvancedAmplifierBackend;
         object result = request.Method switch
         {
             "list" => backend.ListDevices(),
+            "output-processing" => OutputSnapshot(Id(),Channel()),
+            "apply-output-processing" => advanced!.ApplyOutputProcessing(Change<InputProcessingChange>(),Revision()),
+            "fir" => FirSnapshot(Id(),Channel()),
+            "apply-fir" => advanced!.ApplyFir(Id(),args.GetProperty("State").Deserialize<FirState>()!,Revision()),
+            "capture-preset" => advanced!.CapturePreset(Id()),
+            "apply-preset" => advanced!.ApplyPreset(Id(),args.GetProperty("Preset").Deserialize<PresetDocument>()!,Revision()),
+            "preset-slots" => advanced!.GetDevicePresets(Id()),
+            "store-preset" => advanced!.StoreDevicePreset(Id(),args.GetProperty("Slot").GetInt32(),args.GetProperty("Name").GetString()!,Revision()),
+            "recall-preset" => advanced!.RecallDevicePreset(Id(),args.GetProperty("Slot").GetInt32(),Revision()),
+            "factory-reset" => advanced!.FactoryReset(Id(),Revision()),
+            "clear-presets" => advanced!.ClearDevicePresets(Id(),Revision()),
+
             "connect" => (backend as IConnectionBackend ?? throw new NotSupportedException("Connections unavailable.")).Connect(args.GetProperty("Target").Deserialize<CvrTool.Protocol.NetworkTarget>() ?? throw new ArgumentException("Target missing.")),
             "disconnect" => (backend as IConnectionBackend ?? throw new NotSupportedException("Connections unavailable.")).Disconnect(Id()),
             "device" => backend.GetDevice(Id()),
@@ -91,7 +104,7 @@ public sealed class SessionHost : IDisposable
             "set-controls" => backend.SetControlState(Id(), args.GetProperty("Locked").Deserialize<bool?>(), args.GetProperty("Standby").Deserialize<bool?>(), Revision()),
             _ => throw new ArgumentException("Unknown session operation.")
         };
-        if (request.Method.StartsWith("apply-", StringComparison.Ordinal) || request.Method is "rename" or "set-controls" or "connect" or "disconnect")
+        if (request.Method.StartsWith("apply-", StringComparison.Ordinal) || request.Method is "rename" or "set-controls" or "connect" or "disconnect" or "store-preset" or "recall-preset" or "factory-reset" or "clear-presets")
             Changed?.Invoke();
         return result;
     }
@@ -105,6 +118,8 @@ public sealed class SessionHost : IDisposable
         var state = backend.GetInputProcessing(id, channel);
         return new(state.State, state.Revision);
     }
+    private Revisioned<InputProcessingState> OutputSnapshot(string id,int channel) {var read=((IAdvancedAmplifierBackend)backend).GetOutputProcessing(id,channel);return new(read.State,read.Revision);}
+    private Revisioned<FirState> FirSnapshot(string id,int channel) {var read=((IAdvancedAmplifierBackend)backend).GetFir(id,channel);return new(read.State,read.Revision);}
     public void Dispose()
     {
         shutdown.Cancel();

@@ -1,10 +1,13 @@
-// Desktop / Outputs — local channel drafts and validated apply actions.
-// Purpose: present focused controls and forward edits to Application.
-// Input: user events and authoritative device snapshots.
-// State: local drafts never replace the shared backend.
-// Scope: UI rendering does not establish physical hardware capability.
+// Desktop / Output signal flow
+// Purpose: present per-channel FIR, EQ, trim, delay, polarity and mute like the reference.
+// Units: dB and ms; processing editors use the shared application service.
+// State: each row belongs to one output; confirmed edits reload current state.
+// Scope: unimplemented limiter/mode/noise controls remain visibly unavailable.
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
+using CvrTool.Application;
 
 namespace CvrTool.Desktop;
 
@@ -12,93 +15,45 @@ public sealed partial class MainWindow
 {
     private Control OutputsPage()
     {
-        var panel = new StackPanel
-        {
-            Spacing = 18
-        };
+        var panel = new StackPanel { Spacing = 24 };
         panel.Children.Add(Heading("Outputs · " + deviceName.Text));
-        panel.Children.Add(Text("Output signal chain · Edit gain, delay, polarity and mute.", 13, Muted));
-        foreach (var draft in channels)
+        foreach (var output in service.GetDevice(deviceId).Outputs)
         {
-            var row = new Grid
+            var eq = service.GetOutputProcessing(deviceId, output.Number);
+            var fir = service.GetFir(deviceId, output.Number);
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("100,100,100,115,115,100,110,100,110,70,100"), ColumnSpacing = 8, Height = 100, Tag = "output-flow-" + output.Name };
+            Button Block(string title, string value, string tag, Action? action)
             {
-                ColumnDefinitions = new ColumnDefinitions("70,*,*,150,140,Auto"),
-                ColumnSpacing = 18
-            };
-            row.Children.Add(Text("Output " + draft.State.Name, 14));
-            var gain = Number(-80, 18, 1, (decimal)draft.Gain);
-            gain.ValueChanged += (_, _) =>
-            {
-                if (gain.Value is { } v)
-                    draft.Gain = (double)v;
-            };
-            AddColumn(row, Field("Gain · dB", gain), 1);
-            var delay = Number(0, 100, .1m, (decimal)draft.Delay);
-            delay.ValueChanged += (_, _) =>
-            {
-                if (delay.Value is { } v)
-                    draft.Delay = (double)v;
-            };
-            AddColumn(row, Field("Delay · ms", delay), 2);
-            var mute = MuteSwitch(draft.Muted, "Output " + draft.State.Name, value => draft.Muted = value);
-            mute.Tag = "mute-editor-" + draft.State.Name;
-            AddColumn(row, mute, 3);
-            var inverted = new CheckBox
-            {
-                Content = "Inverted",
-                IsChecked = draft.Inverted
-            };
-            inverted.IsCheckedChanged += (_, _) => draft.Inverted = inverted.IsChecked == true;
-            AddColumn(row, inverted, 4);
-            var apply = new Button
-            {
-                Content = "Apply",
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            apply.Click += (_, _) =>
-            {
-                if (gain.Value is null || delay.Value is null)
-                {
-                    status.Text = "Enter gain and delay.";
-                    return;
-                }
-
-                Apply(draft);
-            };
-            AddColumn(row, apply, 5);
-            var channelPanel = new StackPanel
-            {
-                Spacing = 16
-            };
-            var chain = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 6
-            };
-            chain.Children.Add(Stage("Source", "Routing", false));
-            chain.Children.Add(Text("→", 16, Accent));
-            foreach (var block in new[]
-            {
-                "FIR",
-                "EQ",
-                "Limiter",
-                "Mode",
-                "Noise Gate",
-                "Stereo / Profile"
+                var text = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+                text.Children.Add(Centered(title, 13));
+                text.Children.Add(Centered(value, 12, action is null ? Muted : Accent));
+                var button = new Button { Content = text, Tag = tag, Height = 76, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Background = Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), IsEnabled = action is not null };
+                if (action is not null)
+                    button.Click += (_, _) => action();
+                return button;
             }
-
-            )
-                chain.Children.Add(Stage(block, "Not available", false));
-            channelPanel.Children.Add(chain);
-            channelPanel.Children.Add(row);
-            panel.Children.Add(Card(channelPanel));
+            AddColumn(row, Block("Source", "Routing", "output-source-" + output.Name, () => { activeTab = "Inputs"; Render(); }), 0);
+            AddColumn(row, Block("FIR", fir.Enabled ? "On" : "Off", "output-fir-" + output.Name, () => OpenFirEditor(output.Number)), 1);
+            AddColumn(row, Block("EQ", eq.EqEnabled ? "On" : "Off", "output-eq-" + output.Name, () => OpenInputEqEditor(output.Number, true)), 2);
+            var gain = new GainReadout { Value = output.GainDb, Tag = "output-gain-" + output.Name, Width = 105 };
+            gain.ValueChanged += value => Commit(new(deviceId, output.Number, GainDb: value));
+            var trim = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+            trim.Children.Add(Centered("Trim", 13));
+            trim.Children.Add(gain);
+            AddColumn(row, trim, 3);
+            AddColumn(row, Block("Delay", $"{AmplifierService.DelayMeters(output.DelayMs):0.00} m\n{output.DelayMs:0.00} ms", "output-delay-" + output.Name, () => OpenDelayEditor(output.Number, true)), 4);
+            AddColumn(row, Block("Polarity", output.Inverted ? "180°" : "0°", "output-polarity-" + output.Name, () => { Commit(new(deviceId, output.Number, Inverted: !output.Inverted)); Render(); }), 5);
+            AddColumn(row, Block("Limiters", "Unavailable", "output-limiters-" + output.Name, null), 6);
+            AddColumn(row, Block("Mode", "Unavailable", "output-mode-" + output.Name, null), 7);
+            AddColumn(row, Block("Noise Gate", "Unavailable", "output-noise-" + output.Name, null), 8);
+            var mute = MuteSwitch(output.Muted, "Output " + output.Name, value => Commit(new(deviceId, output.Number, Muted: value)));
+            mute.Tag = "mute-editor-" + output.Name;
+            mute.HorizontalAlignment = HorizontalAlignment.Center;
+            mute.VerticalAlignment = VerticalAlignment.Center;
+            AddColumn(row, mute, 9);
+            AddColumn(row, Block("Output " + output.Name, "Speaker", "output-speaker-" + output.Name, () => { activeTab = "Main"; Render(); }), 10);
+            panel.Children.Add(Card(row));
         }
-
-        panel.Children.Add(Text("Edit ranges: −80 to +18 dB · 0 to 100 ms", 12, Muted));
-        return new ScrollViewer
-        {
-            Content = panel,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
-        };
+        return panel;
     }
 }

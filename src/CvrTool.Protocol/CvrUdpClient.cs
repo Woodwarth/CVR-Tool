@@ -19,18 +19,37 @@ public sealed class CvrUdpClient : IDisposable
         socket = new UdpClient(new IPEndPoint(IPAddress.Parse(target.LocalAddress), target.LocalPort));
         socket.Connect(IPAddress.Parse(target.RemoteAddress), target.RemotePort);
     }
-    public byte[] Read(byte function, byte channel = 0, byte segment = 0, byte side = 0) => Exchange(function, channel, segment, side).GetAwaiter().GetResult();
+    public byte[] Read(byte function, byte channel = 0, byte segment = 0, byte side = 0, byte[]? requestBody = null) => Exchange(function, channel, segment, side, requestBody ?? [], 2, 0).GetAwaiter().GetResult();
+    public byte[] Command(byte function,byte[] body,byte channel=0,byte side=0) => Exchange(function,channel,0,side,body,0,3).GetAwaiter().GetResult();
     public void Write(byte function, byte[] body, byte channel = 0, byte segment = 0, byte side = 0)
     {
         serial.Wait();
         try
         {
-            var packet = CvrWire.Encode(new(function, 1, channel, segment, side, body));
-            socket.Send(packet, packet.Length);
+            var packets=CvrWire.EncodeFragments(new(function,1,channel,segment,side,body));
+            foreach(var packet in packets)
+            {
+                socket.Send(packet,packet.Length);
+                if(packets.Count==1)continue;
+                using var timeout=new CancellationTokenSource(timeoutMs);
+                while(true)
+                {
+                    byte[] response;
+                    try {response=socket.ReceiveAsync(timeout.Token).AsTask().GetAwaiter().GetResult().Buffer;}
+                    catch(OperationCanceledException){throw new TimeoutException("CVR fragment acknowledgement timed out. The write may be partial.");}
+                    try
+                    {
+                        var header=CvrWire.Header(response);
+                        if(header.Ack && response.AsSpan(4,4).SequenceEqual(packet.AsSpan(4,4)))break;
+                        if(!header.Ack){var ack=response[..10];ack[8]=1;socket.Send(ack,ack.Length);}
+                    }
+                    catch(InvalidDataException) { }
+                }
+            }
         }
         finally { serial.Release(); }
     }
-    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side)
+    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side, byte[] body, byte sendStatus, byte responseStatus)
     {
         // All backend operations hold their own gate; the transport also serializes standalone callers.
         await serial.WaitAsync().ConfigureAwait(false);
@@ -41,7 +60,7 @@ public sealed class CvrUdpClient : IDisposable
                 IPEndPoint? peer = null;
                 socket.Receive(ref peer);
             }
-            var request = CvrWire.Encode(new(function, 2, channel, segment, side, []));
+            var request = CvrWire.Encode(new(function, sendStatus, channel, segment, side, body));
             await socket.SendAsync(request).ConfigureAwait(false);
             using var timeout = new CancellationTokenSource(timeoutMs);
             byte[][]? fragments = null;
@@ -81,7 +100,7 @@ public sealed class CvrUdpClient : IDisposable
                 var message = CvrWire.DecodeInner(fragments.SelectMany(f => f).ToArray());
                 fragments = null;
                 identity = null;
-                if (message.Function != function || message.Status != 0 || message.Channel != channel || message.Segment != segment || message.Side != side)
+                if (message.Function != function || message.Status != responseStatus || message.Channel != channel || message.Segment != segment || message.Side != side)
                     continue;
                 return message.Body;
             }

@@ -127,11 +127,28 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         telemetry = a.call("get_telemetry", deviceId="demo-2002")
         assert len(telemetry) == 2 and all(t["Voltage"] is None for t in telemetry)
         exported = b.call("export_preset", deviceId="demo-2002")
-        assert exported["SchemaVersion"] == 3 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
+        assert exported["SchemaVersion"] == 4 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
+        out_plan = a.call("plan_output_processing", deviceId="demo-2002", channel=1, delayMs=4,
+            highPass={"FrequencyHz":100,"FilterType":6,"Enabled":True})
+        a.call("apply_output_processing", planId=out_plan["Id"])
+        assert b.call("get_output_processing", deviceId="demo-2002", channel=1)["HighPass"]["FrequencyHz"] == 100
+        a.call("set_output_fir", deviceId="demo-2002", channel=1, name="Test delay", coefficients=[0,1], enabled=True)
+        assert b.call("get_output_fir", deviceId="demo-2002", channel=1)["Coefficients"] == [0,1]
+        a.reject("store_device_preset", deviceId="demo-2002", slot=16, name="Last slot")
+        a.call("store_device_preset", deviceId="demo-2002", slot=16, name="Last slot", confirmed=True)
+        assert b.call("get_device_presets", deviceId="demo-2002")["Slots"][15]["Name"] == "Last slot"
+        native = b.call("export_native_preset", deviceId="demo-2002")
+        a.call("load_preset_file", deviceId="demo-2002", fileName="preset.sd", base64=native["Base64"], confirmed=True)
+        a.call("recall_device_preset", deviceId="demo-2002", slot=16, confirmed=True)
+        b.call("clear_device_presets", deviceId="demo-2002", confirmed=True)
+        assert not any(s["Occupied"] for s in a.call("get_device_presets",deviceId="demo-2002")["Slots"])
+        a.reject("factory_reset", deviceId="demo-2002")
+        b.call("factory_reset", deviceId="demo-2002", confirmed=True)
+        assert not a.call("get_output_fir", deviceId="demo-2002", channel=1)["Enabled"]
         if handoff is not None:
             handoff.wait(timeout=5)
             print("PASS: updated executable waits for the previous process and completes the update handoff")
-        print("PASS: MCP without demo flag, two shared clients, uniform models, channel/routing/input edits, revision conflicts, rename, controls and schema 3 export")
+        print("PASS: MCP without demo flag, two shared clients, uniform models, channel/routing/input edits, revision conflicts, rename, controls full JSON/native presets, output EQ/FIR and sixteen device slots")
     except Exception:
         errors.seek(0)
         print(errors.read(), file=sys.stderr)

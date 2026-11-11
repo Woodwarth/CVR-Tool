@@ -69,7 +69,7 @@ public sealed partial class AmplifierService
         lock (gate)
         {
             PrunePlans();
-            if (plans.Count + routingPlans.Count + inputPlans.Count >= 1000)
+            if (plans.Count + routingPlans.Count + inputPlans.Count + outputPlans.Count >= 1000)
                 throw new InvalidOperationException("Too many pending plans.");
             inputPlans.Add(plan.Id, plan);
         }
@@ -89,6 +89,7 @@ public sealed partial class AmplifierService
     private void PrunePlans()
     {
         var now = clock.GetUtcNow();
+        foreach(var id in outputPlans.Where(p=>p.Value.ExpiresAt<=now).Select(p=>p.Key).ToArray())outputPlans.Remove(id);
         foreach (var id in plans.Where(p => p.Value.ExpiresAt <= now).Select(p => p.Key).ToArray())
             plans.Remove(id);
         foreach (var id in routingPlans.Where(p => p.Value.ExpiresAt <= now).Select(p => p.Key).ToArray())
