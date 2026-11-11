@@ -16,17 +16,39 @@ public sealed class CvrUdpClient : IDisposable
     {
         target = NetworkPreparation.Validate(target).Target;
         timeoutMs = target.TimeoutMs;
-        socket = new UdpClient(new IPEndPoint(IPAddress.Parse(target.LocalAddress), target.LocalPort));
-        socket.Connect(IPAddress.Parse(target.RemoteAddress), target.RemotePort);
+        var candidate = new UdpClient(AddressFamily.InterNetwork) { ExclusiveAddressUse = true };
+        try
+        {
+            candidate.Client.Bind(new IPEndPoint(IPAddress.Parse(target.LocalAddress), target.LocalPort));
+            candidate.Connect(IPAddress.Parse(target.RemoteAddress), target.RemotePort);
+            socket = candidate;
+        }
+        catch { candidate.Dispose(); throw; }
     }
     public byte[] Read(byte function, byte channel = 0, byte segment = 0, byte side = 0, byte[]? requestBody = null) => Exchange(function, channel, segment, side, requestBody ?? [], 2, 0).GetAwaiter().GetResult();
+    private byte[]? identityBody;
+    public byte[]? ObservedIdentity => Volatile.Read(ref identityBody)?.ToArray();
+
+    public byte[] ReadSnapshot(byte function)
+    {
+        if (function is not (0 or 6 or 27)) throw new ArgumentException("Only observed bulk reads are supported.");
+        return Exchange(function, 0, 0, 0, [], 2, 1, observedBulk: true).GetAwaiter().GetResult();
+    }
+
+    private void ObserveIdentity(CvrMessage message)
+    {
+        if (message is { Function: 0, Status: 1, Channel: 3, Segment: 10, Side: 0 } &&
+            message.Body.Length is 75 or 79)
+            Volatile.Write(ref identityBody, message.Body.ToArray());
+    }
+
     public byte[] Command(byte function,byte[] body,byte channel=0,byte side=0) => Exchange(function,channel,0,side,body,0,3).GetAwaiter().GetResult();
-    public void Write(byte function, byte[] body, byte channel = 0, byte segment = 0, byte side = 0)
+    public void Write(byte function, byte[] body, byte channel = 0, byte segment = 0, byte side = 0, byte messageStatus = 1)
     {
         serial.Wait();
         try
         {
-            var packets=CvrWire.EncodeFragments(new(function,1,channel,segment,side,body));
+            var packets=CvrWire.EncodeFragments(new(function,messageStatus,channel,segment,side,body));
             foreach(var packet in packets)
             {
                 socket.Send(packet,packet.Length);
@@ -49,7 +71,7 @@ public sealed class CvrUdpClient : IDisposable
         }
         finally { serial.Release(); }
     }
-    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side, byte[] body, byte sendStatus, byte responseStatus)
+    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side, byte[] body, byte sendStatus, byte responseStatus, bool observedBulk = false)
     {
         // All backend operations hold their own gate; the transport also serializes standalone callers.
         await serial.WaitAsync().ConfigureAwait(false);
@@ -58,7 +80,21 @@ public sealed class CvrUdpClient : IDisposable
             while (socket.Available > 0)
             {
                 IPEndPoint? peer = null;
-                socket.Receive(ref peer);
+                var stale = socket.Receive(ref peer);
+                try
+                {
+                    var header = CvrWire.Header(stale);
+                    if (!header.Ack && header.Count == 1)
+                    {
+                        var message = CvrWire.DecodeInner(stale[10..]);
+                        ObserveIdentity(message);
+                        if (message.Function == 0)
+                        {
+                            var ack = stale[..10]; ack[8] = 1; socket.Send(ack, ack.Length);
+                        }
+                    }
+                }
+                catch (InvalidDataException) { }
             }
             var request = CvrWire.Encode(new(function, sendStatus, channel, segment, side, body));
             await socket.SendAsync(request).ConfigureAwait(false);
@@ -100,7 +136,23 @@ public sealed class CvrUdpClient : IDisposable
                 var message = CvrWire.DecodeInner(fragments.SelectMany(f => f).ToArray());
                 fragments = null;
                 identity = null;
-                if (message.Function != function || message.Status != responseStatus || message.Channel != channel || message.Segment != segment || message.Side != side)
+                ObserveIdentity(message);
+                if (observedBulk)
+                {
+                    var validLength = function == 0 ? message.Body.Length is 75 or 79 :
+                        function == 27 ? message.Body.Length is 2232 or 2687 :
+                        message.Body.Length is 32 or 56 or 72 or 76 or 88 or 92 or 96;
+                    var responseChannel = function == 0 ? 3 : 32;
+                    if (message.Function != function || message.Status != 1 || message.Channel != responseChannel ||
+                        message.Segment != 10 || message.Side != 0 || !validLength) continue;
+                    if (function == 27)
+                    {
+                        // Read completion only: no settings payload and no status-1 write.
+                        var confirmation = CvrWire.Encode(new(27, 3, 0, 0, 0, []));
+                        await socket.SendAsync(confirmation).ConfigureAwait(false);
+                    }
+                }
+                else if (message.Function != function || message.Status != responseStatus || message.Channel != channel || message.Segment != segment || message.Side != side)
                     continue;
                 return message.Body;
             }

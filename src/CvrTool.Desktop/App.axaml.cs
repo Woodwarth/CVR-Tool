@@ -35,6 +35,8 @@ public partial class App : Avalonia.Application
             catch (IOException) { Console.Error.WriteLine("CVR Tool session is already running."); desktop.Shutdown(); return; }
             var window = new MainWindow(new AmplifierService(backend));
             desktop.MainWindow = window;
+            backend.DevicesChanged += () => Dispatcher.UIThread.Post(window.ReloadSession);
+            window.Opened += (_, _) => backend.StartDiscovery();
             session.Changed += () => Dispatcher.UIThread.Post(window.ReloadSession);
             desktop.Exit += (_, _) => { session.Dispose(); backend.Dispose(); };
         }

@@ -38,6 +38,9 @@ public sealed partial class MainWindow : Window
     private readonly ContentControl nameSlot = new(), deviceActions = new();
     private string deviceId = "demo-1004", activeTab = "Main";
     private string? nativePresetName;
+    private bool liveReadOnly;
+    private bool controlWritePending;
+    private readonly HashSet<string> knownDevices = new();
     private List<ChannelDraft> channels = [];
     // Window composition
     // Build the shell once; navigation replaces only the active page.
@@ -69,6 +72,7 @@ public sealed partial class MainWindow : Window
         Content = BuildShell();
         Opened += (_, _) => FitInitialWindow();
         Select(deviceId);
+        StartLiveRefresh();
     }
 
     // Device navigation
@@ -92,20 +96,37 @@ public sealed partial class MainWindow : Window
 
     private void RenderPage()
     {
-        deviceName.Text = service.GetDevice(deviceId).Capabilities.Model;
+        var selectedDevice = service.GetDevice(deviceId);
+        liveReadOnly = selectedDevice.Readings?.ReadOnly == true;
+        if (!liveReadOnly && activeTab == "Details") activeTab = "Main";
+        deviceName.Text = selectedDevice.Capabilities.Model;
+        nameSlot.IsEnabled = !liveReadOnly;
+        deviceActions.IsEnabled = !controlWritePending && (!liveReadOnly || selectedDevice.Readings!.CanSetDisplayLock || selectedDevice.Readings.CanSetStandby);
         ShowDeviceName();
         RefreshDeviceInfo();
         deviceActions.Content = DeviceActions();
         navigation.Children.Clear();
-        foreach (var device in service.ListDevices())
+        deviceDots.Clear();
+        var availableDevices = service.ListDevices();
+        knownDevices.Clear();
+        foreach (var device in availableDevices)
         {
+            knownDevices.Add(device.Id);
             var selected = device.Id == deviceId;
             var label = new StackPanel
             {
                 Spacing = 4
             };
-            label.Children.Add(Text("●  " + device.Capabilities.Model, 13));
-            label.Children.Add(Text(device.Name, 10, Muted));
+            var nameRow = new Grid { ColumnDefinitions = new ColumnDefinitions("18,*") };
+            var dot = Text("●", 13, ConnectionColor(device));
+            dot.Tag = "device-dot-" + device.Id;
+            deviceDots[device.Id] = dot;
+            nameRow.Children.Add(dot);
+            var primaryName = Text(device.Name, 13);
+            primaryName.TextWrapping = TextWrapping.Wrap;
+            AddColumn(nameRow, primaryName, 1);
+            label.Children.Add(nameRow);
+            label.Children.Add(Text(device.Capabilities.Model, 10, Muted));
             var button = new Button
             {
                 Content = label,
@@ -123,15 +144,12 @@ public sealed partial class MainWindow : Window
         }
 
         tabs.Children.Clear();
-        foreach (var (name, symbol) in new[]
+        var pageTabs = new List<(string Name, string Symbol)>
         {
-            ("Main", "⌂"),
-            ("Inputs", "◉"),
-            ("Outputs", "◖"),
-            ("Presets", "☰")
-        }
-
-        )
+            ("Main", "⌂"), ("Inputs", "◉"), ("Outputs", "◖"), ("Presets", "☰")
+        };
+        if (liveReadOnly) pageTabs.Add(("Details", "ⓘ"));
+        foreach (var (name, symbol) in pageTabs)
         {
             var button = new Button
             {
@@ -157,17 +175,21 @@ public sealed partial class MainWindow : Window
         {
             "Inputs" => InputsPage(),
             "Outputs" => OutputsPage(),
-            "Presets" => PresetsPage(),
+            "Presets" => liveReadOnly ? LivePresetPage() : PresetsPage(),
+            "Details" => LiveDetailsPage(),
             _ => MainPage()
         };
+        if (liveReadOnly && page.Content is Control livePage) DisableLiveEdits(livePage, false);
     }
 
     public void ReloadSession()
     {
         try
         {
-            if (!service.ListDevices().Any(d => d.Id == deviceId))
-                deviceId = "demo-1004";
+            var devices = service.ListDevices();
+            var added = devices.FirstOrDefault(d => !d.IsDemo && !knownDevices.Contains(d.Id));
+            if (added is not null) { deviceId = added.Id; activeTab = "Main"; }
+            else if (!devices.Any(d => d.Id == deviceId)) deviceId = "demo-1004";
             channels = service.GetDevice(deviceId).Outputs.Select(c => new ChannelDraft(c)).ToList();
             Render();
             status.Text = "Shared session updated via MCP";

@@ -27,6 +27,11 @@ public sealed partial class MainWindow
         var key = (device, channel, kind);
         inputEditors.Add(key, editor);
         editor.Closed += (_, _) => inputEditors.Remove(key);
+        if (service.GetDevice(device).Readings?.ReadOnly == true)
+        {
+            editor.Title += " · Read-only";
+            DisableLiveEdits(editor, true);
+        }
         editor.Show(this);
     }
     private Button DelayControl(int channel)

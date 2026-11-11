@@ -23,11 +23,11 @@ public sealed partial class MainWindow
         }
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("1.1*,1.1*,1*,Auto"), ColumnSpacing = 22 };
         var model = new StackPanel { Spacing = 8 };
-        model.Children.Add(Labeled("Model", deviceName));
+        model.Children.Add(Labeled("Name", nameSlot));
         model.Children.Add(Value("ip", "IP address"));
         grid.Children.Add(model);
         var name = new StackPanel { Spacing = 8 };
-        name.Children.Add(Labeled("Name", nameSlot));
+        name.Children.Add(Labeled("Model", deviceName));
         name.Children.Add(Value("preset", "Preset"));
         AddColumn(grid, name, 1);
         var connection = new StackPanel { Spacing = 8 };
@@ -42,9 +42,10 @@ public sealed partial class MainWindow
     private void RefreshDeviceInfo()
     {
         var device = service.GetDevice(deviceId);
-        infoValues["ip"].Text = device.IsDemo ? "—" : device.Id.Split(':')[1];
-        infoValues["preset"].Text = nativePresetName ?? "Local settings";
+        infoValues["ip"].Text = device.IsDemo ? "—" : device.Id.Split(':').ElementAtOrDefault(1) ?? "—";
+        infoValues["preset"].Text = device.Readings?.CurrentPreset ?? nativePresetName ?? (device.IsDemo ? "Local settings" : "—");
         infoValues["channels"].Text = device.Outputs.Count + " in / " + device.Outputs.Count + " out";
-        infoValues["connection"].Text = device.IsDemo ? "Local session" : "CVR UDP · Readback";
+        infoValues["connection"].Text = device.IsDemo ? "Local session" : device.Readings?.ReadOnly == true ?
+            (device.Readings.Error is null ? "Live · Lock / Standby" : "Offline · Cached") : "CVR UDP · Readback";
     }
 }

@@ -8,7 +8,7 @@ using System.Net.Sockets;
 
 namespace CvrTool.Protocol;
 
-public sealed record NetworkTarget(string Name, string RemoteAddress, int RemotePort = 45455, string LocalAddress = "127.0.0.1", int LocalPort = 45454, int TimeoutMs = 1000);
+public sealed record NetworkTarget(string Name, string RemoteAddress, int RemotePort = 45455, string LocalAddress = "127.0.0.1", int LocalPort = 45454, int TimeoutMs = 1000, bool ReadOnlySnapshot = false);
 public sealed record NetworkConnectionPlan(NetworkTarget Target, bool IsLoopback, bool HardwareAccessAllowed, string Status);
 public static class NetworkPreparation
 {

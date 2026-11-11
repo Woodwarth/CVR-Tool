@@ -18,25 +18,42 @@ public interface IConnectionBackend
 public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend, IDisposable
 {
     private readonly DemoBackend local = new();
-    private readonly Dictionary<string, CvrLanBackend> peers = new();
+    private readonly Dictionary<string, IAmplifierBackend> peers = new();
     private readonly object gate = new();
+    private CvrDiscoveryService? discovery;
+    private bool disposed;
+    public event Action? DevicesChanged;
+    public void StartDiscovery()
+    {
+        lock (gate)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            discovery ??= new CvrDiscoveryService(target =>
+            {
+                lock (gate) { if (disposed || peers.ContainsKey($"cvr:{target.RemoteAddress}:{target.RemotePort}")) return; }
+                Connect(target);
+                DevicesChanged?.Invoke();
+            });
+        }
+    }
     private IAmplifierBackend Backend(string id) => peers.TryGetValue(id, out var peer) ? peer : local;
     public DeviceSnapshot Connect(NetworkTarget target)
     {
         lock (gate)
         {
+            ObjectDisposedException.ThrowIf(disposed, this);
             target = NetworkPreparation.Validate(target).Target;
             var id = $"cvr:{target.RemoteAddress}:{target.RemotePort}";
             if (peers.ContainsKey(id))
                 return peers[id].GetDevice(id);
-            var backend = new CvrLanBackend(target);
+            IAmplifierBackend backend = target.ReadOnlySnapshot ? new CvrSnapshotBackend(target) : new CvrLanBackend(target);
             try
             {
                 var device = backend.GetDevice(id);
                 peers.Add(id, backend);
                 return device;
             }
-            catch { backend.Dispose(); throw; }
+            catch { ((IDisposable)backend).Dispose(); throw; }
         }
     }
     public DisconnectionResult Disconnect(string deviceId)
@@ -45,7 +62,7 @@ public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, I
         {
             if (!peers.Remove(deviceId, out var peer))
                 return new(false);
-            peer.Dispose();
+            ((IDisposable)peer).Dispose();
             return new(true);
         }
     }
@@ -124,10 +141,12 @@ public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, I
     public DeviceOperationResult ClearDevicePresets(string id,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).ClearDevicePresets(id,revision); }
     public void Dispose()
     {
+        lock (gate) disposed = true;
+        discovery?.Dispose();
         lock (gate)
         {
             foreach (var peer in peers.Values)
-                peer.Dispose();
+                ((IDisposable)peer).Dispose();
             peers.Clear();
         }
     }

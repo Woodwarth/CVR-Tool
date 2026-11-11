@@ -57,6 +57,12 @@ internal static class CvrPeerChecks
         check(Convert.ToHexString(CvrWire.Encode(new(34, 1, 0, 5, 0, BitConverter.GetBytes(4f)))) == "03D90000011100010000552201000500000000000000804000114E", "Input 1 EQ5 Q 4 matches the controlled capture");
         check(Convert.ToHexString(CvrWire.Encode(new(30, 1, 0, 5, 0, [255]))) == "03D90000010E00010000551E0100050000000000FF000E86", "Input EQ5 Peak bypass matches the controlled FF command");
         check(Convert.ToHexString(CvrWire.Encode(new(30, 1, 0, 5, 0, [0]))) == "03D90000010E00010000551E010005000000000000000E87", "Input EQ5 Peak enable matches the controlled zero command");
+        check(Convert.ToHexString(CvrWire.Encode(new(18, 1, 0, 0, 1, [1]))) == "03D90000010E000100005512010000000000000101000E78", "Output A inverted polarity matches the controlled 180-degree command");
+        check(Convert.ToHexString(CvrWire.Encode(new(18, 1, 0, 0, 1, [0]))) == "03D90000010E000100005512010000000000000100000E77", "Output A normal polarity matches the controlled zero-degree command");
+        check(Convert.ToHexString(CvrWire.Encode(new(49, 0, 0, 0, 1, [1]))) == "03D90000010E000100005531000000000000000101000E96", "Output A 70V mode uses observed status zero");
+        check(Convert.ToHexString(CvrWire.Encode(new(49, 0, 0, 0, 1, [0]))) == "03D90000010E000100005531000000000000000100000E95", "Output A Low-Z mode matches the controlled return command");
+        check(Convert.ToHexString(CvrWire.Encode(new(15, 0, 0, 0, 0, [1]))) == "03D90000010E00010000550F000000000000000001000E73", "Standby on matches the observed status-zero command");
+        check(Convert.ToHexString(CvrWire.Encode(new(15, 0, 0, 0, 0, [0]))) == "03D90000010E00010000550F000000000000000000000E72", "Standby off matches the observed status-zero command");
         var corrupt = locked[10..];
         corrupt[^1] ^= 1;
         try
@@ -353,6 +359,7 @@ internal static class CvrPeerChecks
                     }
                     if(state==0)
                     {
+                        if(function is 15 or 49 && !IgnoreWrites) Values[key]=request;
                         if(function==59)
                         {
                             var names=Values[(59,0,0,0)].ToArray();

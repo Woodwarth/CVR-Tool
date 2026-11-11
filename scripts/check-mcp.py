@@ -127,7 +127,7 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         a.call("rename_device", deviceId="demo-2002", name="Front amp")
         assert b.call("get_device", deviceId="demo-2002")["Name"] == "Front amp"
         a.call("set_device_controls", deviceId="demo-2002", displayLocked=True, standby=True)
-        assert b.call("get_device_controls", deviceId="demo-2002") == {"DisplayLocked": True, "Standby": True}
+        assert b.call("get_device_controls", deviceId="demo-2002") == {"DisplayLocked": True, "Standby": True, "StandbyKnown": True}
         telemetry = a.call("get_telemetry", deviceId="demo-2002")
         assert len(telemetry) == 2 and all(t["Voltage"] is None for t in telemetry)
         exported = b.call("export_preset", deviceId="demo-2002")

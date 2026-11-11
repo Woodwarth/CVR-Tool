@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.1
+
+- Automatic CVR discovery on the wired amplifier LAN, alongside all demo devices.
+- Live full-settings/status display with unknown readings kept explicit.
+- Writable display lock and standby, verified with fresh device readback.
+- Standby waits for asynchronous telemetry and native-state updates.
+- Name appears before model; green/red points show connection state.
+- Manual connection/disconnect buttons removed; native/JSON backups remain available.
+- Correct status-zero framing for standby and load-mode commands.
+- Output polarity and Low-Z/70V commands passively confirmed; 100V was unavailable
+  on the tested controller/device combination.
+
+## 0.7.0
+
+- Independent input gain and schema-7/native preset preservation.
+- Corrected active-low output/matrix mute and routing coordinates.
+- Targeted input EQ global/Peak bypass, gain, frequency and Q commands.
+- Sync-only native settings export without invented FIR blocks.
+
 ## 0.6.4
 
 - Stereo/Bridge switches directly with one click; no popup or Apply step.

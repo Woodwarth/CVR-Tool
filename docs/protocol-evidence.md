@@ -31,9 +31,9 @@ Channels and segments are zero-based on the wire.
 | 10 | Output mute | Active-low: byte 0 muted, 1 unmuted; side 1 |
 | 12 | Routing | Float gain + active-low flag (0 muted, 1 enabled); channel=output, segment=input, side=0 |
 | 14 | Delay | Float milliseconds; side 0=input, 1=output |
-| 15 | Standby | Byte 0/1; other states rejected |
+| 15 | Standby | Status-0 command; byte 1 on, 0 off. Telemetry and native-state settling confirm writes |
 | 17 | Display lock | Byte 0/1; command matches captured frame |
-| 18 | Output polarity | Byte 0/1 |
+| 18 | Output polarity | Controlled output A: byte 1=180°, 0=0°; side 1 |
 | 16 | Factory reset | Command body byte 1; semantic ACK required |
 | 27 | Full sync | B118/B119: 2232/2687 bytes |
 | 30 | Input Peak band bypass/type | Controlled Peak slot: FF bypass, 00 active; channel=input, segment=filter, side 0. Channel-254 initialization semantics remain unconfirmed |
@@ -45,7 +45,7 @@ Channels and segments are zero-based on the wire.
 | 40/41/42 | Peak hold/release/threshold | Int16 ms / Int16 ms / float Vpeak; side 1 |
 | 46/47 | RMS/peak bypass | Byte 0 enabled, 1 bypassed; side 1 |
 | 48 | RMS automatic timing | Byte 0 automatic, 1 manual; side 1 |
-| 49 | Output load mode | Byte 0 Low-Z, 1 70V, 2 100V; per channel, side 1 |
+| 49 | Output load mode | Controlled status-0 command: byte 0 Low-Z, 1 70V; per channel, side 1. Value 2 (100V) remains unverified |
 | 50 | Stereo/bridge pair | Byte 0 bridge, 1 stereo; channel is zero-based pair, side 1 |
 | 54/55 | Peak/RMS limiter blocks | 13 packed bytes including read-only voltage maximum |
 | 69 | Noise-gate bypass | Byte 0 enabled, 1 bypassed; side 1 |
@@ -55,6 +55,7 @@ Channels and segments are zero-based on the wire.
 | 52 | Input/output filter block | 141 bytes; side 0/1 |
 | 59 | Device presets | 34-byte mode/slot/name; mode 0 reads sixteen names, 1 stores, 2 recalls, 3 clears |
 | 60 | Device name write | 32 padded bytes; read back through function 0 |
+| 71 | Unassigned opening-time read | Empty status-2 request, 93-byte status-1 reply; meaning unconfirmed |
 
 The filter block contains ten packed 14-byte records and one global bypass
 byte. Each record: signed type, float gain, float frequency, float Q, reset
@@ -229,3 +230,29 @@ Peak type 0 when bypass changes; other types retain the block path. Readback
 must match the aggregate, including unchanged filter parameters. This does not
 validate the earlier special channel-254 initialization traffic or output side.
 Transport ACKs are not independent setting readback. Progress: 13/36 IDs (36%).
+
+Output A polarity is now controlled-capture confirmed: function 18/status 1,
+channel/segment/side 0/0/1, body 01 for 180 degrees and 00 for normal polarity.
+Both commands have valid framing and following transport ACKs; post-test settings
+readback is not yet captured. Existing backend/native mapping agrees. Original
+controller startup also queries function 71 and receives 93 bytes; this remains
+unassigned and expands the progress denominator. Current count: 14/37 IDs (38%).
+
+Output A load-mode testing confirms function 49 uses status 0 (not ordinary
+setting-write status 1), channel/segment/side 0/0/1, bodies 01 for 70V then
+00 for Low-Z. Output A was muted during switching and subsequently unmuted.
+100V could not be selected in the user's controller/device combination; no
+100V command is claimed as physically tested, and this observation is not a
+global model capability declaration. Existing individual-query backend mode
+writes now use status 0. Transport ACKs are not semantic mode readback.
+Current partial live evidence is 15/37 function IDs (41%).
+
+The controlled standby test confirms function 15/status 0, channel/segment/side
+0/0/0, bodies 01 then 00. Direct application validation established that telemetry
+codes change to 1 on all outputs for standby; after exit a transient code 2 can
+precede normal code 8. Native byte 32 updates asynchronously, so an immediate
+full-sync read is insufficient. The live backend sends once and waits on fresh
+telemetry plus settled native state, rejecting unrelated native changes. No
+individual function-15 query semantics are assumed. Both operational controls
+were successfully set/restored on the real device; original native settings
+matched byte-for-byte afterwards. Current progress: 16/37 IDs (43%).

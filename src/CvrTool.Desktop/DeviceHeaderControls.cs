@@ -100,6 +100,7 @@ public sealed partial class MainWindow
             var button = new ToggleButton
             {
                 Tag = "device-" + kind,
+                IsEnabled = !liveReadOnly || (kind == "lock" ? service.GetDevice(deviceId).Readings!.CanSetDisplayLock : service.GetDevice(deviceId).Readings!.CanSetStandby),
                 IsChecked = initial,
                 Width = 38,
                 Height = 38,
@@ -114,7 +115,7 @@ public sealed partial class MainWindow
                 button.Content = new DeviceGlyph(kind, active);
                 button.Background = active ? Brush.Parse("#007F7D") : Brush.Parse("#182129");
                 button.BorderBrush = active ? Accent : Line;
-                AutomationProperties.SetName(button, label + (active ? " on" : " off"));
+                AutomationProperties.SetName(button, label + (kind == "standby" && !state.StandbyKnown ? " unknown" : active ? " on" : " off"));
                 ToolTip.SetTip(button, label + (active ? ": on" : ": off"));
             }
 
@@ -131,6 +132,7 @@ public sealed partial class MainWindow
 
         void Set(bool? locked = null, bool? standby = null)
         {
+            if (liveReadOnly) { SetLiveControls(locked, standby); return; }
             try
             {
                 var after = service.SetControlState(deviceId, locked, standby);

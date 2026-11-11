@@ -66,7 +66,7 @@ public sealed partial class CvrLanBackend : IAmplifierBackend, IDisposable
     private void Write(byte function, byte[] body, byte channel = 0, byte segment = 0, byte side = 0)
     {
         revision++; // Also invalidates plans when readback fails after a potentially successful write.
-        client.Write(function, body, channel, segment, side);
+        client.Write(function, body, channel, segment, side, messageStatus: function is 15 or 49 ? (byte)0 : (byte)1);
         var observed = Read(function == 60 ? (byte)0 : function, channel, segment, side);
         if (function == 60)
             observed = observed.Length >= 64 ? observed[32..64] : [];

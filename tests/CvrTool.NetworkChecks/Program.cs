@@ -153,6 +153,7 @@ finally
         Directory.Delete(directory);
 }
 CvrPeerChecks.Run(Check);
+SnapshotPeerChecks.Run(Check);
 var sessionLabel="stress-"+Guid.NewGuid();
 using (var sessionHost = new SessionHost(new DemoBackend(), sessionLabel))
 {

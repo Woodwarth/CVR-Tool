@@ -5,7 +5,7 @@
 // Scope: unsupported native layouts fail explicitly rather than dropping unknown data.
 namespace CvrTool.Core;
 
-public sealed record FirState(int Channel, string Name, IReadOnlyList<double> Coefficients, bool Enabled = false, int SampleRate = 48000);
+public sealed record FirState(int Channel, string Name, IReadOnlyList<double> Coefficients, bool Enabled = false, int SampleRate = 48000, bool CoefficientsKnown = true);
 public sealed record DevicePresetSlot(int Number, string Name, bool Occupied);
 public sealed record DevicePresetState(IReadOnlyList<DevicePresetSlot> Slots, string? CurrentName = null);
 public sealed record DeviceOperationResult(string Operation, bool Confirmed, string Message);

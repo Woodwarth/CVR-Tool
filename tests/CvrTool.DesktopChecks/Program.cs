@@ -268,7 +268,28 @@ var notClipped = Tagged<Control>("channel-clip-B").GetLogicalDescendants().OfTyp
 Check(clipped.All(t => t.Foreground is ISolidColorBrush b && b.Color == Color.Parse("#FF566A")) && notClipped.All(t => t.Foreground is ISolidColorBrush b && b.Color != Color.Parse("#FF566A")), "Clip indicator and label turn red only on clipping");
 Check(Tagged<Control>("channel-clip-A").GetLogicalDescendants().OfType<StatusLed>().Single().Value == true && Tagged<Control>("channel-clip-B").GetLogicalDescendants().OfType<StatusLed>().Single().Value == false && Tagged<Control>("channel-clip-C").GetLogicalDescendants().OfType<StatusLed>().Single().Value is null && All<StatusLed>().Count() == 36, "Clipping and all output status bits use LEDs with distinct on/off/unknown states");
 Check(Tagged<Control>("telemetry-A-0") is TextBlock a && a.Text == "42.0" && Tagged<Control>("telemetry-B-0") is TextBlock b && b.Text == "21.0", "Each output displays its own telemetry");
-Save("main-clipping-test-fixture"); window.Close(); Console.WriteLine($"PASS: {count} desktop checks");
+Save("main-clipping-test-fixture"); window.Close();
+var liveFixture = new LiveDesktopFixture();
+window = new MainWindow(new AmplifierService(liveFixture)); window.Show(); root = (Control)window.Content!; Layout();
+Check(!All<Button>().Any(b => b.Content?.ToString() is "Manual connection" or "Connect device" or "Disconnect"), "Automatic device view has no manual connection/disconnect buttons");
+Device(LiveDesktopFixture.LiveId); Layout();
+Check(All<Button>().Count(b => b.Tag?.ToString()?.StartsWith("demo-") == true) == 3, "All three demos remain listed beside the live device");
+Check(Tagged<TextBlock>("device-dot-" + LiveDesktopFixture.LiveId).Foreground is ISolidColorBrush liveGreen && liveGreen.Color == Color.Parse("#00CE63"), "Connected live device point is green");
+Check(Tagged<ToggleButton>("device-lock").IsEffectivelyEnabled && Tagged<ToggleButton>("device-standby").IsEffectivelyEnabled && !Tagged<Button>("device-name-display").IsEffectivelyEnabled, "Live lock and standby are enabled while DSP/name editing stays protected");
+Check(All<Slider>().All(s => !s.IsEnabled) && !Tagged<ToggleButton>("mute-output-A").IsEnabled, "Read-only main controls cannot change physical settings");
+Check(Tagged<Control>("channel-clip-A").GetLogicalDescendants().OfType<StatusLed>().Single().Value is null, "Input clip does not copy output clip on live devices");
+Click("ⓘ   Details");
+Check(Text("Fixture-106119-DSP-1004") && Text("Fixture preset") && Text("RMS timing") && Text("Peak timing") && Text("Routing matrix") && Text("coefficients not received"), "Live details include identity, processing, routing, dynamics and unknown FIR state");
+Click("◉   Inputs");
+Check(All<RoutingDial>().All(d => !d.IsEnabled) && Tagged<Button>("input-eq-1").IsEnabled, "Live matrix is read-only while EQ remains viewable");
+Press(Tagged<Button>("input-eq-1")); var liveEq = window.OwnedWindows.Single();
+Check(liveEq.Title!.Contains("Read-only") && !liveEq.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag?.ToString() == "apply-input-eq").IsEnabled, "Live EQ viewer disables apply"); liveEq.Close();
+Click("◖   Outputs"); Check(!Tagged<Button>("output-mode-A").IsEnabled && Tagged<Button>("output-eq-A").IsEnabled, "Live output settings remain visible and protected");
+Click("☰   Presets"); Check(Tagged<Button>("snapshot-save-pc").IsEnabled && !All<ComboBox>().Any(c => c.Tag?.ToString() == "device-preset-slot"), "Unknown device slots are not invented and known settings can be saved");
+liveFixture.Error = "Offline fixture"; window.ReloadSession(); Layout();
+Check(Tagged<TextBlock>("device-dot-" + LiveDesktopFixture.LiveId).Foreground is ISolidColorBrush liveRed && liveRed.Color == Color.Parse("#F05462"), "Disconnected live device point turns red");
+Device("demo-2002"); Click("⌂   Main"); Check(All<Slider>().All(s => s.IsEnabled), "Switching back to a demo restores editable controls");
+window.Close(); Console.WriteLine($"PASS: {count} desktop checks");
 
 // Synthetic values are confined to this UI test; the default demo returns unknown telemetry.
 sealed class TelemetryFixture : IAmplifierBackend

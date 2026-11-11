@@ -28,7 +28,8 @@ public sealed partial class MainWindow
             var draft = channels[i];
             var input = service.GetInputProcessing(deviceId, draft.State.Number);
             var inputGain = input.GainDb;
-            var data = telemetry.Single(t => t.Channel == draft.State.Number);
+            var data = liveReadOnly ? new CvrTool.Core.OutputTelemetry(draft.State.Number) :
+                telemetry.Single(t => t.Channel == draft.State.Number);
             var strip = new Grid
             {
                 RowDefinitions = new RowDefinitions(StripRows),
