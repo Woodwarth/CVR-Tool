@@ -127,7 +127,16 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         telemetry = a.call("get_telemetry", deviceId="demo-2002")
         assert len(telemetry) == 2 and all(t["Voltage"] is None for t in telemetry)
         exported = b.call("export_preset", deviceId="demo-2002")
-        assert exported["SchemaVersion"] == 4 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
+        assert exported["SchemaVersion"] == 5 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
+        dynamics=a.call("get_output_dynamics",deviceId="demo-2002",channel=1)
+        dynamics["Rms"].update(ThresholdVolts=60,AttackMs=40,ReleaseMultiplier=8,Automatic=True)
+        dynamics["Peak"].update(ThresholdVolts=100,HoldMs=80,ReleaseMs=400)
+        dyn_plan=a.call("plan_output_dynamics",deviceId="demo-2002",channel=1,bridged=True,noiseGateEnabled=True,noiseGateDb=-70,rms=dynamics["Rms"],peak=dynamics["Peak"])
+        a.call("apply_output_dynamics",planId=dyn_plan["Id"])
+        assert b.call("get_output_dynamics",deviceId="demo-2002",channel=2)["Bridged"]
+        actual=b.call("get_output_dynamics",deviceId="demo-2002",channel=1)
+        assert actual["NoiseGateDb"]==-70 and actual["Rms"]["ThresholdVolts"]==60 and actual["Peak"]["HoldMs"]==80
+        a.reject("apply_output_dynamics",planId=dyn_plan["Id"])
         out_plan = a.call("plan_output_processing", deviceId="demo-2002", channel=1, delayMs=4,
             highPass={"FrequencyHz":100,"FilterType":6,"Enabled":True})
         a.call("apply_output_processing", planId=out_plan["Id"])

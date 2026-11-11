@@ -30,7 +30,7 @@ public sealed partial class AmplifierService
         lock (gate)
         {
             PrunePlans();
-            if (plans.Count + routingPlans.Count + inputPlans.Count + outputPlans.Count >= 1000)
+            if (plans.Count + routingPlans.Count + inputPlans.Count + outputPlans.Count + dynamicsPlans.Count >= 1000)
                 throw new InvalidOperationException("Too many pending plans.");
             outputPlans.Add(plan.Id, plan);
         }
@@ -85,16 +85,21 @@ public static class PresetOperations
     {
         var device = basic.GetDevice(id);
         var count = device.Outputs.Count;
-        return new(4, device.Capabilities.Model, device.IsDemo, device.Outputs, device.Name, basic.GetRouting(id).Cells,
+        return new(5, device.Capabilities.Model, device.IsDemo, device.Outputs, device.Name, basic.GetRouting(id).Cells,
             Enumerable.Range(1, count).Select(c => basic.GetInputProcessing(id, c).State).ToArray(),
             Enumerable.Range(1, count).Select(c => advanced.GetOutputProcessing(id, c).State).ToArray(),
-            Enumerable.Range(1, count).Select(c => advanced.GetFir(id, c).State).ToArray(), native?.ToArray());
+            Enumerable.Range(1, count).Select(c => advanced.GetFir(id, c).State).ToArray(), native?.ToArray(), Enumerable.Range(1, count).Select(c => advanced.GetOutputDynamics(id, c).State).ToArray());
     }
     public static PresetDocument Copy(PresetDocument preset) => System.Text.Json.JsonSerializer.Deserialize<PresetDocument>(System.Text.Json.JsonSerializer.Serialize(preset))!;
     public static PresetDocument Validate(PresetDocument preset, DeviceSnapshot device)
     {
         var count = device.Outputs.Count;
-        if (preset.SchemaVersion is < 2 or > 4 || preset.Model != device.Capabilities.Model || preset.Outputs.Count != count || !preset.Outputs.Select(c => c.Number).Order().SequenceEqual(Enumerable.Range(1, count)))
+        if (preset.Dynamics is null && preset.NativeData is not null)
+            preset = preset with
+            {
+                Dynamics = NativePresetCodec.Decode(preset.NativeData).Dynamics
+            };
+        if (preset.SchemaVersion is < 2 or > 5 || preset.Model != device.Capabilities.Model || preset.Outputs.Count != count || !preset.Outputs.Select(c => c.Number).Order().SequenceEqual(Enumerable.Range(1, count)))
             throw new ArgumentException("Preset model or channel topology does not match the selected device.");
         foreach (var state in preset.Outputs)
             AmplifierService.Merge(state, new(device.Id, state.Number, state.GainDb, state.Muted, state.DelayMs, state.Inverted));
@@ -124,6 +129,16 @@ public static class PresetOperations
                 throw new ArgumentException("Preset FIR channels are inconsistent.");
             foreach (var fir in preset.Firs)
                 AmplifierService.ValidateFir(fir);
+        }
+        if (preset.Dynamics is not null)
+        {
+            if (preset.Dynamics.Count != count || !preset.Dynamics.Select(d => d.Channel).Order().SequenceEqual(Enumerable.Range(1, count)))
+                throw new ArgumentException("Preset dynamics topology is inconsistent.");
+            foreach (var state in preset.Dynamics)
+                AmplifierService.ValidateDynamics(state);
+            for (var n = 1; n <= count; n += 2)
+            if (preset.Dynamics.Single(d => d.Channel == n).Bridged != preset.Dynamics.Single(d => d.Channel == n + 1).Bridged)
+                throw new ArgumentException("Bridge mode must match within each channel pair.");
         }
         if (preset.NativeData is not null)
         {

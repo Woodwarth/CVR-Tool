@@ -62,6 +62,18 @@ internal static class CvrPeerChecks
             var observed = peer.Values[(52, 0, 0, 0)];
             check(crossover.HighPass == hp && crossover.LowPass == lp && observed[0] == option.Code && observed[126] == 255 - option.Code && observed[14..126].SequenceEqual(bandsBeforeCrossover), "Crossover type/frequency/bypass readback preserves EQ: " + option.ShortName);
         }
+        var dyn=remoteService.GetOutputDynamics(id,1);
+        var rmsState=dyn.Rms with {ThresholdVolts=50,AttackMs=40,ReleaseMultiplier=8,Automatic=true,Enabled=false};var peakState=dyn.Peak with {ThresholdVolts=90,HoldMs=150,ReleaseMs=500,Enabled=false};
+        remoteService.ApplyOutputDynamics(remoteService.PlanOutputDynamics(new(id,1,Bridged:true,NoiseGateEnabled:true,NoiseGateDb:-65,Rms:rmsState,Peak:peakState)).Id);
+        check(service.GetOutputDynamics(id,1) is {Bridged:true,NoiseGateEnabled:true,NoiseGateDb:-65} && service.GetOutputDynamics(id,2).Bridged,"Mode pair and signed gate threshold round-trip through shared IPC");
+        check(service.GetOutputDynamics(id,1).Rms==rmsState && service.GetOutputDynamics(id,1).Peak==peakState,"All RMS/peak settings use independent aggregate readback");
+        check(peer.Values[(50,0,0,1)][0]==0 && peer.Values[(69,0,0,1)][0]==0 && peer.Values[(87,0,0,1)][0]==191 && BitConverter.ToSingle(peer.Values[(55,0,0,1)],9)==100,"Dynamics encoding preserves immutable maximums and active-low flags");
+        peer.IgnoreWrites=true;
+        try{service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,NoiseGateDb:-50)).Id);throw new Exception("Dynamics write rejection ignored");}
+        catch(InvalidOperationException){check(true,"A gate write without matching readback fails explicitly");}finally{peer.IgnoreWrites=false;}
+        peer.IgnoreDynamicsAggregate=true;
+        try{service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,Peak:peakState with {ThresholdVolts=80})).Id);throw new Exception("Aggregate mismatch ignored");}
+        catch(InvalidOperationException){check(true,"Individual ACK/readback without matching aggregate state is not success");}finally{peer.IgnoreDynamicsAggregate=false;}
         var outputBands=remoteService.GetOutputProcessing(id,1).Bands.Select(b=>b with {GainDb=b.Number==2 ? -5 : 0}).ToArray();
         remoteService.ApplyOutputProcessing(remoteService.PlanOutputProcessing(new(id,1,DelayMs:7,Bands:outputBands,LowPass:new(18000,6,true))).Id);
         check(service.GetOutputProcessing(id,1).Bands[1].GainDb==-5 && service.GetInputProcessing(id,1).Bands[0].GainDb==3 && service.GetDevice(id).Outputs[0].DelayMs==7,"Output EQ side selection and delay readback work through IPC");
@@ -111,7 +123,7 @@ internal static class CvrPeerChecks
         private readonly Task listener;
         public int Port => ((IPEndPoint)socket.Client.LocalEndPoint!).Port;
         public readonly System.Collections.Concurrent.ConcurrentDictionary<(byte, byte, byte, byte), byte[]> Values = new();
-        public volatile bool IgnoreWrites, DropReplies;
+        public volatile bool IgnoreWrites, DropReplies, IgnoreDynamicsAggregate;
         public Peer()
         {
             var basic = new byte[75];
@@ -120,9 +132,15 @@ internal static class CvrPeerChecks
             basic[71] = basic[73] = 2;
             Values[(0, 0, 0, 0)] = basic;
             Values[(15, 0, 0, 0)] = [0];
+            Values[(50,0,0,1)]=[1];
             Values[(17, 0, 0, 0)] = [0];
             for (byte ch = 0; ch < 2; ch++)
             {
+                Values[(69,ch,0,1)]=[1];Values[(87,ch,0,1)]=[unchecked((byte)(sbyte)-100)];
+                var rms=new byte[13];BinaryPrimitives.WriteInt16LittleEndian(rms,25);rms[2]=16;BitConverter.GetBytes(80f).CopyTo(rms,3);rms[8]=1;BitConverter.GetBytes(100f).CopyTo(rms,9);Values[(55,ch,0,1)]=rms;
+                var peak=new byte[13];BinaryPrimitives.WriteInt16LittleEndian(peak,50);BinaryPrimitives.WriteInt16LittleEndian(peak.AsSpan(2),300);BitConverter.GetBytes(120f).CopyTo(peak,4);BitConverter.GetBytes(140f).CopyTo(peak,9);Values[(54,ch,0,1)]=peak;
+                foreach(var (fn,offset,length) in new[]{(37,0,2),(38,2,1),(39,3,4),(46,7,1),(48,8,1)})Values[((byte)fn,ch,0,1)]=rms[offset..(offset+length)];
+                foreach(var (fn,offset,length) in new[]{(40,0,2),(41,2,2),(42,4,4),(47,8,1)})Values[((byte)fn,ch,0,1)]=peak[offset..(offset+length)];
                 Values[(9, ch, 0, 1)] = BitConverter.GetBytes(-12f);
                 Values[(10, ch, 0, 1)] = [1];
                 Values[(14, ch, 0, 1)] = BitConverter.GetBytes(0f);
@@ -175,7 +193,13 @@ internal static class CvrPeerChecks
                         if(!IgnoreWrites)
                         {
                             if(function==60){var basic=Values[(0,0,0,0)].ToArray();request.CopyTo(basic,32);Values[(0,0,0,0)]=basic;}
-                            else Values[key]=request;
+                            else
+                            {
+                                Values[key]=request;
+                                var rmsMap=new Dictionary<byte,int>{{37,0},{38,2},{39,3},{46,7},{48,8}};var peakMap=new Dictionary<byte,int>{{40,0},{41,2},{42,4},{47,8}};
+                                if(!IgnoreDynamicsAggregate && rmsMap.TryGetValue(function,out var ro)){var raw=Values[(55,channel,0,1)].ToArray();request.CopyTo(raw,ro);Values[(55,channel,0,1)]=raw;}
+                                if(!IgnoreDynamicsAggregate && peakMap.TryGetValue(function,out var po)){var raw=Values[(54,channel,0,1)].ToArray();request.CopyTo(raw,po);Values[(54,channel,0,1)]=raw;}
+                            }
                         }
                         continue;
                     }

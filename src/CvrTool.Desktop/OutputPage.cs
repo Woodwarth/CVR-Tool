@@ -2,7 +2,7 @@
 // Purpose: present per-channel FIR, EQ, trim, delay, polarity and mute like the reference.
 // Units: dB and ms; processing editors use the shared application service.
 // State: each row belongs to one output; confirmed edits reload current state.
-// Scope: unimplemented limiter/mode/noise controls remain visibly unavailable.
+// Scope: mode is paired; gate and limiter edits belong to each output.
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -21,6 +21,7 @@ public sealed partial class MainWindow
         {
             var eq = service.GetOutputProcessing(deviceId, output.Number);
             var fir = service.GetFir(deviceId, output.Number);
+            var dynamics = service.GetOutputDynamics(deviceId, output.Number);
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("100,100,100,115,115,100,110,100,110,70,100"), ColumnSpacing = 8, Height = 100, Tag = "output-flow-" + output.Name };
             Button Block(string title, string value, string tag, Action? action)
             {
@@ -43,9 +44,9 @@ public sealed partial class MainWindow
             AddColumn(row, trim, 3);
             AddColumn(row, Block("Delay", $"{AmplifierService.DelayMeters(output.DelayMs):0.00} m\n{output.DelayMs:0.00} ms", "output-delay-" + output.Name, () => OpenDelayEditor(output.Number, true)), 4);
             AddColumn(row, Block("Polarity", output.Inverted ? "180°" : "0°", "output-polarity-" + output.Name, () => { Commit(new(deviceId, output.Number, Inverted: !output.Inverted)); Render(); }), 5);
-            AddColumn(row, Block("Limiters", "Unavailable", "output-limiters-" + output.Name, null), 6);
-            AddColumn(row, Block("Mode", "Unavailable", "output-mode-" + output.Name, null), 7);
-            AddColumn(row, Block("Noise Gate", "Unavailable", "output-noise-" + output.Name, null), 8);
+            AddColumn(row, Block("Limiters", "Peak / RMS", "output-limiters-" + output.Name, () => OpenLimiterEditor(output.Number)), 6);
+            AddColumn(row, Block("Mode", dynamics.Bridged ? "Bridge" : "Stereo", "output-mode-" + output.Name, () => OpenModeEditor(output.Number)), 7);
+            AddColumn(row, Block("Noise Gate", (dynamics.NoiseGateEnabled ? "On" : "Off") + "\n" + (dynamics.NoiseGateDb is { } db ? db + " dB" : "—"), "output-noise-" + output.Name, () => OpenNoiseGateEditor(output.Number)), 8);
             var mute = MuteSwitch(output.Muted, "Output " + output.Name, value => Commit(new(deviceId, output.Number, Muted: value)));
             mute.Tag = "mute-editor-" + output.Name;
             mute.HorizontalAlignment = HorizontalAlignment.Center;

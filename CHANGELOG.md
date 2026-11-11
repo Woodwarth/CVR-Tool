@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1
+
+- Outputs: stereo/bridge switching for each A/B or C/D pair.
+- Per-output noise gate with On/Off and editable threshold (-100 to 0 dB).
+- Peak/RMS limiter editors with enable, output-voltage thresholds and timing;
+  RMS automatic timing and read-only device voltage limits.
+- Revision-bound shared UI/MCP operations and complete preset restoration.
+- Schema 5 JSON adds dynamics; earlier JSON remains readable. Supported native
+  files retain bridge, gate and limiter values without changing opaque bytes.
+
+
 ## 0.6.0
 
 - Outputs signal flow with independent graphical EQ/HP/LP and FIR editor.

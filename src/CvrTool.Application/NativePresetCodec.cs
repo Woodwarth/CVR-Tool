@@ -49,7 +49,7 @@ public static class NativePresetCodec
             if (info.FirLength > 0)
                 firs.Add(ProcessingWire.DecodeFir(ch, file[(info.SyncLength + n * info.FirLength)..(info.SyncLength + (n + 1) * info.FirLength)], file[offset + 368] == 0));
         }
-        return new(4, info.Model, isDemo, outputs, null, routes, inputs, processing, info.FirLength > 0 ? firs : null, file.ToArray());
+        return new(5, info.Model, isDemo, outputs, null, routes, inputs, processing, info.FirLength > 0 ? firs : null, file.ToArray(), Enumerable.Range(1, info.Count).Select(ch => OutputDynamicsWire.DecodeNative(file[..info.SyncLength], ch)).ToArray());
     }
     public static byte[] Encode(PresetDocument preset)
     {
@@ -105,6 +105,16 @@ public static class NativePresetCodec
             }
             if (preset.Firs?.SingleOrDefault(f => f.Channel == n + 1) is { } fir)
                 sync[offset + 368] = (byte)(fir.Enabled ? 0 : 1);
+        }
+        foreach (var state in preset.Dynamics ?? [])
+        {
+            var offset = 36 + (state.Channel - 1) * 515;
+            if (preset.NativeData is null)
+            {
+                OutputDynamicsWire.Rms(state.Rms).CopyTo(sync, offset + 59);
+                OutputDynamicsWire.Peak(state.Peak).CopyTo(sync, offset + 72);
+            }
+            OutputDynamicsWire.EncodeNative(sync, state);
         }
         using var data = new MemoryStream();
         data.Write(sync);

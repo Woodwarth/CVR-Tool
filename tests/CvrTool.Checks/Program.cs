@@ -42,7 +42,7 @@ var copy = service.GetDevice("demo-1004");
 ((ChannelState[])copy.Outputs)[0] = copy.Outputs[0] with { GainDb = 18 };
 Check(service.GetDevice("demo-1004").Outputs[0].GainDb == -6, "Defensive snapshot");
 var preset = JsonSerializer.Deserialize<PresetDocument>(service.ExportPreset("demo-2002"))!;
-Check(preset.SchemaVersion == 4 && preset.Outputs.Count == 2 && preset.IsDemo, "Preset export");
+Check(preset.SchemaVersion == 5 && preset.Outputs.Count == 2 && preset.IsDemo, "Preset export");
 var clock = new ManualClock();
 var timed = new AmplifierService(new DemoBackend(), clock);
 var expiring = timed.Plan(new("demo-1004", 1, Muted: false));
@@ -87,7 +87,7 @@ Check(service.RenameDevice("demo-1004", "  Front amplifier  ").Name == "Front am
 Reject<InvalidOperationException>(() => service.ApplyRouting(renameInvalidates.Id));
 foreach (var name in new[] { "", "  ", new string('x', 33), "bad\nname" }) Reject<ArgumentException>(() => service.RenameDevice("demo-1004", name));
 var renamedPreset = JsonSerializer.Deserialize<PresetDocument>(service.ExportPreset("demo-1004"))!;
-Check(renamedPreset.Name == "Front amplifier" && renamedPreset.Routing?.Count == 16, "Schema 3 exports name and routing");
+Check(renamedPreset.Name == "Front amplifier" && renamedPreset.Routing?.Count == 16, "Preset exports name and routing");
 Check(service.GetDevice("demo-1502").Name != "Front amplifier", "Names isolate devices");
 var telemetry = service.GetTelemetry("demo-1004");
 Check(telemetry.Count == 4 && telemetry.Select(t => t.Channel).Distinct().Count() == 4 && telemetry.All(t => t is { LevelDbFs: null, Voltage: null, Current: null, LoadOhms: null, TemperatureC: null } && t.Status == new OutputStatus()), "Per-output telemetry stays explicitly unknown");
@@ -114,7 +114,7 @@ Reject<InvalidOperationException>(() => service.ApplyInputProcessing(inputStale.
 var inputExpired = timed.PlanInputProcessing(new("demo-2002", 1, DelayMs: 1));
 clock.Now = clock.Now.AddMinutes(2);
 Reject<InvalidOperationException>(() => timed.ApplyInputProcessing(inputExpired.Id));
-Check(JsonSerializer.Deserialize<PresetDocument>(service.ExportPreset("demo-2002"))!.Inputs?.Count == 2, "Schema 3 exports input DSP");
+Check(JsonSerializer.Deserialize<PresetDocument>(service.ExportPreset("demo-2002"))!.Inputs?.Count == 2, "Preset exports input DSP");
 var nativeBytes = new byte[192];
 System.Text.Encoding.ASCII.GetBytes("SYNTHETIC-DEMO-DSP-1004").CopyTo(nativeBytes, 0);
 System.Text.Encoding.ASCII.GetBytes("FIR==2080").CopyTo(nativeBytes, 176);
@@ -165,6 +165,7 @@ if (firArgument >= 0 && firArgument + 1 < args.Length)
     var inspection = await FirFileAnalyzer.AnalyzeAsync(stream);
     Console.WriteLine($"LOCAL FIR: {inspection.Coefficients.Count} coefficients, {inspection.NonZeroCount} nonzero, {inspection.SampleRate} Hz preview");
 }
+DynamicsChecks.Run(Check);
 AdvancedChecks.Run(Check);
 CrossoverChecks.Run(Check);
 await UpdateChecks.RunAsync(Check);

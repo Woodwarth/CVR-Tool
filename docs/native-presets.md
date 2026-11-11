@@ -8,11 +8,13 @@ versions, inconsistent lengths, wrong models and invalid values are rejected.
 The native codec reads a 2232/2687-byte sync block, four fixed 515-byte records,
 and optional 2048/2080-byte FIR blocks per active output plus the 16-byte footer.
 EQ, delays, gains, routing, polarity, mute and FIR map to shared application state.
-Source bytes retain unknown settings, limiter/load/mode data and unused channels.
+Bridge pairs, RMS/peak limiter settings and gate bypass are decoded explicitly.
+B119 additionally stores signed gate thresholds; B118 has no threshold field.
+Source bytes retain unknown settings, load data and unused channels.
 Imported native files can therefore be saved without dropping opaque parameters.
 
-JSON schema 4 stores output EQ/FIR and optional original native bytes alongside
-input processing, routing and channel settings; schema 2/3 remains readable.
+JSON schema 5 stores output dynamics, output EQ/FIR and optional original native bytes alongside
+input processing, routing and channel settings; schemas 2–4 remain readable.
 JSON without native bytes preserves the connected device's current unknown settings.
 Local-model exports synthesize a B119 header; they are not proof of compatibility
 with a physical amplifier. A physical load also checks the connected header before

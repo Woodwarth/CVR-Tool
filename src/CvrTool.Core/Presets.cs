@@ -15,4 +15,5 @@ public sealed record PresetDocument(
     IReadOnlyList<InputProcessingState>? Inputs = null,
     IReadOnlyList<InputProcessingState>? OutputProcessing = null,
     IReadOnlyList<FirState>? Firs = null,
-    byte[]? NativeData = null);
+    byte[]? NativeData = null,
+    IReadOnlyList<OutputDynamicsState>? Dynamics = null);

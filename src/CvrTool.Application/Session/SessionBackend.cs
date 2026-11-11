@@ -67,6 +67,8 @@ public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend,
     public InputProcessingState ApplyOutputProcessing(InputProcessingChange change,long revision)=>Call<InputProcessingState>("apply-output-processing",new{Change=change,Revision=revision});
     public (FirState State,long Revision) GetFir(string id,int channel) {var result=Call<Revisioned<FirState>>("fir",new {Id=id,Channel=channel});return(result.State,result.Revision);}
     public FirState ApplyFir(string id,FirState state,long revision)=>Call<FirState>("apply-fir",new{Id=id,State=state,Revision=revision});
+    public (OutputDynamicsState State,long Revision) GetOutputDynamics(string id,int channel) {var read=Call<Revisioned<OutputDynamicsState>>("output-dynamics",new{Id=id,Channel=channel});return(read.State,read.Revision);}
+    public OutputDynamicsState ApplyOutputDynamics(OutputDynamicsChange change,long revision)=>Call<OutputDynamicsState>("apply-output-dynamics",new{Change=change,Revision=revision});
     public PresetDocument CapturePreset(string id)=>Call<PresetDocument>("capture-preset",new{Id=id});
     public DeviceSnapshot ApplyPreset(string id,PresetDocument preset,long revision)=>Call<DeviceSnapshot>("apply-preset",new{Id=id,Preset=preset,Revision=revision});
     public DevicePresetState GetDevicePresets(string id)=>Call<DevicePresetState>("preset-slots",new{Id=id});

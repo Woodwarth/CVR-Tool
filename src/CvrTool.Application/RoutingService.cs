@@ -33,7 +33,7 @@ public sealed partial class AmplifierService
         lock (gate)
         {
             PrunePlans();
-            if (plans.Count + routingPlans.Count + inputPlans.Count + outputPlans.Count >= 1000)
+            if (plans.Count + routingPlans.Count + inputPlans.Count + outputPlans.Count + dynamicsPlans.Count >= 1000)
                 throw new InvalidOperationException("Too many pending plans.");
             routingPlans.Add(plan.Id, plan);
         }

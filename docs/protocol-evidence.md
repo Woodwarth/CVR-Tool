@@ -36,6 +36,14 @@ Channels and segments are zero-based on the wire.
 | 18 | Output polarity | Byte 0/1 |
 | 16 | Factory reset | Command body byte 1; semantic ACK required |
 | 27 | Full sync | B118/B119: 2232/2687 bytes |
+| 37/38/39 | RMS attack/release/threshold | Int16 ms / byte ×Attack / float Vrms; side 1 |
+| 40/41/42 | Peak hold/release/threshold | Int16 ms / Int16 ms / float Vpeak; side 1 |
+| 46/47 | RMS/peak bypass | Byte 0 enabled, 1 bypassed; side 1 |
+| 48 | RMS automatic timing | Byte 0 automatic, 1 manual; side 1 |
+| 50 | Stereo/bridge pair | Byte 0 bridge, 1 stereo; channel is zero-based pair, side 1 |
+| 54/55 | Peak/RMS limiter blocks | 13 packed bytes including read-only voltage maximum |
+| 69 | Noise-gate bypass | Byte 0 enabled, 1 bypassed; side 1 |
+| 87 | Noise-gate threshold | Signed byte, -100..0 dB; side 1 |
 | 43 | Output FIR | 512 LE floats, optionally preceded by a 32-byte name |
 | 44 | FIR bypass | Byte 0 enabled, 1 bypassed; side 1 |
 | 52 | Input/output filter block | 141 bytes; side 0/1 |
@@ -59,3 +67,10 @@ ACKs for each fragment. A missing ACK reports a potentially partial write; no
 automatic retries are made. Transport delivery is never taken as write success.
 FIR/sync changes use independent readback; preset commands require status-3
 acknowledgement and subsequent names/settings reads. See [native presets](native-presets.md).
+
+RMS block offsets: Attack int16 at 0, Release multiplier byte at 2, Threshold
+float at 3, Bypass at 7, Auto at 8, Maximum voltage float at 9. Peak block:
+Hold int16 at 0, Release int16 at 2, Threshold float at 4, Bypass at 8,
+Maximum voltage float at 9. Maximums are not editable. Individual function
+writes require readback and final aggregate reads; existing protection is not
+bypassed while threshold/timing parameters are edited.

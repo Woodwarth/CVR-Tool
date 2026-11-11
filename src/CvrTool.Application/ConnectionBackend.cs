@@ -113,6 +113,8 @@ public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, I
     public InputProcessingState ApplyOutputProcessing(InputProcessingChange change,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(change.DeviceId)).ApplyOutputProcessing(change,revision); }
     public (FirState State,long Revision) GetFir(string id,int channel) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetFir(id,channel); }
     public FirState ApplyFir(string id,FirState state,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).ApplyFir(id,state,revision); }
+    public (OutputDynamicsState State,long Revision) GetOutputDynamics(string id,int channel) {lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetOutputDynamics(id,channel);}
+    public OutputDynamicsState ApplyOutputDynamics(OutputDynamicsChange change,long revision) {lock(gate)return ((IAdvancedAmplifierBackend)Backend(change.DeviceId)).ApplyOutputDynamics(change,revision);}
     public PresetDocument CapturePreset(string id) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).CapturePreset(id); }
     public DeviceSnapshot ApplyPreset(string id,PresetDocument preset,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).ApplyPreset(id,preset,revision); }
     public DevicePresetState GetDevicePresets(string id) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetDevicePresets(id); }

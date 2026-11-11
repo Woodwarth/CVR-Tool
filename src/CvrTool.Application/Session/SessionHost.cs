@@ -77,6 +77,8 @@ public sealed class SessionHost : IDisposable
         object result = request.Method switch
         {
             "list" => backend.ListDevices(),
+            "output-dynamics" => DynamicsSnapshot(Id(),Channel()),
+            "apply-output-dynamics" => advanced!.ApplyOutputDynamics(Change<OutputDynamicsChange>(),Revision()),
             "output-processing" => OutputSnapshot(Id(),Channel()),
             "apply-output-processing" => advanced!.ApplyOutputProcessing(Change<InputProcessingChange>(),Revision()),
             "fir" => FirSnapshot(Id(),Channel()),
@@ -120,6 +122,7 @@ public sealed class SessionHost : IDisposable
     }
     private Revisioned<InputProcessingState> OutputSnapshot(string id,int channel) {var read=((IAdvancedAmplifierBackend)backend).GetOutputProcessing(id,channel);return new(read.State,read.Revision);}
     private Revisioned<FirState> FirSnapshot(string id,int channel) {var read=((IAdvancedAmplifierBackend)backend).GetFir(id,channel);return new(read.State,read.Revision);}
+    private Revisioned<OutputDynamicsState> DynamicsSnapshot(string id,int channel) {var read=((IAdvancedAmplifierBackend)backend).GetOutputDynamics(id,channel);return new(read.State,read.Revision);}
     public void Dispose()
     {
         shutdown.Cancel();

@@ -100,6 +100,9 @@ public sealed partial class CvrLanBackend : IAdvancedAmplifierBackend
             preset = PresetOperations.Validate(preset, GetDevice(deviceId));
             var current = CaptureNative(deviceId);
             Expected(expectedRevision);
+            foreach (var state in preset.Dynamics ?? [])
+                MergeLimiterLimits(state);
+            Expected(expectedRevision);
             var file = NativePresetCodec.Encode(preset with
             {
                 NativeData = preset.NativeData ?? current
@@ -114,8 +117,16 @@ public sealed partial class CvrLanBackend : IAdvancedAmplifierBackend
                 throw new InvalidOperationException("Preset sync readback differs; changes may be partial. Refresh the device.");
             for (var channel = 1; channel <= info.Count; channel++)
                 Write(43, file[(info.SyncLength + (channel - 1) * info.FirLength)..(info.SyncLength + channel * info.FirLength)], Channel(channel), side: 1);
+            if(info.SyncLength==2232)
+                foreach(var state in preset.Dynamics ?? [])
+                    if(state.NoiseGateDb is { } db)Write(87,[unchecked((byte)(sbyte)db)],Channel(state.Channel),side:1);
             return GetDevice(deviceId);
         }
+    }
+    private void MergeLimiterLimits(OutputDynamicsState state)
+    {
+        var actual = GetOutputDynamics(id, state.Channel).State;
+        AmplifierService.MergeDynamics(actual, new(id, state.Channel, Rms: state.Rms, Peak: state.Peak));
     }
     public DevicePresetState GetDevicePresets(string deviceId)
     {

@@ -15,6 +15,8 @@ public interface IAdvancedAmplifierBackend
     InputProcessingState ApplyOutputProcessing(InputProcessingChange change, long revision);
     (FirState State, long Revision) GetFir(string id, int channel);
     FirState ApplyFir(string id, FirState state, long revision);
+    (OutputDynamicsState State, long Revision) GetOutputDynamics(string id, int channel);
+    OutputDynamicsState ApplyOutputDynamics(OutputDynamicsChange change, long revision);
     PresetDocument CapturePreset(string id);
     DeviceSnapshot ApplyPreset(string id, PresetDocument preset, long revision);
     DevicePresetState GetDevicePresets(string id);

@@ -111,6 +111,7 @@ public sealed partial class DemoBackend : IAdvancedAmplifierBackend
                 outputProcessing[(id, state.Channel)] = state;
             foreach (var state in preset.Firs ?? [])
                 firs[(id, state.Channel)] = state;
+            foreach(var state in preset.Dynamics ?? [])dynamics[(id,state.Channel)]=state;
             if (preset.NativeData is not null)
                 nativeTemplates[id] = preset.NativeData.ToArray();
             Changed(id);
@@ -179,6 +180,7 @@ public sealed partial class DemoBackend : IAdvancedAmplifierBackend
                 Name = entry.Device.Name
             }, revision + 1);
             routing[id] = CreateRouting(entry.Device.Outputs.Count);
+            foreach(var key in dynamics.Keys.Where(k=>k.Item1==id).ToArray())dynamics.Remove(key);
             inputs.Remove(id);
             controls.Remove(id);
             nativeTemplates.Remove(id);

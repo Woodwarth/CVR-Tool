@@ -142,6 +142,27 @@ Check(!gainReadout.GetLogicalDescendants().OfType<TextBox>().Any(),"Inputs gain 
 Press(gainReadout.GetLogicalDescendants().OfType<Button>().Single());var gainEditor=gainReadout.GetLogicalDescendants().OfType<TextBox>().Single();gainEditor.Text="-7.5";
 gainEditor.RaiseEvent(new KeyEventArgs {RoutedEvent=InputElement.KeyDownEvent,Key=Key.Enter});Layout();
 Check(Preset().Outputs[0].GainDb==-7.5 && !gainReadout.GetLogicalDescendants().OfType<TextBox>().Any(),"Click-to-edit gain saves and returns to plain text");
+Click("◖   Outputs");Press(Tagged<Button>("output-mode-A"));var modeEditor=window.OwnedWindows.Single();Press(Tagged<Button>("output-mode-B"));
+Check(window.OwnedWindows.Count==1 && ReferenceEquals(modeEditor,window.OwnedWindows.Single()),"Both mode buttons reuse one editor for A/B");
+modeEditor.GetLogicalDescendants().OfType<ComboBox>().Single(c=>c.Tag?.ToString()=="output-mode-choice").SelectedIndex=1;
+modeEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-output-mode").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
+var dynamicsPreset=Preset();Check(dynamicsPreset.Dynamics![0].Bridged && dynamicsPreset.Dynamics[1].Bridged && !dynamicsPreset.Dynamics[2].Bridged,"Bridge edits update A/B together and isolate C/D");
+Click("◖   Outputs");Press(Tagged<Button>("output-noise-A"));var noiseEditor=window.OwnedWindows.Single();
+noiseEditor.GetLogicalDescendants().OfType<CheckBox>().Single(b=>b.Tag?.ToString()=="noise-gate-enabled").IsChecked=true;
+noiseEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(b=>b.Tag?.ToString()=="noise-gate-db").Value=-65;
+noiseEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-noise-gate").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
+Check(Preset().Dynamics![0] is {NoiseGateEnabled:true,NoiseGateDb:-65} && !Preset().Dynamics![1].NoiseGateEnabled,"Noise gate on/off and dB edit are per output");
+Click("◖   Outputs");Press(Tagged<Button>("output-limiters-A"));var limiterEditor=window.OwnedWindows.Single();Press(Tagged<Button>("output-limiters-A"));
+Check(window.OwnedWindows.Count==1 && ReferenceEquals(limiterEditor,window.OwnedWindows.Single()),"Repeated limiter clicks reuse the existing editor");
+void SetLimiter(string tag,decimal value)=>limiterEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()==tag).Value=value;
+SetLimiter("rms-threshold",60);SetLimiter("rms-attack",40);SetLimiter("rms-release",8);SetLimiter("peak-threshold",100);SetLimiter("peak-hold",80);SetLimiter("peak-release",450);
+limiterEditor.GetLogicalDescendants().OfType<CheckBox>().Single(c=>c.Tag?.ToString()=="rms-auto").IsChecked=true;
+Check(!limiterEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="rms-attack").IsEnabled,"Automatic RMS timing disables manual timing controls");
+using(var rendered=new RenderTargetBitmap(new PixelSize(760,590))){limiterEditor.Measure(new Size(760,590));limiterEditor.Arrange(new Rect(0,0,760,590));limiterEditor.UpdateLayout();rendered.Render(limiterEditor);rendered.Save("artifacts/output-limiters.png",PngBitmapEncoderOptions.Default);}
+limiterEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-limiters").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
+var appliedDynamics=Preset().Dynamics![0];Check(appliedDynamics.Rms is {ThresholdVolts:60,AttackMs:40,ReleaseMultiplier:8,Automatic:true} && appliedDynamics.Peak is {ThresholdVolts:100,HoldMs:80,ReleaseMs:450},"Peak and RMS limiter editors commit every displayed setting");
+Click("◖   Outputs");Save("outputs-dynamics");
+Check(!Text("Unavailable"),"Outputs contains functional mode, noise-gate and limiter controls");
 Device("demo-2002"); Click("⌂   Main");
 Check(All<Slider>().Count() == 2 && All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("telemetry-") == true) == 8, "Two-output model has independent measurements");
 Check(Tagged<Border>("input-channel-A").Bounds.Size == fourChannelSize && Tagged<Border>("output-channel-A").Bounds.Size == fourChannelSize, "Two- and four-channel models retain identical group dimensions");
