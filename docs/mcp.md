@@ -49,7 +49,10 @@ for compatibility with isolated test clients and does not share GUI state.
   Enabled selects the limiter; MaximumVolts is read-only and bounds thresholds.
   LoadMode affects only the selected output. The Bridged field remains
   separate and affects an A/B or C/D pair, matching the end-of-row Stereo/Bridge
-  editor in Outputs.
+  switch in Outputs.
+  In the Outputs UI, bridge followers B/D are greyed and cannot be edited;
+  the pair switch stays active. This presentation does not add backend/MCP
+  restrictions or copy settings between outputs.
   Native bridge-coded modes 3–5 are preserved when read, but cannot be requested
   as new LoadMode edits. Older JSON without LoadMode preserves the active mode.
 

@@ -1,4 +1,4 @@
-# Validation — version 0.6.3
+# Validation — version 0.6.4
 
 Windows x64 / .NET SDK 10.0.403:
 
@@ -8,7 +8,7 @@ Windows x64 / .NET SDK 10.0.403:
 - 93 network checks: independent loopback gate/limiter payloads and aggregate
   readback, bridge pair addressing, active-low flags, immutable limits, explicit
   readback rejection, FIR fragmentation and existing network/session checks.
-- 118 desktop checks: per-output Low-Z/70V/100V editor, shared tiles/headings, A/B and C/D bridge editors, matched Trim/Mute blocks, gate On/Off and dB, both limiter
+- 125 desktop checks: per-output Low-Z/70V/100V editor, shared tiles/headings, direct A/B and C/D bridge switching, follower disabling and editor closure, matched Trim/Mute blocks, gate On/Off and dB, both limiter
   sections, automatic timing, single editor activation and existing UI behavior.
 - Shared-session stdio MCP verifies mode, gate, RMS/peak, full presets and
   previous channel/routing/input/output operations through two shared clients.

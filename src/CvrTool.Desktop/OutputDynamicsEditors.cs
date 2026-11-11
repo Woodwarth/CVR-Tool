@@ -45,30 +45,23 @@ public sealed partial class MainWindow
         ShowInputEditor(editor, editedId, channel, "mode");
     }
 
-    private void OpenBridgeEditor(int channel)
+    private void ToggleBridge(int channel)
     {
         var pairStart = (channel - 1) / 2 * 2 + 1;
-        var editedId = deviceId;
-        if (ActivateInputEditor(editedId, pairStart, "bridge"))
-            return;
-        var original = service.GetOutputDynamics(editedId, pairStart);
-        var panel = new StackPanel { Margin = new Thickness(24), Spacing = 16 };
-        panel.Children.Add(Heading($"Stereo / Bridge · Outputs {(char)('A' + pairStart - 1)}/{(char)('A' + pairStart)}"));
-        var choice = new ComboBox { ItemsSource = new[] { "Stereo", "Bridge" }, SelectedIndex = original.Bridged ? 1 : 0, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = "output-bridge-choice" };
-        panel.Children.Add(choice);
-        panel.Children.Add(Text("Applies to both outputs in this pair.", 12, Muted));
-        var message = Text("", 12, Muted);
-        panel.Children.Add(message);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        var apply = new Button { Content = "Apply", Tag = "apply-output-bridge" };
-        var cancel = new Button { Content = "Cancel" };
-        actions.Children.Add(apply);
-        actions.Children.Add(cancel);
-        panel.Children.Add(actions);
-        var editor = EditorWindow("Output stereo / bridge", panel, 480, 310);
-        apply.Click += (_, _) => { try { CommitDynamics(new(editedId, pairStart, Bridged: choice.SelectedIndex == 1), original); editor.Close(); } catch (Exception ex) { message.Text = ex.Message; } };
-        cancel.Click += (_, _) => editor.Close();
-        ShowInputEditor(editor, editedId, pairStart, "bridge");
+        try
+        {
+            var current = service.GetOutputDynamics(deviceId, pairStart);
+            CommitDynamics(new(deviceId, pairStart, Bridged: !current.Bridged), current);
+        }
+        catch (Exception ex) { status.Text = ex.Message; }
+    }
+
+    // A bridge follower cannot retain an editable output window from stereo mode.
+    private void CloseBridgeFollowerEditors(int channel)
+    {
+        foreach (var entry in inputEditors.Where(e => e.Key.Device == deviceId && e.Key.Channel == channel &&
+            e.Key.Kind is "output-eq" or "output-delay" or "fir" or "mode" or "noise-gate" or "limiters").ToArray())
+            entry.Value.Close();
     }
 
     private void OpenNoiseGateEditor(int channel)

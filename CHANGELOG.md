@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.4
+
+- Stereo/Bridge switches directly with one click; no popup or Apply step.
+- In bridge mode, the second output of the pair (B or D) has greyed, disabled
+  function tiles. The pair switch stays enabled to return to Stereo.
+- Existing output editors for the follower close when bridge becomes active.
+- Returning to Stereo restores editing without changing stored channel settings.
+
+
 ## 0.6.3
 
 - Outputs uses equal-size function tiles with one shared heading/value layout.

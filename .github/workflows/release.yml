@@ -99,4 +99,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "$GITHUB_REF_NAME" artifacts/CVR-Tool-* artifacts/SHA256SUMS.txt --draft --title "CVR Tool $GITHUB_REF_NAME" --notes "Equal-size Outputs tiles, paired Stereo/Bridge controls and a README preview. GitHub updates with verified native installation. Self-contained Windows x64/ARM64 and Apple Silicon packages. Physical-amplifier validation remains pending; Mac packages are not notarized."
+          gh release create "$GITHUB_REF_NAME" artifacts/CVR-Tool-* artifacts/SHA256SUMS.txt --draft --title "CVR Tool $GITHUB_REF_NAME" --notes "Direct Stereo/Bridge switching with greyed follower-channel controls and a README preview. GitHub updates with verified native installation. Self-contained Windows x64/ARM64 and Apple Silicon packages. Physical-amplifier validation remains pending; Mac packages are not notarized."

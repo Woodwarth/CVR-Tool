@@ -66,7 +66,18 @@ public sealed partial class MainWindow
             AddColumn(row, Block("Output " + output.Name, "Speaker", "output-speaker-" + output.Name, () => { activeTab = "Main"; Render(); }), 10);
             var pairStart = (output.Number - 1) / 2 * 2 + 1;
             var pair = $"{(char)('A' + pairStart - 1)}/{(char)('A' + pairStart)}";
-            AddColumn(row, Block("Stereo / Bridge", (dynamics.Bridged ? "Bridge" : "Stereo") + "\n" + pair, "output-bridge-" + output.Name, () => OpenBridgeEditor(output.Number)), 11);
+            AddColumn(row, Block("Stereo / Bridge", (dynamics.Bridged ? "Bridge" : "Stereo") + "\n" + pair, "output-bridge-" + output.Name, () => ToggleBridge(output.Number)), 11);
+            var followsBridge = dynamics.Bridged && output.Number % 2 == 0;
+            if (followsBridge)
+            {
+                foreach (var control in row.Children.Where(c => Grid.GetColumn(c) < 11))
+                {
+                    control.IsEnabled = false;
+                    control.Opacity = .35;
+                    ToolTip.SetTip(control, $"Output {output.Name} follows {(char)('A' + pairStart - 1)} in bridge mode.");
+                }
+                CloseBridgeFollowerEditors(output.Number);
+            }
             panel.Children.Add(Card(row));
         }
         return panel;
