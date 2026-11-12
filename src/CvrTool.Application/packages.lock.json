@@ -8,7 +8,7 @@
       "cvrtool.protocol": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Core": "[0.1.0, )"
+          "CvrTool.Core": "[0.7.5, )"
         }
       }
     }

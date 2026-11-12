@@ -24,7 +24,7 @@ for compatibility with isolated test clients and does not share GUI state.
 - `list_devices`, `get_device`, `get_telemetry`, `export_preset`.
 - `connect_amplifier(address, localAddress, localPort=45454, remotePort=45455,
   timeoutMs=1000)`, `disconnect_amplifier(deviceId)`.
-- `rename_device`, `get_device_controls`, `set_device_controls`.
+- `rename_device`, `get_device_controls`, `set_device_controls`. Physical device names accept 1–31 ASCII characters; local demo names accept 1–32 characters.
 - `get_routing`, `plan_routing_change`, `apply_routing_change`.
 - `plan_channel_change`, `apply_change` (gain, mute, delay, polarity).
 - `get_input_processing`, `plan_input_processing`, `apply_input_processing`
@@ -35,9 +35,9 @@ for compatibility with isolated test clients and does not share GUI state.
 
 - `get_output_processing`, `plan_output_processing`, `apply_output_processing`
   use the same EQ/crossover fields as inputs.
-- `get_output_fir`, `set_output_fir`: 1–512 finite taps at 48 kHz.
+- `get_output_fir`, `set_output_fir`: 1â€“512 finite taps at 48 kHz.
 - `set_output_fir_enabled`: bypass only; preserves coefficients, including unknown data.
-- `get_device_presets`, `store_device_preset`, `recall_device_preset` (slots 1–16),
+- `get_device_presets`, `store_device_preset`, `recall_device_preset` (slots 1â€“16),
   `clear_device_presets`, `factory_reset`.
 - `export_native_preset` returns base64 `.sd`; `load_preset_file` accepts base64
   native `.sd` files only. Bulk loads, slot writes/recalls, reset and clear require
@@ -55,12 +55,12 @@ for compatibility with isolated test clients and does not share GUI state.
   In the Outputs UI, bridge followers B/D are greyed and cannot be edited;
   the pair switch stays active. This presentation does not add backend/MCP
   restrictions or copy settings between outputs.
-  Native bridge-coded modes 3–5 are preserved when read, but cannot be requested
+  Native bridge-coded modes 3â€“5 are preserved when read, but cannot be requested
   as new LoadMode edits. Older JSON without LoadMode preserves the active mode.
 
 Channel numbers start at 1. Physical IDs are `cvr:ADDRESS:PORT`; local models
 are `demo-1004`, `demo-2002` and `demo-1502`. Local state is volatile. Exported
-schema 6 JSON includes inputs, outputs, routing, output EQ/FIR and dynamics; schema 2–5
+schema 6 JSON includes inputs, outputs, routing, output EQ/FIR and dynamics; schema 2â€“5
 files remain readable. Native `.sd` supports B-series 106118/106119 layouts. Unknown readings are null, never fabricated.
 
 Plans are read-only, single-use, expire after two minutes and carry the shared

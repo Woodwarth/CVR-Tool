@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.5
+
+- Add a locally generated QR code containing the complete private iPad browser link.
+- Show a persistent Desktop-connection banner and a warning inside open editors.
+- Detect offline, stalled and stopped app connections even while editing; pause
+  controls until fresh state is loaded and preserve drafts without automatic replay.
+- Explain expired connection keys and recover automatically when the app responds.
+- Correct RMS automatic timing to active-high in native files and the legacy writer.
+- Restrict physical device names to 31 ASCII characters plus a wire terminator,
+  preventing the observed 32-byte truncation; keep local demo names at 32 characters.
+- Extend controlled DSP-1004 limiter evidence to 31/38 documented function IDs
+  with partial coverage; unverified live writes and factory reset remain protected.
+- Verify local QR decoding and Chrome tablet/phone fault recovery. Physical
+  iPad/Safari validation remains pending.
+
 ## 0.7.4
 
 - Enable evidenced live input gain/mute, output trim/delay/polarity, routing gain,

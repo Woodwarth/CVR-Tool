@@ -21,7 +21,10 @@ static class BrowserServerChecks
         using var client = new HttpClient { BaseAddress = new(browser.Address!) };
         check((await client.GetStringAsync("/")).Contains("viewport"), "Embedded touch page is served without external assets");
         check((await client.GetAsync("/api/devices")).StatusCode == HttpStatusCode.Unauthorized, "Browser settings require the per-session access key");
+        check((await client.GetAsync("/api/health")).StatusCode == HttpStatusCode.Unauthorized, "Connection heartbeat requires the private session key");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", firstKey);
+        var health = await client.GetFromJsonAsync<JsonElement>("/api/health");
+        check(health.GetProperty("status").GetString()=="ok" && browser.ConnectionUrl==browser.Address+"/#"+firstKey,"Authenticated heartbeat and pairing link describe the running browser session");
         var devices = await client.GetFromJsonAsync<JsonElement>("/api/devices");
         check(devices.GetArrayLength() == 3, "Browser lists the same three demo devices as Desktop");
         using (var wrongOrigin = new HttpRequestMessage(HttpMethod.Get, "/api/devices"))
@@ -53,6 +56,7 @@ static class BrowserServerChecks
         check(browser.Address is null && browser.AccessKey=="","Stopping browser control clears address and credentials");
         await browser.StartAsync(IPAddress.Loopback,0);
         check(browser.AccessKey!=firstKey,"Restarting browser control rotates the access key");
+        check((await client.GetAsync(browser.Address+"/api/health")).StatusCode==HttpStatusCode.Unauthorized,"A previous connection key cannot report a new server session as connected");
         check(!BrowserControlServer.IsLocalAddress(IPAddress.Any) && !BrowserControlServer.IsLocalAddress(IPAddress.Parse("8.8.8.8")),"Browser listener refuses wildcard and public bind addresses");
     }
 }

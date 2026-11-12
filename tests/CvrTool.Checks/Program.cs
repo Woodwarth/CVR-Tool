@@ -86,6 +86,9 @@ var renameInvalidates = service.PlanRouting(new("demo-1004", 1, 1, Muted: true))
 Check(service.RenameDevice("demo-1004", "  Front amplifier  ").Name == "Front amplifier", "Rename trims and stores demo name");
 Reject<InvalidOperationException>(() => service.ApplyRouting(renameInvalidates.Id));
 foreach (var name in new[] { "", "  ", new string('x', 33), "bad\nname" }) Reject<ArgumentException>(() => service.RenameDevice("demo-1004", name));
+Check(AmplifierService.NormalizePhysicalDeviceName("  " + new string('x',31) + "  ").Length==31,"Physical device names allow 31 ASCII bytes plus a wire terminator");
+foreach(var name in new[]{new string('x',32),"Ampli\u00e9"}) Reject<ArgumentException>(()=>AmplifierService.NormalizePhysicalDeviceName(name));
+Check(AmplifierService.NormalizeDeviceName(new string('x',32)).Length==32,"Local demo name validation retains its 32-character limit");
 var renamedPreset = JsonSerializer.Deserialize<PresetDocument>(service.ExportPreset("demo-1004"))!;
 Check(renamedPreset.Name == "Front amplifier" && renamedPreset.Routing?.Count == 16, "Preset exports name and routing");
 Check(service.GetDevice("demo-1502").Name != "Front amplifier", "Names isolate devices");

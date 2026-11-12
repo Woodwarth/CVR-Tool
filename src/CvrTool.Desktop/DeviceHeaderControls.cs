@@ -11,6 +11,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
+using CvrTool.Application;
 
 namespace CvrTool.Desktop;
 
@@ -39,7 +40,9 @@ public sealed partial class MainWindow
         editingDeviceName = true;
         if (nameEditor.Parent is Panel previous)
             previous.Children.Remove(nameEditor);
-        nameEditor.Text = service.GetDevice(deviceId).Name;
+        var selectedDevice = service.GetDevice(deviceId);
+        nameEditor.MaxLength = selectedDevice.IsDemo ? 32 : AmplifierService.MaximumPhysicalDeviceNameLength;
+        nameEditor.Text = selectedDevice.Name;
         var editor = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,32,32"),

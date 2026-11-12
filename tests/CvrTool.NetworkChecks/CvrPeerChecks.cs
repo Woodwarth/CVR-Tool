@@ -197,6 +197,10 @@ internal static class CvrPeerChecks
         remoteService.ApplyOutputDynamics(remoteService.PlanOutputDynamics(new(id,1,Bridged:true,NoiseGateEnabled:true,NoiseGateDb:-65,Rms:rmsState,Peak:peakState)).Id);
         check(service.GetOutputDynamics(id,1) is {Bridged:true,NoiseGateEnabled:true,NoiseGateDb:-65} && service.GetOutputDynamics(id,2).Bridged,"Mode pair and signed gate threshold round-trip through shared IPC");
         check(service.GetOutputDynamics(id,1).Rms==rmsState && service.GetOutputDynamics(id,1).Peak==peakState,"All RMS/peak settings use independent aggregate readback");
+        check(peer.Values[(48,0,0,1)][0]==1,"Automatic RMS timing sends the physically captured function-48 value 1");
+        remoteService.ApplyOutputDynamics(remoteService.PlanOutputDynamics(new(id,1,Rms:rmsState with {Automatic=false})).Id);
+        check(peer.Values[(48,0,0,1)][0]==0 && !service.GetOutputDynamics(id,1).Rms.Automatic,"Manual RMS timing sends function-48 value 0 and agrees with aggregate readback");
+        remoteService.ApplyOutputDynamics(remoteService.PlanOutputDynamics(new(id,1,Rms:rmsState)).Id);
         check(peer.Values[(50,0,0,1)][0]==0 && peer.Values[(69,0,0,1)][0]==0 && peer.Values[(87,0,0,1)][0]==191 && BitConverter.ToSingle(peer.Values[(55,0,0,1)],9)==100,"Dynamics encoding preserves immutable maximums and active-low flags");
         peer.IgnoreWrites=true;
         try{service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,NoiseGateDb:-50)).Id);throw new Exception("Dynamics write rejection ignored");}
@@ -217,6 +221,8 @@ internal static class CvrPeerChecks
         check(remoteService.ClearDevicePresets(id).Confirmed && service.GetDevicePresets(id).Slots.All(s=>!s.Occupied),"Clear verifies all sixteen names empty");
         check(remoteService.FactoryReset(id).Confirmed,"Factory reset requires semantic acknowledgement and settings refresh");
         check(service.RenameDevice(id, "Bench amp").Name == "Bench amp", "Device name write is read back through basic identity");
+        try{service.RenameDevice(id,new string('x',32));throw new Exception("Legacy backend accepted a 32-byte physical name");}
+        catch(ArgumentException){check(service.GetDevice(id).Name=="Bench amp","Legacy physical name validation rejects 32 bytes and preserves the device name");}
         check(service.SetControlState(id, displayLocked: true, standby: true) == new DeviceControlState(true, true), "Lock and standby round-trip");
         var readings = service.GetTelemetry(id);
         check(readings[0] is { Voltage: 40, Current: 5, LoadOhms: 8, TemperatureC: null, LevelDbFs: null } && readings[0].Status!.Clip == true && readings[1].Status!.Clip == false, "Two-channel telemetry keeps channel temperature and dBFS unknown");

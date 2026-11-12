@@ -35,7 +35,9 @@ The app is ad-hoc signed, not notarized
 or signed with an Apple Developer ID. macOS may prevent it from opening.
 
 For iPad browser access, choose Browser control in Desktop, select the local
-network and start it. Open the private connection link on the same LAN.
+network and start it. Scan the private QR code or open the connection link on
+the same LAN. The browser shows connection loss and pauses controls until fresh
+state is loaded; unfinished edits are not sent automatically after reconnect.
 The browser server starts only when requested; no iPad app is required.
 
 The desktop executable supports --mcp for integrated stdio MCP. Start the GUI

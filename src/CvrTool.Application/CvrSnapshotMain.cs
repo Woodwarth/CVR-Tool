@@ -1,6 +1,6 @@
 // Application / Main input controls and device name
 // Purpose: apply captured input gain/mute/delay/Peak-EQ commands and identity names.
-// Units: gain float32 dB, active-low mute and 32-byte ASCII names.
+// Units: gain float32 dB, active-low mute; 31 ASCII name bytes plus NUL.
 // State: fresh settings protect revisions; each write requires independent readback.
 // Scope: only BW-12/BW-24 input crossovers and Peak EQ; no automatic retries or rollback.
 using System.Diagnostics;
@@ -79,8 +79,7 @@ public sealed partial class CvrSnapshotBackend
     }
     public DeviceSnapshot Rename(string deviceId, string name, long expectedRevision)
     {
-        name = AmplifierService.NormalizeDeviceName(name);
-        if (name.Any(c => c > 127)) throw new ArgumentException("Device-side names require ASCII characters (up to 32 bytes).");
+        name = AmplifierService.NormalizePhysicalDeviceName(name);
         lock (ioGate)
         {
             lock (gate) CheckId(deviceId);

@@ -1,7 +1,7 @@
 // Web / Touch controls
 // Purpose: render English local browser controls from the shared Application state.
 // Units: dB/ms/metres/Hz/Q; Peak response preview explicitly uses 48 kHz.
-// State: drafts remain local until Apply; polling pauses during editing.
+// State: drafts remain local; an independent heartbeat pauses writes on connection loss.
 // Scope: no direct amplifier transport, external scripts or factory-reset command.
 "use strict";
 const $ = (s) => document.querySelector(s),
@@ -22,7 +22,18 @@ let key = location.hash.slice(1) || sessionStorage.getItem("cvr-key") || "",
   tab = "Main",
   state = null,
   busy = false,
-  dialogApply = null;
+  dialogApply = null,
+  appConnected = false,
+  stateFresh = false,
+  lastHeartbeat = 0,
+  heartbeatBusy = false,
+  connectionProblem = "connecting",
+  accessEpoch = 0,
+  stateGeneration = 0,
+  refreshInFlight = null;
+const heartbeatIntervalMs = 2000,
+  heartbeatTimeoutMs = 3000,
+  connectionStaleMs = 5000;
 if (location.hash) {
   sessionStorage.setItem("cvr-key", key);
   history.replaceState(null, "", location.pathname);
@@ -35,8 +46,48 @@ function status(text, error = false) {
   $("#status").textContent = text;
   $("#status").className = error ? "error" : "";
 }
-async function api(path, body) {
-  const r = await fetch(path, {
+function renderConnection() {
+  const ready = appConnected && stateFresh;
+  const kind = !key ? "access" : ready ? "connected" : appConnected ? "connecting" : connectionProblem;
+  const messages = {
+    connected: ["Connected to desktop app", "Browser controls are up to date."],
+    connecting: ["Connecting to desktop app…", "Controls are paused until the current session is loaded."],
+    disconnected: ["App connection lost", "Controls paused. Reconnecting automatically…"],
+    unauthorized: ["Connection link expired", "Scan the QR code in Desktop again or enter its current access key."],
+    access: ["Scan to connect", "Use the QR code or connection link shown in the desktop app."],
+  };
+  const [title, detail] = messages[kind];
+  $("#app-connection").dataset.state = kind;
+  $("#connection-title").textContent = title;
+  $("#connection-detail").textContent = detail + (kind === "disconnected" && lastHeartbeat ? " Last response: " + new Date(lastHeartbeat).toLocaleTimeString() + "." : "");
+  $("#controls").disabled = !ready;
+  $("#editor-controls").disabled = !ready;
+  $("#editor-commit").disabled = !ready;
+  $("#editor-connection").textContent = title + ". " + detail;
+  $("#editor-connection").classList.toggle("hidden", ready);
+}
+function loseConnection(reason = "disconnected") {
+  if (appConnected || stateFresh) stateGeneration++;
+  appConnected = false;
+  stateFresh = false;
+  connectionProblem = reason;
+  renderConnection();
+  if (reason === "disconnected") status("Offline · Showing the last received settings", true);
+}
+function connectionReady() {
+  if (appConnected && Date.now() - lastHeartbeat > connectionStaleMs)
+    loseConnection();
+  return appConnected && stateFresh;
+}
+async function api(path, body, timeoutMs = body ? 15000 : 5000) {
+  if (body && !connectionReady())
+    throw Error("Desktop app disconnected. Wait for the connection before applying changes.");
+  const epoch = accessEpoch;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let r;
+  try {
+    r = await fetch(path, {
     method: body ? "POST" : "GET",
     headers: {
       Authorization: "Bearer " + key,
@@ -44,18 +95,29 @@ async function api(path, body) {
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
-  });
+    signal: controller.signal,
+    });
+  } catch (e) {
+    if (epoch === accessEpoch) loseConnection();
+    throw Error(body ? "Connection lost. Check the current device state after reconnecting before trying again." : "Desktop app is not responding.");
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (epoch !== accessEpoch) throw Error("The connection link changed. Waiting for the new session.");
   if (!r.ok) {
+    if (r.status === 401) loseConnection("unauthorized");
     let e;
     try {
       e = await r.json();
     } catch {}
-    throw Error(
+    const error = Error(
       e?.error ||
         (r.status === 401
           ? "Enter the access key from the desktop app."
           : "Request failed: " + r.status),
     );
+    error.httpStatus = r.status;
+    throw error;
   }
   return r;
 }
@@ -78,6 +140,8 @@ function allow(cap = "canSetVerifiedDsp") {
 const dis = (b) => (b ? "" : " disabled");
 async function change(operation, data = {}) {
   if (busy) return;
+  if (!connectionReady())
+    throw Error("Desktop app disconnected. Wait for a fresh connection before editing.");
   busy = true;
   status("Applying and checking readback…");
   try {
@@ -103,7 +167,12 @@ async function refresh(force = false) {
       document.activeElement?.matches("input,select"))
   )
     return;
+  if (refreshInFlight) return refreshInFlight;
+  const epoch = accessEpoch;
+  const generation = stateGeneration;
+  const request = (async () => {
   const devices = await (await api("/api/devices")).json();
+  if (epoch !== accessEpoch || generation !== stateGeneration) return;
   if (!devices.some((d) => d.id === selected)) selected = devices[0]?.id || "";
   $("#devices").innerHTML = devices
     .map(
@@ -111,11 +180,57 @@ async function refresh(force = false) {
         `<option value="${esc(d.id)}" ${d.id === selected ? "selected" : ""}>${esc(d.name)} · ${esc(d.capabilities.model)}</option>`,
     )
     .join("");
-  if (!selected) return;
+  if (!selected) {
+    state = null;
+    $("#identity").textContent = "No devices available.";
+    $("#page").replaceChildren();
+    stateFresh = true;
+    renderConnection();
+    return;
+  }
   state = await (
     await api("/api/state?id=" + encodeURIComponent(selected))
   ).json();
+  if (epoch !== accessEpoch || generation !== stateGeneration) return;
+  stateFresh = true;
   render();
+  renderConnection();
+  })();
+  refreshInFlight = request;
+  try { return await request; }
+  finally { if (refreshInFlight === request) refreshInFlight = null; }
+}
+async function heartbeat() {
+  if (heartbeatBusy || !key) return;
+  const epoch = accessEpoch;
+  heartbeatBusy = true;
+  try {
+    await api("/api/health", undefined, heartbeatTimeoutMs);
+    if (epoch !== accessEpoch) return;
+    const reconnecting = !appConnected || !stateFresh;
+    const previouslyConnected = lastHeartbeat > 0;
+    lastHeartbeat = Date.now();
+    appConnected = true;
+    renderConnection();
+    if (reconnecting) {
+      await refresh(true);
+      if (connectionReady() && (!state || !offline()))
+        status(previouslyConnected ? "Connection restored · Current settings loaded" : "Connected to desktop app");
+    }
+  } catch (e) {
+    if (epoch !== accessEpoch) return;
+    if (e.httpStatus === 401) loseConnection("unauthorized");
+    else if (!appConnected) loseConnection();
+    status(e.message, true);
+  } finally { heartbeatBusy = false; }
+}
+function useAccessKey(value) {
+  key = value.trim();
+  sessionStorage.setItem("cvr-key", key);
+  accessEpoch++;
+  lastHeartbeat = 0;
+  loseConnection("connecting");
+  heartbeat();
 }
 function button(label, action, data = {}, enabled = true, cls = "") {
   return `<button data-action="${action}" data-args="${esc(JSON.stringify(data))}" class="${cls}"${dis(enabled)}>${label}</button>`;
@@ -498,7 +613,7 @@ document.addEventListener("change", async (e) => {
 });
 $("#editor-body").addEventListener("input", () => plot());
 $("#apply").onclick = async () => {
-  if (!dialogApply) return;
+  if (!dialogApply || !connectionReady()) return;
   $("#apply").disabled = true;
   try {
     await dialogApply();
@@ -531,14 +646,23 @@ $("#devices").onchange = async () => {
 $("#connect").onclick = async () => {
   const entered = prompt("Access key from the desktop app", key);
   if (entered == null) return;
-  key = entered.trim();
-  sessionStorage.setItem("cvr-key", key);
-  try {
-    await refresh(true);
-    status("Connected");
-  } catch (e) {
-    status(e.message, true);
-  }
+  useAccessKey(entered);
 };
-refresh(true).catch((e) => status(e.message, true));
+window.addEventListener("offline", () => loseConnection());
+window.addEventListener("online", () => heartbeat());
+window.addEventListener("hashchange", () => {
+  if (!location.hash) return;
+  const nextKey = location.hash.slice(1);
+  history.replaceState(null, "", location.pathname);
+  useAccessKey(nextKey);
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  connectionReady();
+  heartbeat();
+});
+renderConnection();
+heartbeat();
+setInterval(heartbeat, heartbeatIntervalMs);
+setInterval(() => connectionReady(), 500);
 setInterval(() => refresh().catch((e) => status(e.message, true)), 2000);

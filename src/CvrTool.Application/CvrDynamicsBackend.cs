@@ -51,7 +51,7 @@ public sealed partial class CvrLanBackend
                 Write(39, FloatBytes(after.Rms.ThresholdVolts), ch, side: 1);
                 Write(37, Short(after.Rms.AttackMs), ch, side: 1);
                 Write(38, [(byte)after.Rms.ReleaseMultiplier], ch, side: 1);
-                Write(48, [(byte)(after.Rms.Automatic ? 0 : 1)], ch, side: 1);
+                Write(48, [(byte)(after.Rms.Automatic ? 1 : 0)], ch, side: 1);
                 Write(46, [(byte)(after.Rms.Enabled ? 0 : 1)], ch, side: 1);
             }
             if (change.Peak is not null)

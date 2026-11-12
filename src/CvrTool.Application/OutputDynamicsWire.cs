@@ -1,6 +1,6 @@
 // Application / Packed output dynamics
 // Purpose: translate observed limiter blocks and native channel records.
-// Units: LE shorts/floats, volts, ms; active-low bypass/auto/bridge flags.
+// Units: LE shorts/floats, volts, ms; active-low bypass/bridge, active-high RMS auto.
 // State: encode preserves read-only maximum voltage and unrelated bytes.
 // Scope: 13-byte RMS/peak blocks and B118/B119 native sync layouts.
 using System.Buffers.Binary;
@@ -11,6 +11,7 @@ namespace CvrTool.Application;
 public static class OutputDynamicsWire
 {
     private static bool Active(byte value) => value switch { 0 => true, 1 => false, _ => throw new NotSupportedException("Unsupported dynamics flag.") };
+    private static bool AutomaticTiming(byte value) => value switch { 0 => false, 1 => true, _ => throw new NotSupportedException("Unsupported RMS automatic-timing flag.") };
     public static int Mode(byte[] raw)
     {
         if (raw.Length != 1 || raw[0] > 5)
@@ -21,7 +22,7 @@ public static class OutputDynamicsWire
     {
         if (raw.Length != 13)
             throw new InvalidDataException("Expected 13-byte RMS limiter.");
-        return new(Active(raw[7]), ProcessingWire.Float(raw, 3), BinaryPrimitives.ReadInt16LittleEndian(raw), raw[2], Active(raw[8]), ProcessingWire.Float(raw, 9));
+        return new(Active(raw[7]), ProcessingWire.Float(raw, 3), BinaryPrimitives.ReadInt16LittleEndian(raw), raw[2], AutomaticTiming(raw[8]), ProcessingWire.Float(raw, 9));
     }
     public static PeakLimiterState Peak(byte[] raw)
     {
@@ -36,7 +37,7 @@ public static class OutputDynamicsWire
         raw[2] = (byte)state.ReleaseMultiplier;
         ProcessingWire.Put(raw, 3, state.ThresholdVolts);
         raw[7] = (byte)(state.Enabled ? 0 : 1);
-        raw[8] = (byte)(state.Automatic ? 0 : 1);
+        raw[8] = (byte)(state.Automatic ? 1 : 0);
         if (template is null)
             ProcessingWire.Put(raw, 9, state.MaximumVolts);
         return raw;

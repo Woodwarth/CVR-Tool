@@ -34,7 +34,7 @@ Channels and segments are zero-based on the wire.
 | 14 | Delay | Float milliseconds; side 0=input, 1=output |
 | 15 | Standby | Status-0 command; byte 1 on, 0 off. Telemetry and native-state settling confirm writes |
 | 17 | Display lock | Byte 0/1; command matches captured frame |
-| 18 | Output polarity | Controlled output A: byte 1=180°, 0=0°; side 1 |
+| 18 | Output polarity | Controlled output A: byte 1=180Â°, 0=0Â°; side 1 |
 | 16 | Factory reset | Command body byte 1; semantic ACK required |
 | 27 | Full sync | B118/B119: 2232/2687 bytes |
 | 30 | Input Peak band bypass/type | Controlled Peak slot: FF bypass, 00 active; channel=input, segment=filter, side 0. Channel-254 initialization semantics remain unconfirmed |
@@ -42,10 +42,10 @@ Channels and segments are zero-based on the wire.
 | 32 | Input EQ frequency | Float32 Hz; channel=input, segment=filter slot, side 0; controlled EQ5 test |
 | 34 | Input EQ Q | Float32 Q; channel=input, segment=filter slot, side 0 |
 | 36 | Input EQ global bypass | Side 0; byte 1 bypassed, 0 enabled; verify state through filter block |
-| 37/38/39 | RMS attack/release/threshold | Int16 ms / byte ×Attack / float Vrms; side 1 |
+| 37/38/39 | RMS attack/release/threshold | Int16 ms / byte Ã—Attack / float Vrms; side 1 |
 | 40/41/42 | Peak hold/release/threshold | Int16 ms / Int16 ms / float Vpeak; side 1 |
 | 46/47 | RMS/peak bypass | Byte 0 enabled, 1 bypassed; side 1 |
-| 48 | RMS automatic timing | Byte 0 automatic, 1 manual; side 1 |
+| 48 | RMS automatic timing | Controlled output A: byte 1 automatic, 0 manual; side 1. Unlike limiter bypass, this flag is active-high |
 | 49 | Output load mode | Controlled status-0 command: byte 0 Low-Z, 1 70V; per channel, side 1. Value 2 (100V) remains unverified |
 | 50 | Stereo/bridge pair | Byte 0 bridge, 1 stereo; channel is zero-based pair, side 1 |
 | 54/55 | Peak/RMS limiter blocks | 13 packed bytes including read-only voltage maximum |
@@ -56,7 +56,7 @@ Channels and segments are zero-based on the wire.
 | 44 | FIR bypass | Byte 0 enabled, 1 bypassed; side 1 |
 | 52 | Input/output filter block | 141 bytes; side 0/1 |
 | 59 | Device presets | 34-byte mode/slot/name; mode 0 reads sixteen names, 1 stores, 2 recalls, 3 clears |
-| 60 | Device name write | 32 padded bytes; read back through function 0 |
+| 60 | Device name write | 32-byte field; observed DSP-1004 accepts at most 31 ASCII bytes plus NUL; read back through function 0 |
 | 71 | Extended identity / operating time | Empty status-2 request; 93-byte status-1 reply, model header at 42, LE uint32 minutes at 74 |
 
 The filter block contains ten packed 14-byte records and one global bypass
@@ -488,3 +488,41 @@ bypassed LR-48; re-enable and BW-12 restoration are not yet in the inspected
 capture. All eleven HP types now have controlled selection/bypass evidence,
 while independent native/direct-writer validation beyond types 0/4 remains
 pending. LP evidence still covers types 0/4. Function-ID progress: 22/38 (58%).
+
+
+## Controlled output limiter evidence on DSP-1004
+
+Controlled output-A edits establish status-1/channel-0/segment-0/side-1
+functions 37/38/39/40/41/42/46/47/48. Attack and Peak Hold/Release are
+little-endian int16 milliseconds; RMS release is a one-byte attack multiplier;
+thresholds are float32 actual volts. Controlled timing values were 25/26 ms,
+16/17 times attack, 50/51 ms and 300/301 ms. Range boundaries remain untested.
+
+Limiter bypass values are 1 bypassed and 0 enabled. RMS automatic timing is
+**1 automatic and 0 manual**, matching native RMS block offset 8 and the
+original controller's disabled manual timing fields. This corrects the previous
+inverted assumption in native decoding/encoding and the legacy function-48
+writer. Unknown flag values remain rejected.
+
+The original controller may send coupled RMS/Peak threshold commands after a
+single threshold edit. This is controller behavior; independent single-field
+restoration writes preserved every unrelated native byte. All nine final
+restoration commands passed separate full-settings readbacks. The original
+thresholds/timings and enabled automatic state were restored; outputs stayed muted.
+
+This adds nine partially evidenced function IDs: **31/38 (82%)**. It does not
+establish all numeric ranges, other outputs/models/firmwares, power-loss
+persistence, or dedicated function-54/55 query behavior. The default live
+limiter write restrictions remain unchanged. Private captures are not published.
+
+
+## Device-name length boundary
+
+On DSP-1004/106119, 14- and 31-byte ASCII device names passed exact independent
+function-0 identity readback after function-60 writes. A non-terminated 32-byte
+name was truncated to 31 bytes with a final NUL. The application rejected the
+mismatched readback; the original name was restored and all native DSP bytes
+remained unchanged. Physical device names now require 1–31 ASCII characters;
+local demo names retain their 32-character limit. Other firmware/model limits
+and persistence after a power cycle remain unverified. ID coverage stays 31/38
+(82%), with partial evidence per function.

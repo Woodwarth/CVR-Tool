@@ -96,6 +96,10 @@ static class SnapshotPeerChecks
         service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Muted: false)).Id);
         check(service.ExportNativePreset(id).SequenceEqual(mainBefore), "Input gain and mute restore all native bytes exactly");
         check(service.RenameDevice(id, "New main name").Name == "New main name" && service.ExportNativePreset(id).SequenceEqual(mainBefore), "Rename uses independent identity readback and preserves all DSP settings");
+        check(service.RenameDevice(id,new string('x',31)).Name==new string('x',31),"Observed name profile accepts a 31-byte ASCII name with identity readback");
+        var writesBeforeInvalidName=peer.Writes;
+        try{service.RenameDevice(id,new string('x',32));throw new Exception("32-byte physical name accepted");}
+        catch(ArgumentException){check(peer.Writes==writesBeforeInvalidName,"A 32-byte physical name is rejected before any device write");}
         service.RenameDevice(id, "Live fixture");
         peer.IgnoreInputWrites = true;
         try { service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, GainDb: -.5)).Id); throw new Exception("Unconfirmed input gain accepted"); }

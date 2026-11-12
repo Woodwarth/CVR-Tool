@@ -36,6 +36,48 @@ main {
   margin: auto;
   padding: 20px;
 }
+#app-connection {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 12px 22px;
+  border-bottom: 2px solid #f0bd71;
+  background: #3a3020;
+  color: #ffdd9c;
+}
+#app-connection strong {
+  font-size: 18px;
+}
+#app-connection[data-state="connected"] {
+  border-color: #00cebd;
+  background: #12362f;
+  color: #9df0da;
+}
+#app-connection[data-state="disconnected"],
+#app-connection[data-state="unauthorized"],
+.connection-warning {
+  border-color: #ff8192;
+  background: #4c1d29;
+  color: #ffd5dc;
+}
+.connection-warning {
+  padding: 12px;
+  border: 2px solid #ff8192;
+  border-radius: 6px;
+  font-weight: 600;
+}
+#controls, #editor-controls, #editor-commit {
+  min-width: 0;
+}
+.actions > #editor-commit {
+  flex: 1;
+}
+#editor-commit > button {
+  width: 100%;
+}
 button,
 select,
 input {

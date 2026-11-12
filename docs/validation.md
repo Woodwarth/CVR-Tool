@@ -23,7 +23,7 @@ name was restored separately. Input HP/LP cutoff, BW-12/BW-24 type and bypass
 also passed direct full-settings readback and byte-exact restoration. Low-Z/70V encoding remains controller-captured
 evidence, not a repeated load-mode switching test.
 
-Current partial live evidence: **22/38 documented function IDs (58%)**. This
+Current partial live evidence: **31/38 documented function IDs (82%)**. This
 is not full command-variant coverage or a percentage of firmware bytes.
 No signal is currently available: dBFS meter and input-clip calibration remains
 pending. Unknown readings remain explicit. Other models and platform GUI
@@ -103,3 +103,55 @@ Native metadata is supplied through a focused shared-session query: reading
 labels does not request FIR coefficients or capture a complete preset.
 This work is local, has not been published and adds no hardware evidence.
 The 18/38 (47%) partial live-evidence count is unchanged.
+
+
+## Local output-limiter protocol continuation
+
+On the same DSP-1004, controlled output-A limiter commands establish nine more
+function IDs (37/38/39/40/41/42/46/47/48), with independent full-settings
+readback after each final restoration command. RMS automatic timing is
+active-high, unlike limiter bypass. Its native codec and legacy writer are
+corrected; default live limiter editing remains protected.
+
+Release build: zero warnings/errors. Local runs passed 334 core, 257 synthetic
+loopback-network and 177 desktop checks (768 total), plus shared-session MCP.
+These software checks do not increase physical protocol coverage. Per-ID
+percentage coverage is not defined: a command observation is partial evidence,
+not full parameter-range, model, channel or firmware coverage.
+
+
+## Local device-name boundary verification
+
+DSP-1004/106119 accepted 14- and 31-byte ASCII names with exact independent
+identity readback. A 32-byte name was shortened to 31 bytes; the application
+reported the mismatch and restored the original name. All native DSP bytes
+remained unchanged. Physical names now reject lengths above 31 before sending;
+local demo names keep their previous limit. Persistence after a power cycle
+and limits on other models/firmware remain untested. ID evidence stays 31/38.
+
+Debug and Release builds passed without warnings/errors. Local validation
+passed 338 core, 260 synthetic loopback-network and 177 desktop checks
+(775 total), plus the shared-session MCP smoke test.
+
+
+## 0.7.5 browser pairing and connection-loss handling
+
+Desktop browser control shows a QR code generated locally from the complete
+connection URL, including its access-key fragment. An independent decoder
+recovered the exact URL/key from the actual Avalonia-rendered control. Clearing
+the connection removes the QR payload. Dependency versions are locked.
+
+A separate authenticated heartbeat continues during editing, uses a three-second
+request timeout and expires the connection after five seconds without a
+successful response. Failed requests and browser offline signals also pause
+controls. A persistent banner and a warning inside open editors show connection
+loss. Writes stay disabled until fresh state is loaded; drafts are preserved
+without replay. Expired keys direct the user to the current Desktop QR code.
+Returning from a hidden tab rechecks stale connection state immediately.
+
+Local checks passed: 338 core, 263 synthetic loopback-network and 180 desktop
+checks (781 total), plus integrated Desktop MCP smoke checks. Chrome touch checks
+at tablet/phone sizes passed normal edits, offline operation, stalled/refused
+server connections and expired keys during editing, followed by recovery without
+replay or page errors. Physical Safari/iPad validation is still pending.
+This work adds no physical protocol evidence: 31/38 IDs (82%), partial evidence.

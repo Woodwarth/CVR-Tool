@@ -10,9 +10,9 @@ for two- and four-channel models.
 
 | Platform | Direct download | Start after extracting |
 | --- | --- | --- |
-| Windows x64 · Intel / AMD | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.7.4/CVR-Tool-0.7.4-win-x64.zip) | `START-CVR-TOOL.cmd` |
-| Windows ARM64 · Snapdragon | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.7.4/CVR-Tool-0.7.4-win-arm64.zip) | `START-CVR-TOOL.cmd` |
-| Mac · Apple Silicon | [Download archive](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.7.4/CVR-Tool-0.7.4-osx-arm64.tar.gz) | `CVR Tool.app` |
+| Windows x64 · Intel / AMD | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.7.5/CVR-Tool-0.7.5-win-x64.zip) | `START-CVR-TOOL.cmd` |
+| Windows ARM64 · Snapdragon | [Download ZIP](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.7.5/CVR-Tool-0.7.5-win-arm64.zip) | `START-CVR-TOOL.cmd` |
+| Mac · Apple Silicon | [Download archive](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.7.5/CVR-Tool-0.7.5-osx-arm64.tar.gz) | `CVR Tool.app` |
 
 [Latest release and checksums](https://github.com/Woodwarth/CVR-Tool/releases/latest).
 Extract the entire package. The runtime is included; no SDK or additional
@@ -24,9 +24,12 @@ From v0.4.0, choose **Updates → Check for updates → Download and restart**
 inside the app. Updates are verified and installed in your user profile;
 existing versions are retained. Export session settings before restarting.
 
-Choose **Browser control → Start** to control the same session from an iPad
-browser on your local network. Open the private connection link shown in the
-desktop app; no iPad app or internet is required.
+Choose **Browser control > Start** to control the same session from an iPad
+browser on your local network. Scan the private QR code with the iPad camera,
+or open the connection link shown in Desktop; no iPad app or internet is required.
+The browser displays its connection to Desktop separately from amplifier status.
+If the app connection is lost, controls pause until a fresh session is loaded.
+Unfinished edits are never sent automatically when the connection returns.
 
 Desktop, browser and MCP share one local session. CVR devices are found automatically
 on the wired amplifier LAN and listed beside the demos. Live settings and status

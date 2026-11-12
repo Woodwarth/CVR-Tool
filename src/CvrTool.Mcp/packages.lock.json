@@ -323,8 +323,8 @@
       "cvrtool.application": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Core": "[0.1.0, )",
-          "CvrTool.Protocol": "[0.1.0, )"
+          "CvrTool.Core": "[0.7.5, )",
+          "CvrTool.Protocol": "[0.7.5, )"
         }
       },
       "cvrtool.core": {
@@ -333,7 +333,7 @@
       "cvrtool.protocol": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Core": "[0.1.0, )"
+          "CvrTool.Core": "[0.7.5, )"
         }
       }
     }

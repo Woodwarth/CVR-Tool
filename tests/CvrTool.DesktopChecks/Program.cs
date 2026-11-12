@@ -294,6 +294,15 @@ Save("routing-editable-inputs");
 Press(Tagged<Button>("software-updates")); var updateDialog=window.OwnedWindows.Single(); Press(Tagged<Button>("software-updates"));
 Check(window.OwnedWindows.Count==1 && ReferenceEquals(updateDialog,window.OwnedWindows.Single()), "Only one software update dialog is opened");
 Check(updateDialog.GetLogicalDescendants().OfType<Button>().Any(b=>b.Tag?.ToString()=="check-for-updates") && !updateDialog.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="install-update").IsEnabled,"Updater starts with an explicit check and no implicit download"); updateDialog.Close();
+var pairingQr = new BrowserConnectionQrCode { Width=280, Height=280 };
+const string pairingTestUrl="http://127.0.0.1:8787/#0123456789abcdef0123456789abcdef";
+Check(!pairingQr.IsVisible,"Pairing QR starts hidden until browser control has a connection URL");
+pairingQr.SetConnectionUrl(pairingTestUrl);
+pairingQr.Measure(new Size(280,280)); pairingQr.Arrange(new Rect(0,0,280,280));
+using(var pairingImage=new RenderTargetBitmap(new PixelSize(280,280))) {pairingImage.Render(pairingQr);pairingImage.Save("artifacts/browser-connection-qr.png",PngBitmapEncoderOptions.Default);}
+Check(pairingQr.IsVisible && pairingQr.ConnectionUrl==pairingTestUrl,"Pairing QR contains the full connection link including its private key");
+pairingQr.SetConnectionUrl(null);
+Check(!pairingQr.IsVisible && pairingQr.ConnectionUrl is null,"Stopping browser control clears the old QR payload");
 window.Close();
 var nativeService = new AmplifierService(new DemoBackend());
 var nativeFixture = nativeService.ExportNativePreset("demo-1004");

@@ -17,7 +17,7 @@ public sealed partial class AmplifierTools
     [Description("Read a device, capabilities and output parameters from the shared session.")]
     public string GetDevice(string deviceId) => Json(service.GetDevice(deviceId));
     [McpServerTool(Name = "rename_device")]
-    [Description("Rename a session device in the shared application session. Name: 1–32 characters; physical devices require ASCII and confirmed device-side readback.")]
+    [Description("Rename a session device in the shared application session. Demo names: 1–32 characters; physical names: 1–31 ASCII characters with confirmed device-side readback.")]
     public string RenameDevice(string deviceId, string name) => Json(service.RenameDevice(deviceId, name));
     [McpServerTool(Name = "get_telemetry")]
     [Description("Read per-output telemetry. Null fields mean unknown, not measured zero or healthy status.")]

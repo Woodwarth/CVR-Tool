@@ -36,6 +36,15 @@
           "Avalonia": "12.1.4"
         }
       },
+      "QRCoder": {
+        "type": "Direct",
+        "requested": "[1.8.0, )",
+        "resolved": "1.8.0",
+        "contentHash": "RuvX3PEXU6pbY/I5ItAk800jm62r+YnoPLgyS2WTgwxkOnGkOfU9ORiipHUF0LkLyqM8rlroUCA319JjRYfRFQ==",
+        "dependencies": {
+          "System.Drawing.Common": "6.0.0"
+        }
+      },
       "Avalonia.Angle.Windows.Natives": {
         "type": "Transitive",
         "resolved": "2.1.27548.20260419",
@@ -447,6 +456,11 @@
         "resolved": "10.0.13",
         "contentHash": "ZjTwxzhiw2TMEzIbUDkMF0dfDB2I4NQgIfKD0ELu9/5Mk+SRGdKZcD0/lvBrRCAPo6KN2r0BW86MRancoyJkoA=="
       },
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "hqTM5628jSsQiv+HGpiq3WKBl2c8v1KZfby2J6Pr7pEPlK9waPdgEO6b8A/+/xn/yZ9ulv8HuqK71ONy2tg67A=="
+      },
       "ModelContextProtocol": {
         "type": "Transitive",
         "resolved": "2.3.1",
@@ -500,6 +514,14 @@
         "resolved": "10.0.0",
         "contentHash": "uaFRda9NjtbJRkdx311eXlAA3n2em7223c1A8d1VWyl+4FL9vkG7y2lpPfBU9HYdj/9KgdRNdn1vFK8ZYCYT/A=="
       },
+      "System.Drawing.Common": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "NfuoKUiP2nUWwKZN6twGqXioIe1zVD0RIj2t976A+czLHr2nY454RwwXs6JU9Htc6mwqL6Dn/nEL3dpVf2jOhg==",
+        "dependencies": {
+          "Microsoft.Win32.SystemEvents": "6.0.0"
+        }
+      },
       "Tmds.DBus.Protocol": {
         "type": "Transitive",
         "resolved": "0.94.1",
@@ -508,8 +530,8 @@
       "cvrtool.application": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Core": "[0.7.4, )",
-          "CvrTool.Protocol": "[0.7.4, )"
+          "CvrTool.Core": "[0.7.5, )",
+          "CvrTool.Protocol": "[0.7.5, )"
         }
       },
       "cvrtool.core": {
@@ -518,7 +540,7 @@
       "cvrtool.mcp": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Application": "[0.7.4, )",
+          "CvrTool.Application": "[0.7.5, )",
           "Microsoft.Extensions.Hosting": "[10.0.0, )",
           "ModelContextProtocol": "[2.3.1, )"
         }
@@ -526,13 +548,13 @@
       "cvrtool.protocol": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Core": "[0.7.4, )"
+          "CvrTool.Core": "[0.7.5, )"
         }
       },
       "cvrtool.web": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Application": "[0.7.4, )"
+          "CvrTool.Application": "[0.7.5, )"
         }
       }
     }

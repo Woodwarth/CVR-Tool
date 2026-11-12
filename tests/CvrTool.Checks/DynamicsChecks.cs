@@ -24,6 +24,13 @@ static class DynamicsChecks
         foreach(var peak in new[]{first.Peak with {ThresholdVolts=double.PositiveInfinity},first.Peak with {HoldMs=-1},first.Peak with {HoldMs=2001},first.Peak with {ReleaseMs=19},first.Peak with {ReleaseMs=1001}})
             Reject(()=>service.PlanOutputDynamics(new(id,1,Peak:peak)),"Invalid peak settings rejected before mutation");
         var rmsState=first.Rms with {ThresholdVolts=60,AttackMs=40,ReleaseMultiplier=8,Automatic=true,Enabled=false};var peakState=first.Peak with {ThresholdVolts=100,HoldMs=100,ReleaseMs=400,Enabled=true};
+        byte[] automaticFixture=[25,0,16,0,0,160,66,0,1,0,0,200,66];
+        check(OutputDynamicsWire.Rms(automaticFixture) is {Automatic:true,Enabled:true,AttackMs:25,ReleaseMultiplier:16,ThresholdVolts:80},"Observed RMS auto byte 1 means automatic independently of active-low limiter bypass");
+        var manualFixture=automaticFixture.ToArray();manualFixture[8]=0;
+        check(!OutputDynamicsWire.Rms(manualFixture).Automatic,"Observed RMS auto byte 0 means manual timing");
+        check(OutputDynamicsWire.Rms(rmsState)[8]==1 && OutputDynamicsWire.Rms(rmsState with {Automatic=false})[8]==0,"RMS native encoding preserves the evidenced active-high automatic flag");
+        var invalidAutomaticFixture=automaticFixture.ToArray();invalidAutomaticFixture[8]=2;
+        try{OutputDynamicsWire.Rms(invalidAutomaticFixture);throw new Exception("Unknown RMS auto flag accepted");}catch(NotSupportedException){check(true,"Unknown RMS automatic flag remains unsupported");}
         service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,Rms:rmsState,Peak:peakState)).Id);
         check(service.GetOutputDynamics(id,1).Rms==rmsState && service.GetOutputDynamics(id,1).Peak==peakState && service.GetOutputDynamics(id,2).Rms==first.Rms,"Peak and RMS settings apply independently per output");
         var json=service.ExportPreset(id);var preset=JsonSerializer.Deserialize<PresetDocument>(json)!;check(preset is {SchemaVersion:7,Dynamics.Count:4},"Schema 7 exports complete dynamics");

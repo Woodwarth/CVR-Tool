@@ -182,14 +182,12 @@ public sealed partial class CvrLanBackend : IAmplifierBackend, INativePresetMeta
     }
     public DeviceSnapshot Rename(string deviceId, string value, long expectedRevision)
     {
+        value = AmplifierService.NormalizePhysicalDeviceName(value);
         lock (gate)
         {
             CheckId(deviceId);
             Read(0);
             Expected(expectedRevision);
-            value = AmplifierService.NormalizeDeviceName(value);
-            if (value.Any(c => c > 127))
-                throw new ArgumentException("Device-side names currently require ASCII characters (up to 32 bytes).");
             var body = new byte[32];
             Encoding.ASCII.GetBytes(value).CopyTo(body, 0);
             Write(60, body);

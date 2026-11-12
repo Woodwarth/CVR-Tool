@@ -6,6 +6,8 @@
 using System.Net;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Automation;
 using Avalonia.Layout;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -26,15 +28,26 @@ public sealed partial class MainWindow
         var server = browserServer;
         var content = new StackPanel { Margin = new Thickness(22), Spacing = 14 };
         content.Children.Add(Heading("Browser control"));
-        content.Children.Add(Text("Open this link in Safari on your iPad. Both devices must be on the same local network.", 14, Muted));
+        content.Children.Add(Text("Scan the QR code with your iPad camera to open browser control. Both devices must be on the same local network.", 14, Muted));
         var interfaces = BrowserControlServer.Interfaces();
         var network = new ComboBox { ItemsSource = interfaces, SelectedIndex = interfaces.Count > 0 ? 0 : -1, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = "browser-interface" };
         content.Children.Add(Field("Local network", network));
-        var link = new TextBox { IsReadOnly = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Tag = "browser-url" };
+        var link = new TextBox { IsReadOnly = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Tag = "browser-url", MinHeight = 80 };
+        var qr = new BrowserConnectionQrCode { Width = 280, Height = 280, IsVisible = false, Tag = "browser-qr" };
+        AutomationProperties.SetName(qr, "Scan to connect to browser control");
+        var pairing = new Grid { ColumnDefinitions = new ColumnDefinitions("280,*"), ColumnSpacing = 20 };
+        pairing.Children.Add(qr);
+        var details = new StackPanel { Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
+        details.Children.Add(Text("Scan to connect", 20));
+        details.Children.Add(Text("Open the link with your iPad camera, or copy it into Safari.", 14, Muted));
+        details.Children.Add(link);
         var message = Text("", 13, Muted);
         var start = new Button { Content = "Start browser control", Tag = "browser-start" };
         var stop = new Button { Content = "Stop browser control", Tag = "browser-stop" };
         var copy = new Button { Content = "Copy connection link", Tag = "browser-copy" };
+        details.Children.Add(copy);
+        details.Children.Add(Text("The QR code includes the private access key. Share it only with people who may control this session.", 12, Muted));
+        AddColumn(pairing, details, 1);
         void Refresh()
         {
             var running = server.Address is not null;
@@ -42,6 +55,8 @@ public sealed partial class MainWindow
             network.IsEnabled = !running;
             stop.IsEnabled = copy.IsEnabled = running;
             link.Text = server.ConnectionUrl ?? "";
+            qr.SetConnectionUrl(server.ConnectionUrl);
+            pairing.IsVisible = running;
             message.Text = running ? "Running · The connection link grants control. Keep it private." : "Stopped · Start to allow local browser access.";
         }
         start.Click += async (_, _) =>
@@ -53,12 +68,12 @@ public sealed partial class MainWindow
         };
         stop.Click += async (_, _) => { stop.IsEnabled = false; await server.DisposeAsync(); Refresh(); };
         copy.Click += async (_, _) => { if (Clipboard is { } clipboard) await clipboard.SetValueAsync(DataFormat.Text, server.ConnectionUrl); };
-        content.Children.Add(link);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         actions.Children.Add(start); actions.Children.Add(stop); content.Children.Add(actions);
-        content.Children.Add(copy); content.Children.Add(message);
+        content.Children.Add(pairing); content.Children.Add(message);
         content.Children.Add(Text("Allow private-network access if Windows asks. Internet access is not required. This does not change amplifier discovery.", 12, Muted));
-        browserWindow = EditorWindow("Browser control · iPad", content, 700, 420);
+        browserWindow = EditorWindow("Browser control · iPad", new ScrollViewer { Content = content, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }, 760, 650);
+        browserWindow.MinWidth = 680;
         browserWindow.Closed += (_, _) => browserWindow = null;
         Refresh(); browserWindow.Show(this);
     }

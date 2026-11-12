@@ -85,6 +85,7 @@ public sealed class BrowserControlServer(AmplifierService service) : IAsyncDispo
         app.MapGet("/", () => Asset("index.html", "text/html; charset=utf-8"));
         app.MapGet("/app.js", () => Asset("app.js", "text/javascript; charset=utf-8"));
         app.MapGet("/style.css", () => Asset("style.css", "text/css; charset=utf-8"));
+        app.MapGet("/api/health", () => new { status = "ok" });
         app.MapGet("/api/devices", () => service.ListDevices());
         app.MapGet("/api/state", (string id) => State(id));
         app.MapGet("/api/preset", (string id) => Results.File(service.ExportNativePreset(id), "application/octet-stream", "CVR-preset.sd"));
