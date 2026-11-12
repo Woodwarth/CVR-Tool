@@ -10,6 +10,11 @@ namespace CvrTool.Mcp;
 
 public sealed partial class AmplifierTools
 {
+    [McpServerTool(Name = "get_native_preset_metadata")]
+    [Description("Read preserved native input/speaker names, input-mute flags, source alignment and configured load. Null means no native source; does not write files or devices.")]
+    public string GetNativePresetMetadata(string deviceId) => Json(service.GetNativePresetMetadata(deviceId));
+    [McpServerTool(Name = "set_output_fir_enabled"), Description("Enable/bypass existing output FIR without changing or inventing coefficients; live writes require independent readback.")]
+    public string SetOutputFirEnabled(string deviceId,int channel,bool enabled) => Json(service.SetFirEnabled(deviceId,channel,enabled));
     [McpServerTool(Name = "export_preset")]
     [Description("Return a versioned preset JSON document. Does not write files.")]
     public string ExportPreset(string deviceId) => service.ExportPreset(deviceId);

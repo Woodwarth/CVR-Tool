@@ -14,7 +14,7 @@ public sealed partial class AmplifierService
     public InputProcessingState GetOutputProcessing(string id, int channel) => Advanced.GetOutputProcessing(id, channel).State;
     public InputProcessingPlan PlanOutputProcessing(InputProcessingChange change)
     {
-        if(change.GainDb is not null)throw new ArgumentException("Output trim uses channel gain, not input processing gain.");
+        if(change.GainDb is not null || change.Muted is not null)throw new ArgumentException("Output trim uses channel gain, not input processing gain.");
         var (before, revision) = Advanced.GetOutputProcessing(change.DeviceId, change.Channel);
         var after = MergeInput(before, change);
         var frozen = change with
@@ -48,10 +48,11 @@ public sealed partial class AmplifierService
             return Advanced.ApplyOutputProcessing(plan.Change, plan.ExpectedRevision);
         }
     }
+    public FirState SetFirEnabled(string id, int channel, bool enabled) => Advanced.ApplyFirEnabled(id, channel, enabled, backend.GetChannel(id, channel).Revision);
     public FirState GetFir(string id, int channel) => Advanced.GetFir(id, channel).State;
     public static FirState ValidateFir(FirState state)
     {
-        if (state.SampleRate != 48000 || state.Coefficients.Count is < 1 or > 512 || state.Coefficients.Any(c => !double.IsFinite(c) || Math.Abs(c) > 1e6) || state.Name.Length > 32 || state.Name.Any(char.IsControl))
+        if (!state.CoefficientsKnown || state.SampleRate != 48000 || state.Coefficients.Count is < 1 or > 512 || state.Coefficients.Any(c => !double.IsFinite(c) || Math.Abs(c) > 1e6) || state.Name.Length > 32 || state.Name.Any(char.IsControl))
             throw new ArgumentException("FIR requires 1–512 finite taps at 48 kHz and a name of at most 32 characters.");
         return state with
         {
@@ -103,7 +104,7 @@ public static class PresetOperations
             var nativeDynamics = nativePreset.Dynamics!;
             preset = preset with
             {
-                Inputs=preset.Inputs is null ? nativePreset.Inputs : preset.Inputs.Select(input=>input with {GainDb=input.GainDb ?? nativePreset.Inputs!.Single(n=>n.Channel==input.Channel).GainDb}).ToArray(),
+                Inputs=preset.Inputs is null ? nativePreset.Inputs : preset.Inputs.Select(input=>input with {GainDb=input.GainDb ?? nativePreset.Inputs!.Single(n=>n.Channel==input.Channel).GainDb, Muted=input.Muted ?? nativePreset.Inputs!.Single(n=>n.Channel==input.Channel).Muted}).ToArray(),
                 Dynamics = preset.Dynamics is null ? nativeDynamics : preset.Dynamics.Select(d => d with { LoadMode = d.LoadMode ?? nativeDynamics.Single(n => n.Channel == d.Channel).LoadMode }).ToArray()
             };
         }
@@ -136,7 +137,11 @@ public static class PresetOperations
             if (preset.Firs.Count != count || !preset.Firs.Select(f => f.Channel).Order().SequenceEqual(Enumerable.Range(1, count)))
                 throw new ArgumentException("Preset FIR channels are inconsistent.");
             foreach (var fir in preset.Firs)
+            {
+                if (!fir.CoefficientsKnown && device.IsDemo && fir.Coefficients.Count == 0 && fir.SampleRate == 48000 &&
+                    preset.NativeData is { } source && NativePresetCodec.Inspect(source).FirLength == 0) continue;
                 AmplifierService.ValidateFir(fir);
+            }
         }
         if (preset.Dynamics is not null)
         {
@@ -156,7 +161,7 @@ public static class PresetOperations
         }
         return Copy(preset);
     }
-    public static InputProcessingState DefaultProcessing(int channel) => new(channel, 0, true, new[] { 60, 132, 290, 639, 1406, 3092, 6803, 14966 }.Select((f, n) => new EqualizerBand(n + 1, f, 0, 1.41)).ToArray(), new(20), new(20000));
+    public static InputProcessingState DefaultProcessing(int channel) => new(channel, 0, true, new[] { 60, 132, 290, 639, 1406, 3092, 6803, 14966 }.Select((f, n) => new EqualizerBand(n + 1, f, 0, 1.41)).ToArray(), new(20), new(20000), Muted: false);
     public static void CheckSlot(int slot)
     {
         if (slot is < 1 or > 16)

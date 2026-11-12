@@ -9,7 +9,7 @@ using CvrTool.Core;
 
 namespace CvrTool.Application;
 
-public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend
+public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend, INativePresetMetadataSource
 {
     private T Call<T>(string method, object arguments) where T : class => CallAsync<T>(method, arguments).GetAwaiter().GetResult();
     private async Task<T> CallAsync<T>(string method, object arguments) where T : class
@@ -67,9 +67,11 @@ public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend,
     public (InputProcessingState State,long Revision) GetOutputProcessing(string id,int channel) {var result=Call<Revisioned<InputProcessingState>>("output-processing",new {Id=id,Channel=channel});return(result.State,result.Revision);}
     public InputProcessingState ApplyOutputProcessing(InputProcessingChange change,long revision)=>Call<InputProcessingState>("apply-output-processing",new{Change=change,Revision=revision});
     public (FirState State,long Revision) GetFir(string id,int channel) {var result=Call<Revisioned<FirState>>("fir",new {Id=id,Channel=channel});return(result.State,result.Revision);}
+    public FirState ApplyFirEnabled(string id,int channel,bool enabled,long revision) => Call<FirState>("apply-fir-enabled",new {Id=id,Channel=channel,Enabled=enabled,Revision=revision});
     public FirState ApplyFir(string id,FirState state,long revision)=>Call<FirState>("apply-fir",new{Id=id,State=state,Revision=revision});
     public (OutputDynamicsState State,long Revision) GetOutputDynamics(string id,int channel) {var read=Call<Revisioned<OutputDynamicsState>>("output-dynamics",new{Id=id,Channel=channel});return(read.State,read.Revision);}
     public OutputDynamicsState ApplyOutputDynamics(OutputDynamicsChange change,long revision)=>Call<OutputDynamicsState>("apply-output-dynamics",new{Change=change,Revision=revision});
+    public NativePresetMetadata? GetNativePresetMetadata(string id) => Call<NativeMetadataReply>("native-metadata", new { Id = id }).Metadata;
     public PresetDocument CapturePreset(string id)=>Call<PresetDocument>("capture-preset",new{Id=id});
     public DeviceSnapshot ApplyPreset(string id,PresetDocument preset,long revision)=>Call<DeviceSnapshot>("apply-preset",new{Id=id,Preset=preset,Revision=revision});
     public DevicePresetState GetDevicePresets(string id)=>Call<DevicePresetState>("preset-slots",new{Id=id});

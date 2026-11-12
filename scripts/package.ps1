@@ -34,17 +34,24 @@ macOS (Apple Silicon): extract the archive and open CVR Tool.app.
 The app is ad-hoc signed, not notarized
 or signed with an Apple Developer ID. macOS may prevent it from opening.
 
+For iPad browser access, choose Browser control in Desktop, select the local
+network and start it. Open the private connection link on the same LAN.
+The browser server starts only when requested; no iPad app is required.
+
 The desktop executable supports --mcp for integrated stdio MCP. Start the GUI
 first, then connect your MCP client with that argument. Both use one session.
 The optional CvrTool.Mcp executable beside the desktop executable shares the
 same included runtime. There is no second mcp/ runtime directory.
-For headless ownership use --host-session. Manual CVR targets are configured
-with the integrated MCP tool connect_amplifier. No network discovery or firmware updates.
+For headless ownership use --host-session. Devices are discovered automatically
+on the wired amplifier LAN; explicit targets remain available through MCP.
+No IP-range scans, Wi-Fi discovery or firmware updates are included.
 Updates: choose Updates > Check for updates > Download and restart in the app.
 Packages are verified and installed in your user profile; previous versions stay.
 Export local session settings before restarting. Version 0.3.0 requires one manual
 upgrade to 0.4.0 before this feature is available.
-Local demo devices remain available; physical-amplifier validation is pending.
+Local demo devices remain available. Selected reads and write variants were
+validated on one DSP-1004; other hardware remains pending. Reset and unverified
+live write variants stay protected. Unknown readings remain unknown.
 '@
 [System.IO.File]::WriteAllText((Join-Path $stage 'START-HERE.md'), $startReadme, (New-Object System.Text.UTF8Encoding($false)))
 function Assert-CompactPackage {

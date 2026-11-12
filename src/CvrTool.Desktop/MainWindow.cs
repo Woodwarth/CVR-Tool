@@ -70,6 +70,7 @@ public sealed partial class MainWindow : Window
         FontFamily = new FontFamily("Inter, Segoe UI, sans-serif");
         Icon = Branding.WindowIcon();
         Content = BuildShell();
+        InitializeBrowserControl();
         Opened += (_, _) => FitInitialWindow();
         Select(deviceId);
         StartLiveRefresh();
@@ -100,8 +101,8 @@ public sealed partial class MainWindow : Window
         liveReadOnly = selectedDevice.Readings?.ReadOnly == true;
         if (!liveReadOnly && activeTab == "Details") activeTab = "Main";
         deviceName.Text = selectedDevice.Capabilities.Model;
-        nameSlot.IsEnabled = !liveReadOnly;
-        deviceActions.IsEnabled = !controlWritePending && (!liveReadOnly || selectedDevice.Readings!.CanSetDisplayLock || selectedDevice.Readings.CanSetStandby || selectedDevice.Readings.CanSetWink);
+        nameSlot.IsEnabled = !controlWritePending && (!liveReadOnly || (ConnectionAvailable(selectedDevice) && selectedDevice.Readings!.CanRename));
+        deviceActions.IsEnabled = !controlWritePending && ConnectionAvailable(selectedDevice) && (!liveReadOnly || selectedDevice.Readings!.CanSetDisplayLock || selectedDevice.Readings.CanSetStandby || selectedDevice.Readings.CanSetWink);
         ShowDeviceName();
         RefreshDeviceInfo();
         deviceActions.Content = DeviceActions();
@@ -179,7 +180,7 @@ public sealed partial class MainWindow : Window
             "Details" => LiveDetailsPage(),
             _ => MainPage()
         };
-        if (liveReadOnly && page.Content is Control livePage) DisableLiveEdits(livePage, false, selectedDevice.Readings?.CanSetMutes == true && !controlWritePending);
+        if (liveReadOnly && page.Content is Control livePage) DisableLiveEdits(livePage, false, ConnectionAvailable(selectedDevice) && selectedDevice.Readings?.CanSetMutes == true && !controlWritePending, ConnectionAvailable(selectedDevice) && selectedDevice.Readings?.CanSetInputGain == true && !controlWritePending, ConnectionAvailable(selectedDevice) && selectedDevice.Readings?.CanSetVerifiedDsp == true && !controlWritePending);
     }
 
     public void ReloadSession()

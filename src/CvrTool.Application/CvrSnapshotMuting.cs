@@ -1,9 +1,8 @@
-// Application / Verified output and route muting
-// Purpose: allow active-low mute flags while preserving every unrelated DSP byte.
+// Application / Verified output and routing edits
+// Purpose: apply captured trim/delay/polarity and routing commands with native readback.
 // Units: function 10 output side 1; function 12 output/channel, input/segment side 0.
 // State: fresh full settings protect revisions and independently verify each write.
-// Scope: no gain changes, automatic write retries or implicit route enabling.
-using System.Diagnostics;
+// Scope: unrelated bytes remain unchanged; no automatic retries or route enabling.
 using CvrTool.Core;
 using CvrTool.Protocol;
 
@@ -13,27 +12,32 @@ public sealed partial class CvrSnapshotBackend
 {
     public ChannelState Apply(ChannelChange change, long expectedRevision)
     {
-        if (change.Muted is null || change.GainDb is not null || change.DelayMs is not null || change.Inverted is not null) throw ReadOnly();
-        MutateMute(change.DeviceId, expectedRevision, client =>
+        MutateSettings(change.DeviceId, expectedRevision, client =>
         {
             CheckChannel(change.Channel);
-            var offset = 36 + (change.Channel - 1) * 515 + 48;
-            WriteMuteFlag(client, 10, (byte)(change.Channel - 1), 0, 1, offset, change.Muted.Value, false);
+            AmplifierService.Merge(settings.Outputs.Single(o => o.Number == change.Channel), change);
+            var ch = (byte)(change.Channel - 1); var offset = 36 + (change.Channel - 1) * 515;
+            if (change.GainDb is { } gain) WriteSettingsBytes(client, 9, ch, 1, offset + 44, BitConverter.GetBytes((float)gain));
+            if (change.DelayMs is { } delay) WriteSettingsBytes(client, 14, ch, 1, offset + 54, BitConverter.GetBytes((float)delay));
+            if (change.Inverted is { } inverted) WriteSettingsBytes(client, 18, ch, 1, offset + 58, [(byte)(inverted ? 1 : 0)]);
+            if (change.Muted is { } muted) WriteSettingsBytes(client, 10, ch, 1, offset + 48, [(byte)(muted ? 0 : 1)]);
         });
         return GetChannel(change.DeviceId, change.Channel).State;
     }
     public RoutingCellState ApplyRouting(RoutingChange change, long expectedRevision)
     {
-        if (change.Muted is null || change.GainDb is not null) throw ReadOnly();
-        MutateMute(change.DeviceId, expectedRevision, client =>
+        MutateSettings(change.DeviceId, expectedRevision, client =>
         {
             CheckChannel(change.Input); CheckChannel(change.Output);
-            var offset = 36 + (change.Output - 1) * 515 + 28 + (change.Input - 1) * 5;
-            WriteMuteFlag(client, 12, (byte)(change.Output - 1), (byte)(change.Input - 1), 0, offset, change.Muted.Value, true);
+            var before = settings.Routing!.Single(r => r.Input == change.Input && r.Output == change.Output);
+            var after = AmplifierService.MergeRouting(before, change);
+            var offset = 36 + (change.Output - 1) * 515 + 24 + (change.Input - 1) * 5;
+            var body = BitConverter.GetBytes((float)after.GainDb).Concat(new[] { (byte)(after.Muted ? 0 : 1) }).ToArray();
+            WriteSettingsBytes(client, 12, (byte)(change.Output - 1), 0, offset, body, segment:(byte)(change.Input - 1));
         });
         return GetRouting(change.DeviceId).Cells.Single(c => c.Input == change.Input && c.Output == change.Output);
     }
-    private void MutateMute(string deviceId, long expectedRevision, Action<CvrUdpClient> write)
+    private void MutateSettings(string deviceId, long expectedRevision, Action<CvrUdpClient> write)
     {
         lock (ioGate)
         {
@@ -43,7 +47,7 @@ public sealed partial class CvrSnapshotBackend
                 CvrEndpointGate.UseClient(target, client =>
                 {
                     ReadSettings(client);
-                    lock (gate) if (revision != expectedRevision) throw new InvalidOperationException("Device changed. Create a new mute plan.");
+                    lock (gate) if (revision != expectedRevision) throw new InvalidOperationException("Device changed. Create a fresh settings plan.");
                     write(client);
                 });
                 lock (gate) { error = null; UpdateSnapshot(); }
@@ -51,28 +55,5 @@ public sealed partial class CvrSnapshotBackend
             catch (Exception ex)
             { lock (gate) { forceSettingsRefresh = true; error = ex.Message; UpdateSnapshot(); } throw; }
         }
-    }
-    private void WriteMuteFlag(CvrUdpClient client, byte function, byte channel, byte segment, byte side, int offset, bool muted, bool route)
-    {
-        byte[] expected;
-        var flag = (byte)(muted ? 0 : 1);
-        lock (gate)
-        {
-            expected = native.ToArray();
-            if (expected[offset] == flag) return;
-            revision++;
-        }
-        expected[offset] = flag;
-        var body = route ? expected[(offset - 4)..(offset + 1)] : new[] { flag };
-        client.Write(function, body, channel, segment, side);
-        var deadline = Stopwatch.StartNew();
-        while (true)
-        {
-            ReadSettings(client);
-            lock (gate) if (native[offset] == flag) break;
-            if (deadline.Elapsed >= TimeSpan.FromSeconds(2)) throw new InvalidOperationException("Mute readback did not confirm the requested state.");
-            Thread.Sleep(75);
-        }
-        lock (gate) if (!native.SequenceEqual(expected)) throw new InvalidOperationException("Unrelated settings changed during muting; current readings were refreshed.");
     }
 }

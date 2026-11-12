@@ -33,8 +33,8 @@ static class SnapshotPeerChecks
         check(!service.GetFir(id, 1).CoefficientsKnown && service.GetFir(id, 1).Coefficients.Count == 0, "Missing FIR coefficients are explicitly unknown");
         check(service.GetDevicePresets(id).Slots.Count == 0, "Unobserved slot names are not fabricated");
         check(service.ExportNativePreset(id).SequenceEqual(peer.Sync), "Known native settings can be backed up exactly without synthesized FIR");
-        try { service.Apply(service.Plan(new(id, 1, GainDb: -1)).Id); throw new Exception("Read-only mutation accepted"); }
-        catch (NotSupportedException) { check(true, "Read-only connection rejects settings changes before any write"); }
+        try { service.ApplyOutputProcessing(service.PlanOutputProcessing(new(id, 1, EqEnabled: false)).Id); throw new Exception("Unverified output EQ accepted"); }
+        catch (NotSupportedException) { check(true, "Unverified output EQ stays protected before any write"); }
         var pipe = "cvr-snapshot-" + Guid.NewGuid().ToString("N");
         using var host = new SessionHost(backend, pipe);
         var remote = new AmplifierService(new SessionBackend(pipe));
@@ -82,15 +82,98 @@ static class SnapshotPeerChecks
         try { service.Apply(service.Plan(new(id, 1, Muted: true)).Id); throw new Exception("Rejected mute accepted"); }
         catch (InvalidOperationException) { check(true, "Mute ACK/delivery without matching native state fails"); }
         finally { peer.IgnoreMuteWrites = false; }
-        try { service.ApplyRouting(service.PlanRouting(new(id, 1, 1, GainDb: -3)).Id); throw new Exception("Live gain edit accepted"); }
-        catch (NotSupportedException) { check(true, "Enabling mute does not enable live routing gain writes"); }
+        try { service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id, 1, Bridged: true)).Id); throw new Exception("Unverified bridge accepted"); }
+        catch (NotSupportedException) { check(true, "Unverified bridge switching remains protected"); }
+        var mainBefore = service.ExportNativePreset(id);
+        check(service.GetDevice(id).Readings is { CanSetInputGain: true, CanSetInputMute: true, CanRename: true }, "Main advertises only its implemented gain/mute/name write capabilities");
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, GainDb: .5)).Id);
+        var gainExpected = mainBefore.ToArray(); BitConverter.GetBytes(.5f).CopyTo(gainExpected, 36 + 369);
+        check(service.GetInputProcessing(id, 1).GainDb == .5 && service.ExportNativePreset(id).SequenceEqual(gainExpected), "Input gain changes exactly its observed float32 native value");
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, GainDb: 0)).Id);
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Muted: true)).Id);
+        var inputMuteExpected = mainBefore.ToArray(); inputMuteExpected[2192] = 0;
+        check(service.GetInputProcessing(id, 1).Muted == true && service.ExportNativePreset(id).SequenceEqual(inputMuteExpected), "Input mute uses side zero and only the native input mute flag");
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, Muted: false)).Id);
+        check(service.ExportNativePreset(id).SequenceEqual(mainBefore), "Input gain and mute restore all native bytes exactly");
+        check(service.RenameDevice(id, "New main name").Name == "New main name" && service.ExportNativePreset(id).SequenceEqual(mainBefore), "Rename uses independent identity readback and preserves all DSP settings");
+        service.RenameDevice(id, "Live fixture");
+        peer.IgnoreInputWrites = true;
+        try { service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, GainDb: -.5)).Id); throw new Exception("Unconfirmed input gain accepted"); }
+        catch (InvalidOperationException) { check(service.GetInputProcessing(id, 1).GainDb == 0, "Input gain delivery without matching settings readback fails"); }
+        finally { peer.IgnoreInputWrites = false; }
+        peer.IgnoreRenameWrites = true;
+        try { service.RenameDevice(id, "Ignored rename"); throw new Exception("Unconfirmed name accepted"); }
+        catch (InvalidOperationException) { check(service.GetDevice(id).Name == "Live fixture", "Failed identity name write retains actual device state"); }
+        finally { peer.IgnoreRenameWrites = false; }
+        var verifiedBefore = service.ExportNativePreset(id);
+        var beforeChannel = service.GetDevice(id).Outputs[0];
+        service.Apply(service.Plan(new(id,1,GainDb:-.5,DelayMs:1.25,Inverted:true)).Id);
+        check(service.GetDevice(id).Outputs[0] is {GainDb:-.5,DelayMs:1.25,Inverted:true}, "Verified output trim, delay and polarity each use independent native readback");
+        service.Apply(service.Plan(new(id,1,GainDb:beforeChannel.GainDb,DelayMs:beforeChannel.DelayMs,Inverted:beforeChannel.Inverted)).Id);
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,DelayMs:2)).Id);
+        check(service.GetInputProcessing(id,1).DelayMs==2,"Verified input delay uses the captured input-side command");
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,DelayMs:0)).Id);
+        var routeOriginal = service.GetRouting(id).Cells.Single(r=>r.Input==1 && r.Output==1);
+        service.ApplyRouting(service.PlanRouting(new(id,1,1,GainDb:-.5)).Id);
+        check(service.GetRouting(id).Cells.Single(r=>r.Input==1 && r.Output==1) is {GainDb:-.5} updatedRoute && updatedRoute.Muted==routeOriginal.Muted,"Routing gain changes preserve independent mute state");
+        service.ApplyRouting(service.PlanRouting(new(id,1,1,GainDb:routeOriginal.GainDb)).Id);
+        var eqOriginal = service.GetInputProcessing(id,1);
+        var editedBands = eqOriginal.Bands.Select(b=>b.Number==5 ? b with {GainDb=.5,FrequencyHz=1000,Q=2,Enabled=false} : b).ToArray();
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,Bands:editedBands,EqEnabled:false)).Id);
+        check(service.GetInputProcessing(id,1).Bands[4] is {GainDb:.5,FrequencyHz:1000,Q:2,Enabled:false} && !service.GetInputProcessing(id,1).EqEnabled,"Captured input Peak gain/frequency/Q/bypass and global bypass are independently applied");
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,Bands:eqOriginal.Bands,EqEnabled:eqOriginal.EqEnabled)).Id);
+        service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,NoiseGateEnabled:true,NoiseGateDb:-65,LoadMode:1)).Id);
+        check(service.GetOutputDynamics(id,1) is {NoiseGateEnabled:true,NoiseGateDb:-65,LoadMode:1},"Captured gate flag, signed threshold and status-zero 70V mode use native readback");
+        var originalDynamics = OutputDynamicsWire.DecodeNative(verifiedBefore,1);
+        service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,NoiseGateEnabled:originalDynamics.NoiseGateEnabled,NoiseGateDb:originalDynamics.NoiseGateDb,LoadMode:originalDynamics.LoadMode)).Id);
+        check(service.SetFirEnabled(id,1,true) is {Enabled:true,CoefficientsKnown:false,Coefficients.Count:0},"FIR bypass works without reading, replacing or inventing coefficient data");
+        service.SetFirEnabled(id,1,verifiedBefore[36+368]==0);
+        check(service.ExportNativePreset(id).SequenceEqual(verifiedBefore),"All verified DSP edits restore the complete original native settings");
+        try {service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,LoadMode:2)).Id);throw new Exception("100V enabled");}
+        catch(NotSupportedException){check(true,"Uncaptured 100V mode remains disabled");}
+        try {service.FactoryReset(id);throw new Exception("Reset enabled");}
+        catch(NotSupportedException){check(true,"Factory reset remains explicitly disabled on physical profiles");}
+        var crossoverBefore = service.GetInputProcessing(id,1);
+        var crossoverNative = service.ExportNativePreset(id);
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,HighPass:new(80,4,true),LowPass:new(18000,4,true))).Id);
+        var crossoverExpected = crossoverNative.ToArray();
+        crossoverExpected[121] = crossoverExpected[247] = 4;
+        BitConverter.GetBytes(80f).CopyTo(crossoverExpected,126);
+        BitConverter.GetBytes(18000f).CopyTo(crossoverExpected,252);
+        check(service.ExportNativePreset(id).SequenceEqual(crossoverExpected), "Input HP/LP use slots zero/nine and alter only type/frequency bytes");
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,HighPass:new(80,4,false),LowPass:new(18000,4,false))).Id);
+        crossoverExpected[121] = crossoverExpected[247] = 251;
+        check(service.ExportNativePreset(id).SequenceEqual(crossoverExpected), "Bypassed BW-24 encodes signed -5 and preserves cutoff frequencies");
+        service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,HighPass:crossoverBefore.HighPass,LowPass:crossoverBefore.LowPass)).Id);
+        check(service.ExportNativePreset(id).SequenceEqual(crossoverNative), "Restoring HP/LP preserves every native byte including other channels and EQ");
+        var crossoverWrites = peer.Writes;
+        try {service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,GainDb:-1,HighPass:new(80,1,true))).Id);throw new Exception("Uncaptured crossover type accepted");}
+        catch(NotSupportedException){check(peer.Writes==crossoverWrites,"Unsupported crossover rejects the whole change before any gain/filter write");}
+        peer.IgnoreFilterWrites = true;
+        try {service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,HighPass:new(80,0,true))).Id);throw new Exception("Unconfirmed crossover accepted");}
+        catch(InvalidOperationException){check(service.ExportNativePreset(id).SequenceEqual(crossoverNative),"Crossover delivery without independent native confirmation fails");}
+        finally {peer.IgnoreFilterWrites = false;}
         check(peer.DelayedStandbyReads > 0, "Standby readback waits for asynchronous native state without repeating writes");
         using (var secondPeer = new Peer("demo-1502"))
         {
             var second = service.Connect(target with { RemotePort = secondPeer.Port });
             check(second.Outputs.Count == 2 && service.GetInputProcessing(second.Id, 2).Bands.Count == 8, "Two-channel live snapshot has the same processing functions");
             check(service.ListDevices().Count(d => !d.IsDemo) == 2, "Two live devices share the same local UDP port beside demos");
+            var twoNative = service.ExportNativePreset(second.Id);
+            var twoInput = service.GetInputProcessing(second.Id,2);
+            service.ApplyInputProcessing(service.PlanInputProcessing(new(second.Id,2,HighPass:new(80,4,false))).Id);
+            var twoExpected = twoNative.ToArray(); twoExpected[36+515+85]=251;
+            BitConverter.GetBytes(80f).CopyTo(twoExpected,36+515+90);
+            check(service.ExportNativePreset(second.Id).SequenceEqual(twoExpected), "Two-channel input 2 crossover edits preserve input 1 and all output data");
+            service.ApplyInputProcessing(service.PlanInputProcessing(new(second.Id,2,HighPass:twoInput.HighPass)).Id);
+            check(service.ExportNativePreset(second.Id).SequenceEqual(twoNative), "Two-channel crossover restoration is byte-exact");
             service.Disconnect(second.Id);
+        }
+        using (var legacyPeer = new Peer(legacy: true))
+        {
+            var legacyDevice = service.Connect(target with { RemotePort = legacyPeer.Port });
+            check(legacyDevice.Readings!.CurrentPreset == "Legacy fixture", "B118 current preset name is read from the shared native name offset");
+            service.Disconnect(legacyDevice.Id);
         }
         var discovered = CvrDiscoveryService.Search(new("127.0.0.1", "127.0.0.1", 8), localPort: 0, remotePort: peer.Port, durationMs: 150);
         check(discovered.Count == 1 && discovered[0].ReadOnlySnapshot && discovered[0].RemotePort == peer.Port, "Bounded identity discovery finds the synthetic peer without adding an address");
@@ -116,17 +199,23 @@ static class SnapshotPeerChecks
         public byte[] Sync { get; }
         public int Port => ((IPEndPoint)socket.Client.LocalEndPoint!).Port;
         public int Writes, Confirmations, UnexpectedQueries;
-        public volatile bool IgnoreControlWrites, IgnoreMuteWrites, IgnoreWinkWrites;
+        public volatile bool IgnoreControlWrites, IgnoreMuteWrites, IgnoreWinkWrites, IgnoreInputWrites, IgnoreRenameWrites, IgnoreFilterWrites;
         private bool wink;
+        private string deviceName = "Live fixture";
         private bool standby;
         private long nativeStandbyDue;
         private byte nativeStandbyValue;
         public int DelayedStandbyReads;
-        public Peer(string model = "demo-1004")
+        public Peer(string model = "demo-1004", bool legacy = false)
         {
             var service = new AmplifierService(new DemoBackend());
             var file = service.ExportNativePreset(model);
-            Sync = file[..NativePresetCodec.Inspect(file).SyncLength];
+            Sync = file[..(legacy ? 2232 : NativePresetCodec.Inspect(file).SyncLength)];
+            if (legacy)
+            {
+                Encoding.ASCII.GetBytes("106118").CopyTo(Sync, 9);
+                Encoding.ASCII.GetBytes("Legacy fixture").CopyTo(Sync, 2160);
+            }
             listener = Task.Run(Listen);
         }
         private async Task Send(CvrMessage message, IPEndPoint endpoint)
@@ -163,12 +252,37 @@ static class SnapshotPeerChecks
                         }
                         continue;
                     }
+                    if (message is { Status: 1, Function: 9 or 14, Body.Length: 4 })
+                    {
+                        Interlocked.Increment(ref Writes);
+                        var offset = message.Function == 9 ? (message.Side == 0 ? 369 : 44) : (message.Side == 0 ? 50 : 54);
+                        if (!(message.Side == 0 && IgnoreInputWrites)) message.Body.CopyTo(Sync, 36 + message.Channel * 515 + offset);
+                        continue;
+                    }
+                    if ((message is { Status: 1, Function: 18 or 44 or 69 or 87, Side: 1, Body.Length: 1 }) ||
+                        (message is { Status: 0, Function: 49, Side: 1, Body.Length: 1 }))
+                    {
+                        Interlocked.Increment(ref Writes);
+                        var offset = message.Function switch { 18=>58,44=>368,49=>367,69=>373,_=>-1 };
+                        Sync[offset < 0 ? 2232 + message.Channel : 36 + message.Channel * 515 + offset] = message.Body[0];
+                        continue;
+                    }
+                    if (message is { Status: 1, Function: 30 or 31 or 32 or 34 or 36, Side: 0 })
+                    {
+                        Interlocked.Increment(ref Writes);
+                        if (IgnoreFilterWrites) continue;
+                        var offset = message.Function == 36 ? 225 : 85 + message.Segment * 14 + (message.Function switch {31=>1,32=>5,34=>9,_=>0});
+                        message.Body.CopyTo(Sync,36 + message.Channel * 515 + offset);
+                        continue;
+                    }
+                    if (message is { Status: 1, Function: 60, Side: 0, Body.Length: 32 })
+                    { Interlocked.Increment(ref Writes); if (!IgnoreRenameWrites) deviceName = Encoding.ASCII.GetString(message.Body).TrimEnd('\0'); continue; }
                     if (message.Status == 1 && message.Function is 10 or 12)
                     {
                         Interlocked.Increment(ref Writes);
                         if (!IgnoreMuteWrites)
                         {
-                            if (message.Function == 10) Sync[36 + message.Channel * 515 + 48] = message.Body[0];
+                            if (message.Function == 10) Sync[message.Side == 0 ? 2192 + message.Channel : 36 + message.Channel * 515 + 48] = message.Body[0];
                             else message.Body.CopyTo(Sync, 36 + message.Channel * 515 + 24 + message.Segment * 5);
                         }
                         continue;
@@ -188,7 +302,7 @@ static class SnapshotPeerChecks
                     else if (message.Function is 0 or 27)
                     {
                         var identity = new byte[79]; Sync[..32].CopyTo(identity, 0);
-                        Encoding.ASCII.GetBytes("Live fixture").CopyTo(identity, 32);
+                        Encoding.ASCII.GetBytes(deviceName).CopyTo(identity, 32);
                         new byte[] { 2, 0, 0, 0, 0, 1 }.CopyTo(identity, 64);
                         identity[71] = identity[73] = (byte)(Sync[2] - (byte)'0');
                         await Send(new(0, 1, 3, 10, 0, identity), received.RemoteEndPoint);

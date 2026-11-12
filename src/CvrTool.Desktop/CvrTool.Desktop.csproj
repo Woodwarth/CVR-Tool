@@ -8,6 +8,7 @@
     <AvaloniaResource Include="Assets/**"/>
     <ProjectReference Include="../CvrTool.Application/CvrTool.Application.csproj"/>
     <ProjectReference Include="../CvrTool.Mcp/CvrTool.Mcp.csproj"/>
+    <ProjectReference Include="../CvrTool.Web/CvrTool.Web.csproj"/>
     <PackageReference Include="Avalonia" Version="12.1.4"/>
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4"/>
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4"/>

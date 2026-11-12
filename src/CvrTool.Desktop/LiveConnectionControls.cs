@@ -18,13 +18,12 @@ public sealed partial class MainWindow
     private readonly DispatcherTimer liveTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly Dictionary<string, TextBlock> deviceDots = new();
     private bool refreshingLive;
+    private int liveEditInteractions;
+    private bool editingDeviceName;
     private DateTimeOffset preserveStatusUntil;
-    private static IBrush ConnectionColor(DeviceSnapshot device)
-    {
-        var connected = device.IsDemo || (device.Readings is { Error: null, TelemetryObservedAt: { } at } &&
-            DateTimeOffset.UtcNow - at < TimeSpan.FromSeconds(3));
-        return Brush.Parse(connected ? "#00CE63" : "#F05462");
-    }
+    private static bool ConnectionAvailable(DeviceSnapshot device) => device.IsDemo ||
+        (device.Readings is { Error: null, TelemetryObservedAt: { } at } && DateTimeOffset.UtcNow - at < TimeSpan.FromSeconds(3));
+    private static IBrush ConnectionColor(DeviceSnapshot device) => Brush.Parse(ConnectionAvailable(device) ? "#00CE63" : "#F05462");
     private void StartLiveRefresh()
     {
         liveTimer.Tick += async (_, _) =>
@@ -37,13 +36,13 @@ public sealed partial class MainWindow
                 var devices = await Task.Run(() => service.ListDevices());
                 foreach (var device in devices)
                     if (deviceDots.TryGetValue(device.Id, out var dot)) dot.Foreground = ConnectionColor(device);
-                if (!liveReadOnly || OwnedWindows.Count != 0 || controlWritePending || selected != deviceId) return;
+                if (!liveReadOnly || OwnedWindows.Count != 0 || controlWritePending || liveEditInteractions > 0 || editingDeviceName || selected != deviceId) return;
                 var snapshot = devices.SingleOrDefault(d => d.Id == selected);
                 if (snapshot is null) return;
                 channels = snapshot.Outputs.Select(c => new ChannelDraft(c)).ToList();
                 Render();
                 var readings = snapshot.Readings!;
-                if (DateTimeOffset.UtcNow >= preserveStatusUntil) status.Text = readings.Error is null ? $"Live · Limited editing · Settings {readings.SettingsObservedAt.ToLocalTime():HH:mm:ss} · Status {readings.TelemetryObservedAt?.ToLocalTime():HH:mm:ss}" :
+                if (DateTimeOffset.UtcNow >= preserveStatusUntil) status.Text = readings.Error is null ? $"Live · Verified editing · Settings {readings.SettingsObservedAt.ToLocalTime():HH:mm:ss} · Status {readings.TelemetryObservedAt?.ToLocalTime():HH:mm:ss}" :
                     "Connection unavailable · Last received values shown · " + readings.Error;
             }
             catch (Exception ex) { status.Text = "Live refresh failed: " + ex.Message; }
@@ -86,17 +85,20 @@ public sealed partial class MainWindow
     {
         await RunLiveMute(change.DeviceId, () => service.Apply(service.Plan(change).Id));
     }
-    private async void CommitLiveRouteMute(int input, int output, bool muted)
+    private async void CommitLiveRouteMute(int input, int output, bool? muted, double? gainDb = null)
     {
         var selected = deviceId;
-        await RunLiveMute(selected, () => service.ApplyRouting(service.PlanRouting(new(selected, input, output, Muted: muted)).Id));
+        await RunLiveChange(selected, () => service.ApplyRouting(service.PlanRouting(new(selected, input, output, GainDb: gainDb, Muted: muted)).Id), gainDb is null ? "Routing mute" : "Routing gain");
     }
-    private async Task RunLiveMute(string selected, Action change)
+    private Task RunLiveMute(string selected, Action change) => RunLiveChange(selected, change, "Mute");
+    private Task CommitLiveInput(CvrTool.Core.InputProcessingChange change, string operation) =>
+        RunLiveChange(change.DeviceId, () => service.ApplyInputProcessing(service.PlanInputProcessing(change).Id), operation);
+    private async Task RunLiveChange(string selected, Action change, string operation)
     {
         if (controlWritePending) return;
         controlWritePending = true; Render();
-        status.Text = "Applying mute and checking device readback…";
-        try { await Task.Run(change); status.Text = "Mute confirmed by device readback"; }
+        status.Text = "Applying " + operation + " and checking device readback…";
+        try { await Task.Run(change); status.Text = operation + " confirmed by device readback"; }
         catch (Exception ex) { status.Text = ex.Message; }
         finally
         {
@@ -110,21 +112,29 @@ public sealed partial class MainWindow
             catch (Exception ex) { status.Text = ex.Message; }
         }
     }
-    private static void DisableLiveEdits(Control root, bool editor, bool canMute = false)
+    private static void DisableLiveEdits(Control root, bool editor, bool canMute = false, bool canInputGain = false, bool canVerifiedDsp = false)
     {
         foreach (var control in root.GetLogicalDescendants().OfType<Control>().Prepend(root))
         {
             if (control is RoutingDial dial)
-            { dial.CanEditGain = false; dial.IsEnabled = dial.IsEnabled && canMute; }
+            { dial.CanEditGain = canVerifiedDsp; dial.IsEnabled = dial.IsEnabled && (canMute || canVerifiedDsp); }
             else if (control is ToggleButton toggle && (toggle.Tag?.ToString()?.StartsWith("mute-") ?? false))
                 toggle.IsEnabled = toggle.IsEnabled && canMute;
-            else if (control is Slider or NumericUpDown or TextBox or ToggleButton or GainReadout or EqualizerGraph)
+            else if (control is Slider slider && slider.Tag?.ToString()?.StartsWith("input-gain-") == true)
+                slider.IsEnabled = slider.IsEnabled && canInputGain;
+            else if (control is GainReadout readout && (readout.Tag?.ToString()?.StartsWith("output-gain-") == true || readout.Tag?.ToString()?.StartsWith("routing-output-gain-") == true))
+                readout.IsEnabled = readout.IsEnabled && canVerifiedDsp;
+            else if (control is Slider or NumericUpDown or ComboBox or TextBox or ToggleButton or GainReadout or EqualizerGraph)
                 control.IsEnabled = false;
             if (control is Button button)
             {
                 var tag = button.Tag?.ToString() ?? "";
                 var allowed = editor ? button.Content?.ToString() is "Cancel" or "Close" :
-                    tag.StartsWith("input-eq-") || tag.StartsWith("output-eq-") || tag == "snapshot-save-pc" || (canMute && tag.StartsWith("mute-"));
+                    (canVerifiedDsp && tag == "gain-edit" && button.GetLogicalAncestors().OfType<GainReadout>().Any(r => r.IsEnabled)) ||
+                    tag.StartsWith("input-eq-") || tag.StartsWith("output-eq-") ||
+                    tag.StartsWith("input-delay-") || tag.StartsWith("output-delay-") ||
+                    tag.StartsWith("output-mode-") || tag.StartsWith("output-noise-") ||
+                    tag.StartsWith("output-limiters-") || tag.StartsWith("output-fir-") || tag == "snapshot-save-pc" || (canMute && tag.StartsWith("mute-")) || (canVerifiedDsp && (tag.StartsWith("output-trim-") || tag.StartsWith("output-polarity-")));
                 if (!allowed) button.IsEnabled = false;
             }
         }

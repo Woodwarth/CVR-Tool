@@ -9,6 +9,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 
 namespace CvrTool.Desktop;
@@ -18,6 +19,8 @@ public sealed class GainReadout : ContentControl
     private double value;
     private bool editing;
     public event Action<double>? ValueChanged;
+    public event Action? EditingStarted;
+    public event Action? EditingEnded;
     public double Value
     {
         get => value;
@@ -36,6 +39,7 @@ public sealed class GainReadout : ContentControl
 
     public GainReadout()
     {
+        Foreground = Brush.Parse("#EDF2F5");
         FontSize = 16;
         FontWeight = FontWeight.SemiBold;
         Width = 128;
@@ -44,9 +48,22 @@ public sealed class GainReadout : ContentControl
         ShowValue();
     }
 
+    protected override void OnDetachedFromLogicalTree(LogicalTreeAttachmentEventArgs e)
+    {
+        // A navigation change must not leave live refresh paused by an abandoned draft.
+        if (editing)
+        {
+            editing = false;
+            EditingEnded?.Invoke();
+        }
+        base.OnDetachedFromLogicalTree(e);
+    }
+
     private void ShowValue()
     {
+        var wasEditing = editing;
         editing = false;
+        if (wasEditing) EditingEnded?.Invoke();
         var label = new TextBlock { Text = value.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + " dB", Foreground = Foreground, FontSize = FontSize, FontWeight = FontWeight, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var edit = new Button { Tag = "gain-edit", Content = label, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
         ToolTip.SetTip(edit, "Click to change gain · −80 to +18 dB");
@@ -58,6 +75,7 @@ public sealed class GainReadout : ContentControl
     {
         if (editing || !IsEffectivelyEnabled) return;
         editing = true;
+        EditingStarted?.Invoke();
         var editor = new TextBox
         {
             Text = value.ToString("0.0", CultureInfo.InvariantCulture),
@@ -71,7 +89,7 @@ public sealed class GainReadout : ContentControl
         {
             if (!editing)
                 return;
-            if (!double.TryParse(editor.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) || !double.IsFinite(parsed) || parsed is < -80 or > 18)
+            if (!double.TryParse(editor.Text?.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) || !double.IsFinite(parsed) || parsed is < -80 or > 18)
             {
                 ToolTip.SetTip(editor, "Enter a number from −80 to +18 dB");
                 editor.BorderBrush = Brush.Parse("#FF566A");
@@ -79,6 +97,7 @@ public sealed class GainReadout : ContentControl
             }
 
             editing = false;
+            EditingEnded?.Invoke();
             Value = parsed;
         }
 

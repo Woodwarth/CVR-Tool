@@ -37,6 +37,8 @@ internal static class CvrPeerChecks
         check(Convert.ToHexString(CvrWire.Encode(new(9,1,0,0,0,BitConverter.GetBytes(4.5f))))=="03D900000111000100005509010000000000000000009040001140","Input A 4.5 dB command matches the controlled capture exactly");
         check(Convert.ToHexString(CvrWire.Encode(new(9, 1, 0, 0, 1, BitConverter.GetBytes(-.5f)))) == "03D9000001110001000055090100000000000001000000BF001130", "Output A -0.5 dB trim command matches the controlled capture");
         check(Convert.ToHexString(CvrWire.Encode(new(9, 1, 0, 0, 1, BitConverter.GetBytes(0f)))) == "03D900000111000100005509010000000000000100000000001171", "Output A zero trim command matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(10, 1, 0, 0, 0, [0]))) == "03D90000010E00010000550A010000000000000000000E6E", "Input 1 mute matches controlled side-zero active-low capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(10, 1, 0, 0, 0, [1]))) == "03D90000010E00010000550A010000000000000001000E6F", "Input 1 unmute matches controlled side-zero capture");
         check(Convert.ToHexString(CvrWire.Encode(new(10, 1, 0, 0, 1, [0]))) == "03D90000010E00010000550A010000000000000100000E6F", "Output A mute matches the user-confirmed active-low capture");
         check(Convert.ToHexString(CvrWire.Encode(new(10, 1, 0, 0, 1, [1]))) == "03D90000010E00010000550A010000000000000101000E70", "Output A unmute matches the controlled capture");
         check(Convert.ToHexString(CvrWire.Encode(new(14, 1, 0, 0, 1, BitConverter.GetBytes(8.89f)))) == "03D90000011100010000550E0100000000000001713D0E41001173", "Output A 8.89 ms delay matches the user-confirmed output control capture");
@@ -63,6 +65,12 @@ internal static class CvrPeerChecks
         check(Convert.ToHexString(CvrWire.Encode(new(49, 0, 0, 0, 1, [0]))) == "03D90000010E000100005531000000000000000100000E95", "Output A Low-Z mode matches the controlled return command");
         check(Convert.ToHexString(CvrWire.Encode(new(15, 0, 0, 0, 0, [1]))) == "03D90000010E00010000550F000000000000000001000E73", "Standby on matches the observed status-zero command");
         check(Convert.ToHexString(CvrWire.Encode(new(15, 0, 0, 0, 0, [0]))) == "03D90000010E00010000550F000000000000000000000E72", "Standby off matches the observed status-zero command");
+        check(Convert.ToHexString(CvrWire.Encode(new(69, 1, 0, 0, 1, [0]))) == "03D90000010E000100005545010000000000000100000EAA", "Output A noise-gate enable matches the controlled active-low capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(69, 1, 0, 0, 1, [1]))) == "03D90000010E000100005545010000000000000101000EAB", "Output A noise-gate disable matches the controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(87, 1, 0, 0, 1, [0xBF]))) == "03D90000010E0001000055570100000000000001BF000E7B", "Output A gate threshold -65 dB matches controlled signed-byte capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(87, 1, 0, 0, 1, [0xBA]))) == "03D90000010E0001000055570100000000000001BA000E76", "Output A gate threshold -70 dB restoration matches controlled capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(44, 1, 0, 0, 1, [0]))) == "03D90000010E00010000552C010000000000000100000E91", "Output A FIR enable matches the controlled active-low bypass capture");
+        check(Convert.ToHexString(CvrWire.Encode(new(44, 1, 0, 0, 1, [1]))) == "03D90000010E00010000552C010000000000000101000E92", "Output A FIR disable matches the controlled bypass capture");
         var corrupt = locked[10..];
         corrupt[^1] ^= 1;
         try

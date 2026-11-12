@@ -73,7 +73,12 @@ public sealed partial class MainWindow
         header.Children.Add(row);
         var updates = new Button { Content = "Updates · " + AppUpdateLifecycle.Version, Tag = "software-updates", VerticalAlignment = VerticalAlignment.Center };
         updates.Click += (_, _) => OpenUpdates();
-        AddColumn(header, updates, 1);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        var browser = new Button { Content = "Browser control", Tag = "browser-control", VerticalAlignment = VerticalAlignment.Center };
+        browser.Click += (_, _) => OpenBrowserControl();
+        actions.Children.Add(browser);
+        actions.Children.Add(updates);
+        AddColumn(header, actions, 1);
         return new Border { Child = header, Padding = new Thickness(16, 10), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1) };
     }
 }

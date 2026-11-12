@@ -83,7 +83,7 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         a = Client(errors); cleanup.callback(a.close)
         b = Client(errors); cleanup.callback(b.close)
         names = {tool["name"] for tool in a.request("tools/list", {})["tools"]}
-        expected = {"list_devices", "get_device", "plan_channel_change", "apply_change", "export_preset",
+        expected = {"list_devices", "get_device", "plan_channel_change", "apply_change", "export_preset", "get_native_preset_metadata",
             "rename_device", "get_routing", "get_telemetry", "plan_routing_change", "apply_routing_change",
             "connect_amplifier", "disconnect_amplifier", "get_device_controls", "set_device_controls", "set_device_wink", "get_input_processing", "plan_input_processing", "apply_input_processing"}
         assert expected <= names, names
@@ -91,6 +91,7 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         assert a.call("set_device_wink", deviceId="demo-2002", enabled=True)["Wink"] is True
         assert b.call("get_device_controls", deviceId="demo-2002")["Wink"] is True
         assert b.call("set_device_wink", deviceId="demo-2002", enabled=False)["Wink"] is False
+        assert a.call("get_native_preset_metadata", deviceId="demo-2002") is None
         devices = a.call("list_devices")
         assert {len(d["Outputs"]) for d in devices} == {2, 4}
         assert all(d["Capabilities"]["InputCount"] == len(d["Outputs"]) for d in devices)
@@ -110,6 +111,11 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         b.call("apply_input_processing",planId=input_gain["Id"])
         assert a.call("get_input_processing",deviceId="demo-2002",channel=1)["GainDb"]==4.5
         assert a.call("get_device",deviceId="demo-2002")["Outputs"][0]["GainDb"]==0
+        input_mute=b.call("plan_input_processing",deviceId="demo-2002",channel=1,muted=True)
+        b.call("apply_input_processing",planId=input_mute["Id"])
+        assert a.call("get_input_processing",deviceId="demo-2002",channel=1)["Muted"] is True
+        assert a.call("set_output_fir_enabled",deviceId="demo-2002",channel=1,enabled=True)["Enabled"] is True
+        assert b.call("set_output_fir_enabled",deviceId="demo-2002",channel=1,enabled=False)["Enabled"] is False
         before = a.call("get_input_processing", deviceId="demo-2002", channel=1)
         bands = before["Bands"]
         bands[0]["GainDb"] = 3
@@ -159,6 +165,7 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         assert b.call("get_device_presets", deviceId="demo-2002")["Slots"][15]["Name"] == "Last slot"
         native = b.call("export_native_preset", deviceId="demo-2002")
         a.call("load_preset_file", deviceId="demo-2002", fileName="preset.sd", base64=native["Base64"], confirmed=True)
+        assert len(b.call("get_native_preset_metadata", deviceId="demo-2002")["Channels"]) == 2
         a.call("recall_device_preset", deviceId="demo-2002", slot=16, confirmed=True)
         b.call("clear_device_presets", deviceId="demo-2002", confirmed=True)
         assert not any(s["Occupied"] for s in a.call("get_device_presets",deviceId="demo-2002")["Slots"])

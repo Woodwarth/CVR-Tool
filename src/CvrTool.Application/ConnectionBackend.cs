@@ -15,7 +15,7 @@ public interface IConnectionBackend
     DisconnectionResult Disconnect(string deviceId);
 }
 
-public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend, IDisposable
+public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend, INativePresetMetadataSource, IDisposable
 {
     private readonly DemoBackend local = new();
     private readonly Dictionary<string, IAmplifierBackend> peers = new();
@@ -39,22 +39,29 @@ public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, I
     private IAmplifierBackend Backend(string id) => peers.TryGetValue(id, out var peer) ? peer : local;
     public DeviceSnapshot Connect(NetworkTarget target)
     {
+        target = NetworkPreparation.Validate(target).Target;
+        var id = $"cvr:{target.RemoteAddress}:{target.RemotePort}";
         lock (gate)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
-            target = NetworkPreparation.Validate(target).Target;
-            var id = $"cvr:{target.RemoteAddress}:{target.RemotePort}";
-            if (peers.ContainsKey(id))
-                return peers[id].GetDevice(id);
-            IAmplifierBackend backend = target.ReadOnlySnapshot ? new CvrSnapshotBackend(target) : new CvrLanBackend(target);
-            try
+            if (peers.TryGetValue(id, out var existing)) return existing.GetDevice(id);
+        }
+        // Slow handshakes must not block cached reads or the demo device list.
+        IAmplifierBackend candidate = target.ReadOnlySnapshot ? new CvrSnapshotBackend(target) : new CvrLanBackend(target);
+        var adopted = false;
+        try
+        {
+            lock (gate)
             {
-                var device = backend.GetDevice(id);
-                peers.Add(id, backend);
+                ObjectDisposedException.ThrowIf(disposed, this);
+                if (peers.TryGetValue(id, out var existing)) return existing.GetDevice(id);
+                var device = candidate.GetDevice(id);
+                peers.Add(id, candidate);
+                adopted = true;
                 return device;
             }
-            catch { ((IDisposable)backend).Dispose(); throw; }
         }
+        finally { if (!adopted) ((IDisposable)candidate).Dispose(); }
     }
     public DisconnectionResult Disconnect(string deviceId)
     {
@@ -131,9 +138,12 @@ public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, I
     public (InputProcessingState State,long Revision) GetOutputProcessing(string id,int channel) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetOutputProcessing(id,channel); }
     public InputProcessingState ApplyOutputProcessing(InputProcessingChange change,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(change.DeviceId)).ApplyOutputProcessing(change,revision); }
     public (FirState State,long Revision) GetFir(string id,int channel) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetFir(id,channel); }
+    public FirState ApplyFirEnabled(string id,int channel,bool enabled,long revision) { lock(gate) return ((IAdvancedAmplifierBackend)Backend(id)).ApplyFirEnabled(id,channel,enabled,revision); }
     public FirState ApplyFir(string id,FirState state,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).ApplyFir(id,state,revision); }
     public (OutputDynamicsState State,long Revision) GetOutputDynamics(string id,int channel) {lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetOutputDynamics(id,channel);}
     public OutputDynamicsState ApplyOutputDynamics(OutputDynamicsChange change,long revision) {lock(gate)return ((IAdvancedAmplifierBackend)Backend(change.DeviceId)).ApplyOutputDynamics(change,revision);}
+    public NativePresetMetadata? GetNativePresetMetadata(string id)
+    { lock (gate) return (Backend(id) as INativePresetMetadataSource)?.GetNativePresetMetadata(id); }
     public PresetDocument CapturePreset(string id) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).CapturePreset(id); }
     public DeviceSnapshot ApplyPreset(string id,PresetDocument preset,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).ApplyPreset(id,preset,revision); }
     public DevicePresetState GetDevicePresets(string id) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetDevicePresets(id); }

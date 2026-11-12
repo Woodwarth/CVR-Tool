@@ -23,6 +23,13 @@ internal sealed class ChannelMeter(double? level) : Control
             var lit = level is not null && segment / 24.0 < fraction;
             var brush = Brush.Parse(lit ? segment >= 22 ? "#FF5264" : "#00CEBD" : "#20383E");
             context.DrawRectangle(brush, null, new Rect(x + 3, 3 + (23 - segment) * (height - 4) / 24, width - 6, Math.Max(1, (height - 4) / 24 - 2)));
+
+        }
+        if (level is null)
+        {
+            var label = new FormattedText("—", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"), 12, Brush.Parse("#A1ADB7"));
+            context.DrawText(label, new Point((Bounds.Width - label.Width) / 2, (Bounds.Height - label.Height) / 2));
         }
     }
 }

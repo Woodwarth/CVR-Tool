@@ -42,7 +42,7 @@ public static class NativePresetCodec
             var offset = 36 + n * 515;
             var ch = n + 1;
             outputs.Add(new(ch, ((char)('A' + n)).ToString(), ProcessingWire.Float(file, offset + 44), file[offset + 48] == 0, ProcessingWire.Float(file, offset + 54), file[offset + 58] != 0));
-            inputs.Add(ProcessingWire.DecodeEq(ch, ProcessingWire.Float(file, offset + 50), file[(offset + 85)..(offset + 226)]) with {GainDb=ProcessingWire.Float(file,offset+369)});
+            inputs.Add(ProcessingWire.DecodeEq(ch, ProcessingWire.Float(file, offset + 50), file[(offset + 85)..(offset + 226)]) with {GainDb=ProcessingWire.Float(file,offset+369), Muted=file[2192+n] switch {0=>true,1=>false,_=>(bool?)null}});
             processing.Add(ProcessingWire.DecodeEq(ch, ProcessingWire.Float(file, offset + 54), file[(offset + 226)..(offset + 367)]));
             // Each output record contains one five-byte route entry per input.
             for (var input = 0; input < info.Count; input++)
@@ -57,6 +57,10 @@ public static class NativePresetCodec
         var count = preset.Outputs.Count;
         if (count is not (2 or 4))
             throw new ArgumentException("A native preset requires two or four outputs.");
+        var hasUnknownFir = preset.Firs?.Any(f => !f.CoefficientsKnown) == true;
+        var hasKnownFir = preset.Firs?.Any(f => f.CoefficientsKnown) == true;
+        if (hasUnknownFir && (hasKnownFir || preset.NativeData is null || Inspect(preset.NativeData).FirLength != 0))
+            throw new NotSupportedException("Cannot export an incomplete FIR set. Unknown channel coefficients must not be invented.");
         byte[] sync;
         int firLength;
         if (preset.NativeData is { } original)
@@ -95,6 +99,7 @@ public static class NativePresetCodec
             sync[offset + 58] = (byte)(output.Inverted ? 1 : 0);
             if (preset.Inputs?.SingleOrDefault(c => c.Channel == n + 1) is { } input)
             {
+                if (input.Muted is { } muted) sync[2192+n] = (byte)(muted ? 0 : 1);
                 if(input.GainDb is { } gain)ProcessingWire.Put(sync,offset+369,gain);
                 ProcessingWire.Put(sync, offset + 50, input.DelayMs);
                 ProcessingWire.EncodeEq(input, sync[(offset + 85)..(offset + 226)]).CopyTo(sync, offset + 85);
@@ -121,7 +126,7 @@ public static class NativePresetCodec
         }
         // A sync-only source has no FIR payload; preserve that absence on export.
         if (preset.NativeData is { } syncOnly && Inspect(syncOnly).FirLength == 0 &&
-            (preset.Firs is null || preset.Firs.Count == 0))
+            !hasKnownFir)
             return sync;
         using var data = new MemoryStream();
         data.Write(sync);

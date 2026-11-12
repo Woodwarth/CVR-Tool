@@ -5,6 +5,7 @@
     <Project Path="src/CvrTool.Protocol/CvrTool.Protocol.csproj"/>
     <Project Path="src/CvrTool.Desktop/CvrTool.Desktop.csproj"/>
     <Project Path="src/CvrTool.Mcp/CvrTool.Mcp.csproj"/>
+    <Project Path="src/CvrTool.Web/CvrTool.Web.csproj"/>
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/CvrTool.Checks/CvrTool.Checks.csproj"/>

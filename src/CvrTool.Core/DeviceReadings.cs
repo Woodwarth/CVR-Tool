@@ -19,4 +19,8 @@ public sealed record DeviceReadings(
     bool CanSetStandby = false,
     bool CanSetMutes = false,
     uint? OperatingMinutes = null,
-    bool CanSetWink = false);
+    bool CanSetWink = false,
+    bool CanSetInputGain = false,
+    bool CanSetInputMute = false,
+    bool CanRename = false,
+    bool CanSetVerifiedDsp = false);

@@ -48,6 +48,6 @@ public sealed partial class MainWindow
         infoValues["runtime"].Text = CvrTool.Application.DeviceMetadataCodec.FormatOperatingTime(device.Readings?.OperatingMinutes);
         infoValues["channels"].Text = device.Outputs.Count + " in / " + device.Outputs.Count + " out";
         infoValues["connection"].Text = device.IsDemo ? "Local session" : device.Readings?.ReadOnly == true ?
-            (device.Readings.Error is null ? "Live · Controls / Mute" : "Offline · Cached") : "CVR UDP · Readback";
+            (device.Readings.Error is null ? "Live · Verified editing" : "Offline · Cached") : "CVR UDP · Readback";
     }
 }

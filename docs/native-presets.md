@@ -50,3 +50,13 @@ retains true=muted. The controlled off-diagonal test and independent full sync e
 native route storage: output record `36 + (output-1)*515`, route gain at
 `24 + (input-1)*5`, followed by its active-low flag. Both import and export
 now follow this order; earlier native route mapping was transposed.
+
+## Local offline parity fixes after 0.7.3
+
+Settings-only files loaded into demos keep FIR coefficients unknown rather than
+retaining a previous demo filter. Export and local preset slots preserve this
+absence. Export rejects mixed known/unknown FIR sets instead of fabricating the
+missing filters. The FIR viewer leaves graphs empty when coefficients are unknown.
+Read-only native metadata exposes input/speaker names, separate input mute,
+configured load and source alignment. This does not enable new live writes.
+See [the field audit](preset-protocol-ui-audit.md) for remaining preserved data.

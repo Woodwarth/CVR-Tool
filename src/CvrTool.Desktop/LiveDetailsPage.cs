@@ -39,7 +39,7 @@ public sealed partial class MainWindow
             ("Settings received", data.SettingsObservedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")),
             ("Status received", data.TelemetryObservedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "—"),
             ("Connection", data.Error ?? "Connected"), ("Display lock", OnOff(controls.DisplayLocked)),
-            ("Standby", controls.StandbyKnown ? OnOff(controls.Standby) : "Unknown"), ("Power · reported", Known(data.Power)),
+            ("Wink", Flag(controls.Wink)), ("Standby", controls.StandbyKnown ? OnOff(controls.Standby) : "Unknown"), ("Power · reported", Known(data.Power)),
             ("Input/output dBFS", "Unknown · calibration not established"));
         void Processing(string title, InputProcessingState state)
         {
@@ -89,6 +89,7 @@ public sealed partial class MainWindow
                 ("Peak timing", $"Hold {dynamics.Peak.HoldMs} ms · Release {dynamics.Peak.ReleaseMs} ms"));
             Processing("Output " + output.Name + " EQ", service.GetOutputProcessing(deviceId, ch));
         }
+        if (NativePresetInformation() is { } information) root.Children.Add(information);
         return root;
     }
     private Control LivePresetPage()
@@ -117,6 +118,8 @@ public sealed partial class MainWindow
             }
             catch (Exception ex) { status.Text = ex.Message; }
         };
-        root.Children.Add(save); return root;
+        root.Children.Add(save);
+        if (NativePresetInformation() is { } information) root.Children.Add(information);
+        return root;
     }
 }

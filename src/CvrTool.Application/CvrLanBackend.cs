@@ -9,7 +9,7 @@ using CvrTool.Protocol;
 
 namespace CvrTool.Application;
 
-public sealed partial class CvrLanBackend : IAmplifierBackend, IDisposable
+public sealed partial class CvrLanBackend : IAmplifierBackend, INativePresetMetadataSource, IDisposable
 {
     private readonly CvrUdpClient client;
     private readonly object gate = new();

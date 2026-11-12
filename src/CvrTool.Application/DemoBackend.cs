@@ -7,7 +7,7 @@ using CvrTool.Core;
 
 namespace CvrTool.Application;
 /// <summary>In-memory simulation. No sockets, discovery or real devices.</summary>
-public sealed partial class DemoBackend : IAmplifierBackend
+public sealed partial class DemoBackend : IAmplifierBackend, INativePresetMetadataSource
 {
     private readonly object gate = new();
     private readonly Dictionary<string, RoutingCellState[]> routing = new()

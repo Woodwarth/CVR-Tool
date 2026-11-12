@@ -17,6 +17,8 @@ public sealed class EqualizerGraph : Control
     private IReadOnlyList<EqualizerBand> bands = [];
     private bool enabled = true;
     private CrossoverFilter? highPass, lowPass;
+    public bool CanEditCrossovers { get; set; } = true;
+    public bool PeakBandsOnly { get; set; }
     public event Action<bool, CrossoverFilter>? CrossoverChanged;
     public CrossoverFilter? HighPass
     {
@@ -131,7 +133,7 @@ public sealed class EqualizerGraph : Control
     public void MoveCrossover(bool high, double frequency)
     {
         var filter = (high ? HighPass : LowPass);
-        if (filter is null)
+        if (!IsEffectivelyEnabled || !CanEditCrossovers || filter is null)
             return;
         filter = filter with
         {
@@ -145,7 +147,9 @@ public sealed class EqualizerGraph : Control
     }
     public void MoveBand(int number, double frequency, double gain)
     {
-        var band = bands.Single(b => b.Number == number) with
+        var original = bands.Single(b => b.Number == number);
+        if (!IsEffectivelyEnabled || (PeakBandsOnly && original.FilterType != 0)) return;
+        var band = original with
         {
             FrequencyHz = Math.Round(Math.Clamp(frequency, 20, 20000)),
             GainDb = Math.Round(Math.Clamp(gain, -18, 18), 1)
@@ -164,12 +168,14 @@ public sealed class EqualizerGraph : Control
             var p = BandPosition(b);
             return Math.Sqrt(Math.Pow(p.X - point.X, 2) + Math.Pow(p.Y - point.Y, 2));
         }
-        var closest = bands.MinBy(Distance)!;
+        var editableBands = bands.Where(b => !PeakBandsOnly || b.FilterType == 0).ToArray();
+        if (editableBands.Length == 0) return;
+        var closest = editableBands.MinBy(Distance)!;
         var best = Distance(closest);
         selected = closest.Number;
         foreach (var (filter, index) in new[] { (highPass, 0), (lowPass, 9) })
         {
-            if (filter is null)
+            if (!CanEditCrossovers || filter is null)
                 continue;
             var p = CrossoverPosition(filter);
             var distance = Math.Sqrt(Math.Pow(p.X - point.X, 2) + Math.Pow(p.Y - point.Y, 2));

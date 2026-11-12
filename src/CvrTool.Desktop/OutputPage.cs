@@ -33,6 +33,7 @@ public sealed partial class MainWindow
     private Control OutputsPage()
     {
         var panel = new StackPanel { Spacing = 24 };
+        var metadata = service.GetNativePresetMetadata(deviceId);
         panel.Children.Add(Heading("Outputs · " + deviceName.Text));
         foreach (var output in service.GetDevice(deviceId).Outputs)
         {
@@ -42,7 +43,8 @@ public sealed partial class MainWindow
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("108", 12))), ColumnSpacing = 8, Height = 100, Tag = "output-flow-" + output.Name };
             Button Block(string title, string value, string tag, Action action)
             {
-                var button = new Button { Content = OutputBlockContent(title, Centered(value, 12, Accent)), Tag = tag, Width = OutputBlockWidth, Height = OutputBlockHeight, Padding = new Thickness(6, 8), Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Background = Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3) };
+                var caption = Centered(value, 12, Accent); caption.MaxWidth = 94; caption.TextTrimming = TextTrimming.CharacterEllipsis;
+                var button = new Button { Content = OutputBlockContent(title, caption), Tag = tag, Width = OutputBlockWidth, Height = OutputBlockHeight, Padding = new Thickness(6, 8), Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Background = Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3) };
                 button.Click += (_, _) => action();
                 return button;
             }
@@ -65,7 +67,7 @@ public sealed partial class MainWindow
             mute.CornerRadius = new CornerRadius(3);
             mute.VerticalAlignment = VerticalAlignment.Center;
             AddColumn(row, mute, 9);
-            AddColumn(row, Block("Output " + output.Name, "Speaker", "output-speaker-" + output.Name, () => { activeTab = "Main"; Render(); }), 10);
+            AddColumn(row, Block("Output " + output.Name, metadata?.Channels.Single(c => c.Channel == output.Number).SpeakerName is { Length: > 0 } speaker ? speaker : "Speaker", "output-speaker-" + output.Name, () => { activeTab = "Main"; Render(); }), 10);
             var pairStart = (output.Number - 1) / 2 * 2 + 1;
             var bridge = Block("", "", "output-bridge-" + output.Name, () => ToggleBridge(output.Number));
             bridge.Content = Centered(dynamics.Bridged ? "Bridge" : "Stereo", 13, Accent);

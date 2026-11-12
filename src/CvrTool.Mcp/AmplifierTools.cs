@@ -12,5 +12,5 @@ namespace CvrTool.Mcp;
 [McpServerToolType]
 public sealed partial class AmplifierTools(AmplifierService service)
 {
-    private static string Json(object value) => JsonSerializer.Serialize(value);
+    private static string Json(object? value) => JsonSerializer.Serialize(value);
 }

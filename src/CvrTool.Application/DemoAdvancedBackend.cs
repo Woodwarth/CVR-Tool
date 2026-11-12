@@ -72,6 +72,8 @@ public sealed partial class DemoBackend : IAdvancedAmplifierBackend
             }, revision);
         }
     }
+    public FirState ApplyFirEnabled(string id, int channel, bool enabled, long revision)
+    { lock (gate) { var state = GetFir(id, channel).State; Revision(id, revision); firs[(id,channel)] = state with { Enabled=enabled }; Changed(id); return GetFir(id,channel).State; } }
     public FirState ApplyFir(string id, FirState state, long revision)
     {
         lock (gate)
@@ -85,6 +87,15 @@ public sealed partial class DemoBackend : IAdvancedAmplifierBackend
             {
                 Coefficients = state.Coefficients.ToArray()
             };
+        }
+    }
+    public NativePresetMetadata? GetNativePresetMetadata(string id)
+    {
+        lock (gate)
+        {
+            Find(id);
+            var native = nativeTemplates.GetValueOrDefault(id);
+            return native is null ? null : NativePresetMetadata.Decode(native);
         }
     }
     public PresetDocument CapturePreset(string id)
@@ -104,11 +115,14 @@ public sealed partial class DemoBackend : IAdvancedAmplifierBackend
                 Outputs = preset.Outputs.ToArray()
             }, revision);
             if (preset.Inputs is not null)
-                inputs[id] = preset.Inputs.Select(input=>input with {GainDb=input.GainDb ?? GetInputProcessing(id,input.Channel).State.GainDb}).ToArray();
+                inputs[id] = preset.Inputs.Select(input=>input with {GainDb=input.GainDb ?? GetInputProcessing(id,input.Channel).State.GainDb, Muted=input.Muted ?? (preset.NativeData is null ? GetInputProcessing(id,input.Channel).State.Muted : null)}).ToArray();
             if (preset.Routing is not null)
                 routing[id] = preset.Routing.ToArray();
             foreach (var state in preset.OutputProcessing ?? [])
                 outputProcessing[(id, state.Channel)] = state;
+            if (preset.Firs is null && preset.NativeData is { } syncSource && NativePresetCodec.Inspect(syncSource).FirLength == 0)
+                for (var channel = 1; channel <= entry.Device.Outputs.Count; channel++)
+                    firs[(id, channel)] = new(channel, "Unknown", [], syncSource[36 + (channel - 1) * 515 + 368] == 0, CoefficientsKnown: false);
             foreach (var state in preset.Firs ?? [])
                 firs[(id, state.Channel)] = state;
             foreach (var state in preset.Dynamics ?? [])

@@ -1,4 +1,36 @@
-# Validation — 0.7.3
+# Validation
+
+## 0.7.4
+
+Windows x64: 330 core, 255 loopback-network and 177 desktop checks passed
+(762 checks), plus shared-session MCP smoke checks. Release built with zero
+warnings/errors. Embedded web checks verify access-key enforcement, host/origin
+checks, shared state, validation, .sd export and lifecycle. Chrome touch tests
+at tablet/phone widths passed delay/EQ/routing/mode edits and two-/four-channel
+layouts without page errors or horizontal clipping. Physical Safari/iPad
+validation remains pending.
+
+Direct Avalonia renderings cover Main and protected editors. Inputs gesture checks verify
+release-only routing commits without mute changes, graphical Peak-EQ drafts and
+BW-12/BW-24 HP/LP drafts, while other filter types remain protected. Gain editing survives a live refresh and
+accepts decimal commas. These UI checks use synthetic devices, not new physical evidence.
+
+On the connected DSP-1004, input gain/mute, output mute/trim/delay/polarity,
+input delay/Peak-EQ gain/frequency/Q and bypass, global input EQ bypass, routing
+gain, gate enable/threshold, FIR bypass and device rename were independently
+read back. Original native settings were restored byte-for-byte; the original
+name was restored separately. Input HP/LP cutoff, BW-12/BW-24 type and bypass
+also passed direct full-settings readback and byte-exact restoration. Low-Z/70V encoding remains controller-captured
+evidence, not a repeated load-mode switching test.
+
+Current partial live evidence: **22/38 documented function IDs (58%)**. This
+is not full command-variant coverage or a percentage of firmware bytes.
+No signal is currently available: dBFS meter and input-clip calibration remains
+pending. Unknown readings remain explicit. Other models and platform GUI
+validation remain pending. Reset, bridge, 100V, limiters, other crossover/non-Peak/output
+EQ, real FIR transfer and device preset writes remain protected.
+
+## Published 0.7.3 validation (historical)
 
 Local Windows x64 checks:
 
@@ -58,3 +90,16 @@ time matches the user reference and is shown in the header/details. Delay typing
 links metres/ms in both directions; Trim opens from the whole tile; Stereo/Bridge
 requires confirmation; PC loading/saving offers only .sd. Structured JSON API
 interchange remains supported. Final runs passed: 283 core, 198 network and 149 desktop checks, plus the shared-session MCP smoke check; the Release build completed without warnings or errors.
+
+## Local offline work after 0.7.3
+
+The network/preset/UI parity audit is documented in
+[preset-protocol-ui-audit.md](preset-protocol-ui-audit.md). Local runs passed
+319 core, 208 network and 160 desktop checks, shared-session MCP checks and a
+Release build with zero warnings/errors. Private DSP-1004/DSP-1502 samples and
+settings-only derivatives also round-trip byte-identically; no private bytes
+were added to tests or documentation. New transport tests use loopback only.
+Native metadata is supplied through a focused shared-session query: reading
+labels does not request FIR coefficients or capture a complete preset.
+This work is local, has not been published and adds no hardware evidence.
+The 18/38 (47%) partial live-evidence count is unchanged.

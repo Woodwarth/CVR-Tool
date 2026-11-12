@@ -15,6 +15,7 @@ public interface IAdvancedAmplifierBackend
     InputProcessingState ApplyOutputProcessing(InputProcessingChange change, long revision);
     (FirState State, long Revision) GetFir(string id, int channel);
     FirState ApplyFir(string id, FirState state, long revision);
+    FirState ApplyFirEnabled(string id, int channel, bool enabled, long revision) => throw new NotSupportedException("FIR bypass is unavailable on this backend.");
     (OutputDynamicsState State, long Revision) GetOutputDynamics(string id, int channel);
     OutputDynamicsState ApplyOutputDynamics(OutputDynamicsChange change, long revision);
     PresetDocument CapturePreset(string id);

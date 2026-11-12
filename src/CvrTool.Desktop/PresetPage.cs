@@ -97,6 +97,7 @@ public sealed partial class MainWindow
         }));
         pc.Children.Add(files);
         content.Children.Add(Card(pc));
+        if (NativePresetInformation() is { } information) content.Children.Add(information);
         return content;
     }
     private async Task<bool> ConfirmPresetAction(string title, string text)

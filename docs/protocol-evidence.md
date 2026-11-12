@@ -29,7 +29,7 @@ Channels and segments are zero-based on the wire.
 | 0 | Basic identity read | 75/79 bytes; model 0..31, name 32..63, analog inputs at 71, outputs at 73 |
 | 6 | Telemetry read | Known layout sizes; see network notes |
 | 9 | Input gain / output trim | Little-endian float; side 0=input, 1=output |
-| 10 | Output mute | Active-low: byte 0 muted, 1 unmuted; side 1 |
+| 10 | Input/output mute | Active-low: byte 0 muted, 1 unmuted; side 0=input, side 1=output |
 | 12 | Routing | Float gain + active-low flag (0 muted, 1 enabled); channel=output, segment=input, side=0 |
 | 14 | Delay | Float milliseconds; side 0=input, 1=output |
 | 15 | Standby | Status-0 command; byte 1 on, 0 off. Telemetry and native-state settling confirm writes |
@@ -274,3 +274,217 @@ matching and status-3 command replies do not apply to this tested firmware.
 The test restored initial Wink off and left the complete native settings
 byte-identical. This is device state confirmation; visible blinking needs user
 observation. Progress: 18/38 documented function IDs (47%) with partial live evidence.
+
+Controlled Input 1 mute/unmute confirms function 10/status 1, channel/segment/side
+0/0/0 with byte 00 muted then 01 enabled, approximately 2.53 seconds apart.
+Both checksums match; the original native input-mute flag at absolute offset
+2192 was 01. Final independent full-settings readback remains pending. Earlier
+function-30/channel-254 startup traffic is excluded from this interpretation.
+Function 10 already had output-side evidence, so progress stays 18/38 IDs (47%).
+
+Controlled Output A noise-gate on/off confirms function 69/status 1,
+channel/segment/side 0/0/1: byte 00 enabled, 01 bypassed. The valid commands
+are approximately 3.57 seconds apart and bracketed by output mute/unmute.
+The user confirms the gate was originally off; no threshold write occurred.
+Final independent full-settings readback remains pending. This adds one
+live-evidenced function: 19/38 documented IDs (50%).
+
+Controlled Output A gate threshold confirms function 87/status 1,
+channel/segment/side 0/0/1: signed byte BF (-65 dB) then BA (-70 dB),
+approximately 5.30 seconds apart. Output mute/unmute brackets the edits; no
+function-69 gate toggle appears in this capture. Checksums match and the
+requested original threshold is restored by the controller command. Final
+independent native readback remains pending. Progress: 20/38 IDs (53%).
+
+Controlled Output A FIR on/off confirms function 44/status 1,
+channel/segment/side 0/0/1: byte 00 active, 01 bypassed, approximately 3.01
+seconds apart. Output mute/unmute brackets the edits. No function-43 transfer
+or fragmented outgoing data appears in this capture; coefficients were not
+changed. The originally off state was requested again. Final independent
+native readback remains pending. Progress: 21/38 documented IDs (55%).
+
+After the controlled input-mute, gate enable/threshold and FIR-bypass sequence,
+an independent function-27 read confirms all 2687 native settings bytes match
+the original pre-test block. Input 1 and Output A are enabled, gate/FIR are
+bypassed and gate threshold is -70 dB. This verifies the restored final state
+and absence of unrelated native changes; intermediate native states were not
+queried. Partial function coverage remains 21/38 (55%).
+
+Direct Main validation confirms input gain, input mute and device rename with
+independent fresh reads. Function 60/status 1 sends a 32-byte ASCII name;
+function-0 identity queries independently confirm the temporary and restored
+name. The complete native settings block is unchanged after restoration.
+This adds function 60 to live evidence: 22/38 documented IDs (58%).
+
+The limited live writer additionally passed fresh native readback after each
+output trim/delay/polarity, input delay, input Peak gain/frequency/Q/band/global
+bypass, routing gain, gate enable/threshold and FIR-bypass edit. Outputs were
+muted first and restored last; all original native bytes matched afterwards.
+Load-mode switching was not repeated; its Low-Z/70V evidence remains the earlier
+controlled capture. 100V, bridge, limiters, HP/LP, non-Peak types, output EQ, FIR
+coefficient transfer, device preset operations and reset remain protected.
+
+Controlled Input 1 HP enable/bypass confirms function 30/status 1,
+channel/segment/side 0/0/0: 00 enabled then FF bypassed, approximately 2.59 s
+apart (frames 1323/1397 in the private crossover capture). All outputs were
+muted first. Checksums match. A preceding function-32/segment-1 transfer repeats
+60 Hz for EQ1; it is not interpreted as HP frequency. Channel-254 startup
+traffic is excluded. Independent native readback is still pending; this does
+not enable all crossover types. Function 30 already counts toward live evidence,
+so progress remains 22/38 documented IDs (58%).
+
+Controlled Input 1 HP frequency confirms function 32/status 1,
+channel/segment/side 0/0/0, float32 LE 80 Hz then 20 Hz, approximately 4.19 s
+apart (frames 12429/12553); a second 20 Hz send precedes HP bypass. Checksums
+match. The same interval also contains function-37 output-side writes 8 then
+25 (int16), whose deliberate user action has not been established; these are
+not counted as new limiter evidence. Native readback remains pending.
+Function 32 already counts: progress stays 22/38 documented IDs (58%).
+
+Controlled Input 1 HP filter selection confirms function 30/status 1,
+channel/segment/side 0/0/0: 04 for 24 dB/oct Butterworth, then 00 for
+12 dB/oct Butterworth, and FF for bypass. Private frames 5887/6165/6207
+have valid checksums. The controller also sends function 31 gain 0 dB and
+function 32 frequency 20 Hz on HP slot 0; these repeated values are not
+interpreted as independent HP gain controls. Additional 00/FF toggles follow.
+This establishes enabled types 0 and 4 and bypass for type 0 only. Disabled
+nonzero-type encoding, remaining type choices and independent native readback
+remain pending. Progress stays 22/38 documented function IDs (58%).
+
+Controlled Input 1 LP enable/bypass confirms function 30/status 1,
+channel/segment/side 0/9/0: 00 enabled then FF bypassed, approximately 2.47 s
+apart (private frames 7965/8039). Checksums match. HP and LP therefore use
+separate filter slots 0 and 9; output-side behavior is not inferred. Native
+readback remains pending. Progress stays 22/38 documented IDs (58%).
+
+Controlled Input 1 LP frequency confirms function 32/status 1,
+channel/segment/side 0/9/0, float32 LE 18000 then 19900 Hz (private frames
+9451/9757), approximately 10.94 s apart. A repeated 19900 Hz send precedes
+LP bypass FF. Checksums match; no other setting-write functions occur in this
+step. Independent native readback remains pending. Progress stays 22/38
+documented function IDs (58%).
+
+Clean repeated Input 1 LP type/bypass test confirms function 30/status 1,
+channel/segment/side 0/9/0: 00 enabled BW-12, 04 enabled BW-24, then FB
+(signed -5) disabled BW-24 (private frames 489/603/789 in the retry capture).
+This directly supports disabled type encoding -type-1 for observed type 4,
+without generalizing every filter type. Checksums match. The controller repeats
+LP gain 0 through function 31 and frequency 19900 Hz through function 32;
+no global EQ toggle appears. LP currently remains disabled BW-24 until the
+restoration step. Native readback remains pending. Progress: 22/38 IDs (58%).
+
+LP restoration is command-confirmed in the retry capture: function 30/input 1/
+segment 9 sends 04 (re-enable BW-24), 00 (BW-12), then FF (bypass), with
+function 32 repeating 19900 Hz. Frames 2316/2441/2499 have valid checksums.
+This restores the requested initial LP state at command level; independent
+native readback remains pending. Progress stays 22/38 documented IDs (58%).
+
+Controlled Input 1 HP BW-24 bypass/re-enable confirms function 30/status 1,
+channel/segment/side 0/0/0: 04, FB, 04, 00, FF in private retry-capture
+frames 3983/4045/4135/4241/4339. Checksums match. Frequency is repeated as
+20 Hz. HP finishes at disabled BW-12; LP was previously restored to disabled
+BW-12 at 19900 Hz. This adds type-4 disabled/re-enable evidence for HP, not
+new function IDs: progress remains 22/38 (58%).
+
+Independent function-27 read after controller exit confirms Input 1 HP disabled
+BW-12 at 20 Hz and LP disabled BW-12 at 19900 Hz. Compared with the baseline
+before manual capture, only current-preset-name bytes 2160..2171 differ; all
+other native bytes match. This label change is retained, not treated as a
+filter setting or overwritten.
+
+The new restricted live crossover writer passed direct DSP-1004 validation:
+for HP and LP separately, change cutoff, enable BW-12, select BW-24, bypass,
+re-enable, and restore the original filter. Each changed field requires a
+fresh full-settings read with exact unrelated-byte preservation. All outputs
+were muted first through the already evidenced command and restored last.
+The final native block matches the immediate pre-write baseline byte-for-byte.
+Only types 0/BW-12 and 4/BW-24 are enabled in UI/backend/MCP; unverified stored
+or requested types remain protected. Progress stays 22/38 IDs (58%).
+
+The short dedicated HP-type capture expired before the user operated the
+controller (zero packets); the actual sequence was recovered from the user's
+continuously running Wireshark capture and extracted privately. Controlled
+Input 1 HP selection confirms function 30/status 1/channel 0/segment 0/side 0:
+01 = 12 dB Bessel, 02 = 12 dB Linkwitz-Riley, 03 = 18 dB Butterworth, then
+00 = BW-12 and FF = bypass. Original Wireshark frames 63746/63902/64159/
+64477/64539 have valid checksums. Frequency 20 Hz and gain 0 are repeated.
+User explicitly reports no intermediate HP bypass/re-enable: this establishes
+enabled type selection only, not FE/FD/FC bypass values. Current HP state is
+command-restored to BW-12 off at 20 Hz. Independent native readback and bypass
+variants for types 1/2/3 remain pending. No new function IDs: 22/38 (58%).
+
+Controlled Input 1 HP Bessel-12 bypass confirms function 30/status 1,
+channel/segment/side 0/0/0: 01 active then FE (signed -2) bypassed, private
+frames 1115/1181 in the new-types bypass capture. Checksums match; the
+controller repeats gain 0 and frequency 20 Hz. HP currently remains disabled
+Bessel-12 for the next deliberate step. Re-enable/native readback pending.
+Partial function evidence remains 22/38 (58%).
+
+Controlled Input 1 HP Linkwitz-Riley-12 bypass confirms function 30/status 1,
+channel/segment/side 0/0/0: preceding 01 re-enables Bessel-12, then 02 selects
+LR-12 and FD (signed -3) bypasses it. Private frames 6379/6637/6683 have valid
+checksums. Gain 0 and frequency 20 Hz are repeated. HP currently remains
+LR-12 bypassed; its re-enable/native readback remains pending. Function-ID
+coverage is unchanged at 22/38 (58%).
+
+Controlled Input 1 HP Butterworth-18 bypass confirms function 30/status 1,
+channel/segment/side 0/0/0: 02 re-enables LR-12, 03 selects BW-18, then FC
+(signed -4) bypasses BW-18 (private frames 7761/7879/7937). Checksums match;
+frequency 20 Hz is repeated. BW-18 re-enable and restoration to BW-12 have
+not appeared in the inspected capture yet; do not claim full restoration.
+Function-ID progress remains 22/38 (58%).
+
+HP BW-18 re-enable/restoration is now command-confirmed: function 30/status 1,
+channel/segment/side 0/0/0 sends 03, then 00 for BW-12, then FF for bypass
+(private frames 11871/11997/12043). Checksums match and function 32 repeats
+20 Hz. This completes captured enable/bypass/re-enable variants for HP types
+1/2/3; independent native readback/direct-writer tests for those types remain
+pending. Five of eleven HP types now have controlled selection/bypass evidence
+(0..4); LP still has types 0 and 4. Function-ID coverage stays 22/38 (58%).
+
+Controlled Input 1 HP Bessel-24 selection/bypass confirms function 30/status 1,
+channel/segment/side 0/0/0: 05 active, FA (signed -6) bypassed, private frames
+14275/14325. Checksums match; gain 0 and frequency 20 Hz are repeated. HP now
+remains bypassed Bessel-24. Re-enable and independent native readback for this
+type remain pending. Six of eleven HP types have selection/bypass capture
+evidence; function-ID progress remains 22/38 (58%).
+
+Controlled Input 1 HP Linkwitz-Riley-24 selection/bypass confirms function 30/
+status 1/channel 0/segment 0/side 0: preceding 05 re-enables Bessel-24,
+06 selects LR-24, and F9 (signed -7) bypasses it. Private frames
+15287/15397/15463 have valid checksums; gain 0 and frequency 20 Hz repeat.
+HP currently remains bypassed LR-24. Its re-enable/native readback remains
+pending. Seven of eleven HP types have controlled selection/bypass evidence;
+function-ID progress stays 22/38 (58%).
+
+Controlled Input 1 HP Butterworth-36 selection/bypass confirms function 30/
+status 1/channel 0/segment 0/side 0: preceding 06 re-enables LR-24, 07
+selects BW-36, and F8 (signed -8) bypasses it. Private frames
+16545/16671/16721 have valid checksums; gain 0 and frequency 20 Hz repeat.
+HP currently remains bypassed BW-36; re-enable/native readback pending.
+Eight of eleven HP types have selection/bypass capture evidence. Function-ID
+coverage stays 22/38 (58%).
+
+Controlled Input 1 HP Butterworth-48 selection/bypass confirms function 30/
+status 1/channel 0/segment 0/side 0: preceding 07 re-enables BW-36, 08
+selects BW-48, and F7 (signed -9) bypasses it. Private frames
+19659/19829/19883 have valid checksums; gain 0 and frequency 20 Hz repeat.
+HP currently remains bypassed BW-48; re-enable/native readback pending.
+Nine of eleven HP types have selection/bypass capture evidence. Function-ID
+coverage stays 22/38 (58%).
+
+Controlled Input 1 HP Bessel-48 selection/bypass confirms function 30/status 1/
+channel 0/segment 0/side 0: preceding 08 re-enables BW-48, 09 selects BE-48,
+and F6 (signed -10) bypasses it. Private frames 22305/22423/22469 have valid
+checksums; gain 0 and frequency 20 Hz repeat. HP currently remains bypassed
+BE-48; re-enable/native readback pending. Ten of eleven HP types have
+selection/bypass capture evidence. Function-ID coverage stays 22/38 (58%).
+
+Controlled Input 1 HP Linkwitz-Riley-48 selection/bypass confirms function 30/
+status 1/channel 0/segment 0/side 0: preceding 09 re-enables BE-48, 0A selects
+LR-48, and F5 (signed -11) bypasses it. Private frames 23523/23649/23715 have
+valid checksums; gain 0 and frequency 20 Hz repeat. HP currently remains
+bypassed LR-48; re-enable and BW-12 restoration are not yet in the inspected
+capture. All eleven HP types now have controlled selection/bypass evidence,
+while independent native/direct-writer validation beyond types 0/4 remains
+pending. LP evidence still covers types 0/4. Function-ID progress: 22/38 (58%).

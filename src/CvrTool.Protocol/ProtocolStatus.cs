@@ -9,5 +9,5 @@ public static class ProtocolStatus
 {
     public const bool HardwareAccessEnabled = true;
     public const bool PhysicalAmplifierValidated = false;
-    public const string Reason = "Manual CVR UDP is available. Synthetic loopback checks pass; physical-amplifier compatibility remains unverified.";
+    public const string Reason = "Selected bulk-profile operations passed on DSP-1004; other models and the individual-query profile remain unverified.";
 }

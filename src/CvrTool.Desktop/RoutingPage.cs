@@ -1,4 +1,4 @@
-// Desktop / Routing — build identical gain/mute dials for each demo matrix cell.
+// Desktop / Inputs and routing — per-channel processing, route dials and output trim.
 // Purpose: present focused controls and forward edits to Application.
 // Input: user events and authoritative device snapshots.
 // State: local drafts never replace the shared backend.
@@ -48,16 +48,17 @@ public sealed partial class MainWindow
                 var current = state;
                 var dial = new RoutingDial
                 {
+                    DeferGainUntilRelease = liveReadOnly,
                     GainDb = state.GainDb,
                     Muted = state.Muted,
                     Tag = $"route-dial-{input}-{output}",
-                    CanEditGain = !liveReadOnly
+                    CanEditGain = !liveReadOnly || service.GetDevice(deviceId).Readings?.CanSetVerifiedDsp == true
                 };
                 Avalonia.Automation.AutomationProperties.SetName(dial, $"Source {input} to output {(char)('A' + output - 1)} gain and mute");
                 void Change(double? gainDb = null, bool? muted = null)
                 {
-                    if (liveReadOnly && muted is { } desired && gainDb is null)
-                    { CommitLiveRouteMute(state.Input, state.Output, desired); return; }
+                    if (liveReadOnly)
+                    { CommitLiveRouteMute(state.Input, state.Output, muted, gainDb); return; }
                     try
                     {
                         current = service.ApplyRouting(service.PlanRouting(new(deviceId, state.Input, state.Output, gainDb, muted)).Id);
@@ -72,6 +73,8 @@ public sealed partial class MainWindow
                     dial.Muted = current.Muted;
                 }
 
+                dial.InteractionStarted += () => { if (liveReadOnly) liveEditInteractions++; };
+                dial.InteractionEnded += () => { liveEditInteractions = Math.Max(0, liveEditInteractions - 1); };
                 dial.MuteRequested += () => Change(muted: !current.Muted);
                 dial.GainChanged += value => Change(gainDb: value);
                 Grid.SetRow(dial, output);
@@ -79,7 +82,7 @@ public sealed partial class MainWindow
             }
         }
 
-        // Preserve signal-flow alignment; small windows can scroll the full matrix horizontally.
+        // Keep the signal-flow grid fixed; the shell scales uniformly on smaller windows.
         var environment = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("156,Auto,156"),
@@ -118,6 +121,8 @@ public sealed partial class MainWindow
         foreach (var output in service.GetDevice(deviceId).Outputs)
         {
             var gain = new GainReadout { Value = output.GainDb, Tag = "routing-output-gain-" + output.Name };
+            gain.EditingStarted += () => { if (liveReadOnly) liveEditInteractions++; };
+            gain.EditingEnded += () => { liveEditInteractions = Math.Max(0, liveEditInteractions - 1); };
             gain.ValueChanged += value => { channels.Single(c => c.State.Number == output.Number).Gain = value; Commit(new(deviceId, output.Number, GainDb: value)); };
             var label = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
             label.Children.Add(Centered("Volume " + output.Name, 13));

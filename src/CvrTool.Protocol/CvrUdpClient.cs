@@ -77,7 +77,7 @@ public sealed class CvrUdpClient : IDisposable
         await serial.WaitAsync().ConfigureAwait(false);
         try
         {
-            while (socket.Available > 0)
+            for (var drained = 0; drained < 64 && socket.Available > 0; drained++)
             {
                 IPEndPoint? peer = null;
                 var stale = socket.Receive(ref peer);
@@ -99,9 +99,7 @@ public sealed class CvrUdpClient : IDisposable
             var request = CvrWire.Encode(new(function, sendStatus, channel, segment, side, body));
             await socket.SendAsync(request).ConfigureAwait(false);
             using var timeout = new CancellationTokenSource(timeoutMs);
-            byte[][]? fragments = null;
-            byte[]? identity = null;
-            int last = 0;
+            var assembly = new CvrReplyAssembler();
             while (true)
             {
                 byte[] packet;
@@ -121,21 +119,8 @@ public sealed class CvrUdpClient : IDisposable
                 var ack = packet[..10];
                 ack[8] = 1;
                 await socket.SendAsync(ack).ConfigureAwait(false);
-                // Keep one bounded assembly; fragments may arrive before fragment one.
-                if (identity is null || !identity.AsSpan().SequenceEqual(packet.AsSpan(0, 7)))
-                {
-                    fragments = new byte[header.Count][];
-                    identity = packet[..7];
-                    last = header.Last;
-                }
-                if (fragments is null || header.Count != fragments.Length || header.Last != last)
-                    continue;
-                fragments[header.Index - 1] = packet[10..];
-                if (fragments.Any(f => f is null))
-                    continue;
-                var message = CvrWire.DecodeInner(fragments.SelectMany(f => f).ToArray());
-                fragments = null;
-                identity = null;
+                var message = assembly.Accept(packet);
+                if (message is null) continue;
                 ObserveIdentity(message);
                 if (observedBulk)
                 {

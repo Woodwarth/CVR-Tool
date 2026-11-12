@@ -2,7 +2,7 @@
 // Purpose: expose full native settings and periodic status beside local devices.
 // Units: native DSP units; telemetry timestamps are independent of settings age.
 // State: one exclusive UDP owner, serialized polling and cached immutable reads.
-// Scope: DSP settings stay read-only; operational controls require full readback.
+// Scope: only evidenced write variants are enabled; every edit requires independent readback.
 using System.Text;
 using System.Text.Json;
 using CvrTool.Core;
@@ -10,7 +10,7 @@ using CvrTool.Protocol;
 
 namespace CvrTool.Application;
 
-public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmplifierBackend, IDisposable
+public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmplifierBackend, INativePresetMetadataSource, IDisposable
 {
     private readonly NetworkTarget target;
     private byte[]? identityBody;
@@ -130,10 +130,10 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
         var identity = identityBody;
         var name = identity is not null ? Text(identity[32..64]) : "—";
         var mac = identity is not null ? string.Join(":", identity[64..70].Select(b => b.ToString("X2"))) : null;
-        var currentPreset = native.Length == 2687 ? Text(native[2160..2192]) : null;
+        var currentPreset = native.Length is 2232 or 2687 ? Text(native[2160..2192]) : null;
         var readings = new DeviceReadings(true, Text(native[..32]), mac,
             string.IsNullOrEmpty(currentPreset) ? null : currentPreset, settingsAt,
-            telemetryAt == default ? null : telemetryAt, power, statusCodes?.ToArray(), error, CanSetDisplayLock: true, CanSetStandby: standbyKnown, CanSetMutes: true, OperatingMinutes: operatingMinutes, CanSetWink: winkState is not null);
+            telemetryAt == default ? null : telemetryAt, power, statusCodes?.ToArray(), error, CanSetDisplayLock: true, CanSetStandby: standbyKnown, CanSetMutes: true, OperatingMinutes: operatingMinutes, CanSetWink: winkState is not null, CanSetInputGain: true, CanSetInputMute: settings.Inputs!.All(i => i.Muted is not null), CanRename: true, CanSetVerifiedDsp: true);
         device = new(id, string.IsNullOrWhiteSpace(name) ? "—" : name,
             new(settings.Model, settings.Outputs.Count, settings.Outputs.Count, false), false,
             settingsAt, settings.Outputs.ToArray(), readings);
@@ -191,15 +191,14 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
     { lock (gate) { CheckId(deviceId); return new(native[33] != 0, standbyState, StandbyKnown: standbyKnown, Wink: winkState); } }
     public DevicePresetState GetDevicePresets(string deviceId)
     { lock (gate) { CheckId(deviceId); return new([], device.Readings?.CurrentPreset); } }
+    public NativePresetMetadata GetNativePresetMetadata(string deviceId)
+    { lock (gate) { CheckId(deviceId); return NativePresetMetadata.Decode(native); } }
     public PresetDocument CapturePreset(string deviceId)
     { lock (gate) { CheckId(deviceId); return JsonSerializer.Deserialize<PresetDocument>(JsonSerializer.Serialize(settings with { Name = device.Name }))!; } }
 
-    private static NotSupportedException ReadOnly() => new("Only mute and operational controls are writable on this live connection.");
-    public DeviceSnapshot Rename(string deviceId, string name, long expectedRevision) => throw ReadOnly();
-    public InputProcessingState ApplyInputProcessing(InputProcessingChange change, long expectedRevision) => throw ReadOnly();
+    private static NotSupportedException ReadOnly() => new("Only physically evidenced command variants are writable on this live connection.");
     public InputProcessingState ApplyOutputProcessing(InputProcessingChange change, long expectedRevision) => throw ReadOnly();
     public FirState ApplyFir(string deviceId, FirState state, long expectedRevision) => throw ReadOnly();
-    public OutputDynamicsState ApplyOutputDynamics(OutputDynamicsChange change, long expectedRevision) => throw ReadOnly();
     public DeviceSnapshot ApplyPreset(string deviceId, PresetDocument preset, long expectedRevision) => throw ReadOnly();
     public DeviceOperationResult StoreDevicePreset(string deviceId, int slot, string name, long expectedRevision) => throw ReadOnly();
     public DeviceOperationResult RecallDevicePreset(string deviceId, int slot, long expectedRevision) => throw ReadOnly();

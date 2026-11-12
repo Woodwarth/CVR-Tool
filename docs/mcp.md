@@ -9,7 +9,8 @@ takes no extra arguments and shares the included runtime. Earlier packages
 had a separate `mcp/` directory; update that path if using the optional apphost.
 The recommended desktop path with `--mcp` is unchanged. No demo flag or
 SDK/runtime is required.
-Stdout contains only MCP messages; logs use stderr. There is no HTTP listener.
+Stdout contains only MCP messages; logs use stderr. MCP remains stdio only. The separately enabled Browser control server is a
+local web UI; it is not an HTTP MCP endpoint.
 
 For a headless owner, run either executable with `--host-session`. Start a
 second process as the MCP client. `--session NAME` selects an independent named
@@ -27,7 +28,7 @@ for compatibility with isolated test clients and does not share GUI state.
 - `get_routing`, `plan_routing_change`, `apply_routing_change`.
 - `plan_channel_change`, `apply_change` (gain, mute, delay, polarity).
 - `get_input_processing`, `plan_input_processing`, `apply_input_processing`
-  (delay, EQ enable state, eight bands with Hz/dB/Q and enable state, plus
+  (gain, independent input mute, delay, EQ enable state, eight bands with Hz/dB/Q and enable state, plus
   highPass/lowPass objects with FrequencyHz, FilterType and Enabled).
   Crossover type IDs: 0 BW-12, 1 BE-12, 2 LR-12, 3 BW-18, 4 BW-24,
   5 BE-24, 6 LR-24, 7 BW-36, 8 BW-48, 9 BE-48, 10 LR-48.
@@ -35,6 +36,7 @@ for compatibility with isolated test clients and does not share GUI state.
 - `get_output_processing`, `plan_output_processing`, `apply_output_processing`
   use the same EQ/crossover fields as inputs.
 - `get_output_fir`, `set_output_fir`: 1–512 finite taps at 48 kHz.
+- `set_output_fir_enabled`: bypass only; preserves coefficients, including unknown data.
 - `get_device_presets`, `store_device_preset`, `recall_device_preset` (slots 1–16),
   `clear_device_presets`, `factory_reset`.
 - `export_native_preset` returns base64 `.sd`; `load_preset_file` accepts base64
@@ -68,6 +70,18 @@ applied multi-parameter change; refresh before making a new plan. Use one
 controller: the firmware has no compare-and-swap transaction and an external
 controller can change settings between queries.
 
+## Physical capabilities
+
+The default observed profile exposes only independently evidenced write variants.
+See [network capabilities](network.md). Input HP/LP cutoff/type/bypass supports
+only evidenced BW-12 and BW-24 on the observed live profile; unverified stored
+and requested types are rejected before writes. Input mute uses the nullable `Muted`
+field; an unknown native flag is not treated as unmuted. FIR bypass can change
+without reading or replacing coefficients. The legacy connection option
+`ReadOnly=true` selects this restricted profile; individual capability flags
+determine which edits are allowed. Unsupported variants are rejected by the
+backend as well as disabled in the UI. Reset remains protected.
+
 ## Development
 
 Build with .NET SDK 10, then run `python scripts/configure-mcp.py` to create
@@ -77,3 +91,6 @@ This checks stdio MCP; live tool loading by a specific AI client is separate.
 
 `set_device_wink` enables/disables display blinking through the shared owner.
 Live writes use a separate function-83 state query and preserve DSP settings.
+
+`get_native_preset_metadata` reads preserved source/speaker annotations, separate
+input mute, source alignment and configured load. Null means no native source.

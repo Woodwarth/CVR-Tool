@@ -165,13 +165,16 @@ if (firArgument >= 0 && firArgument + 1 < args.Length)
     var inspection = await FirFileAnalyzer.AnalyzeAsync(stream);
     Console.WriteLine($"LOCAL FIR: {inspection.Coefficients.Count} coefficients, {inspection.NonZeroCount} nonzero, {inspection.SampleRate} Hz preview");
 }
+Check(DeviceProfiles.TargetModels.Count == 12 && DeviceProfiles.TargetModels.Select(m => m.Model).Distinct().Count() == 12 && DeviceProfiles.TargetModels.All(m => m.OutputCount is 2 or 4 && m.InputCount == m.OutputCount && m.OutputCount == m.Model[^1] - '0' && !m.VerifiedOnHardware), "All twelve target models derive topology from their last digit without inventing hardware verification");
 InputGainChecks.Run(Check);
+InputMuteChecks.Run(Check);
 OutputMuteChecks.Run(Check);
 RoutingMuteChecks.Run(Check);
 RoutingAxisChecks.Run(Check);
 LoadModeChecks.Run(Check);
 DynamicsChecks.Run(Check);
 AdvancedChecks.Run(Check);
+NativeMetadataChecks.Run(Check);
 CrossoverChecks.Run(Check);
 await UpdateChecks.RunAsync(Check);
 await UpdateChecks.StageNativePackage(args);

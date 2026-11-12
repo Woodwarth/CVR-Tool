@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.7.4
+
+- Enable evidenced live input gain/mute, output trim/delay/polarity, routing gain,
+  input delay/Peak EQ, gate, Low-Z/70V, FIR bypass and device-name edits.
+- Require independent readback and preserve unrelated native bytes.
+- Commit live Main gain edits in 0.5 dB steps; add independent input mute.
+- Enable graphical live input Peak EQ and evidenced BW-12/BW-24 HP/LP cutoff,
+  type and bypass; keep other filter types protected.
+- Verify HP/LP writes on DSP-1004 with full native readback and exact restoration.
+- Preview live routing drags and write once on release, preserving route mute.
+- Keep Inputs output-gain drafts across refreshes; improve text contrast and accept decimal commas.
+- Keep uncalibrated meters/clip unknown and all reset operations protected.
+- Add the twelve requested target models without claiming hardware validation.
+
+- Add integrated local-network browser control with responsive iPad layouts,
+  per-session private access links, and shared Desktop/MCP state.
+- Serve local browser assets without internet or an extra iPad app.
+- Recover from corrupt/interleaved/duplicate UDP replies with bounded assembly.
+- Keep cached/demo reads responsive during slow connection handshakes.
+- Expose preserved native labels, input mute, source alignment and configured load.
+- Open protected live settings viewers and disable writes on offline devices.
+- Preserve missing FIR coefficients through settings-only files and demo slots.
+- Read current preset names in B118 as well as B119.
+- Record remaining source, linking, DEQ and device-slot gaps in the parity audit.
+
 ## 0.7.3
 
 - Linked metre/millisecond delay editing and whole-tile Trim interaction.

@@ -29,8 +29,7 @@ public sealed partial class MainWindow
         editor.Closed += (_, _) => inputEditors.Remove(key);
         if (service.GetDevice(device).Readings?.ReadOnly == true)
         {
-            editor.Title += " · Read-only";
-            DisableLiveEdits(editor, true);
+            ConfigureLiveEditor(editor, device, channel, kind);
         }
         editor.Show(this);
     }
@@ -110,13 +109,14 @@ public sealed partial class MainWindow
         actions.Children.Add(apply);
         actions.Children.Add(cancel);
         var editor = EditorWindow(side+" delay · Channel " + channel, content, 400, 340);
-        apply.Click += (_, _) =>
+        apply.Click += async (_, _) =>
         {
             if (pendingMs is null) return;
             try
             {
                 var change=new InputProcessingChange(editedId,channel,DelayMs:pendingMs.Value);
-                if(output)service.ApplyOutputProcessing(service.PlanOutputProcessing(change).Id);else service.ApplyInputProcessing(service.PlanInputProcessing(change).Id);
+                void Apply() { if(output) service.Apply(service.Plan(new(editedId,channel,DelayMs:pendingMs.Value)).Id); else service.ApplyInputProcessing(service.PlanInputProcessing(change).Id); }
+                if (service.GetDevice(editedId).Readings?.ReadOnly == true) await Task.Run(Apply); else Apply();
                 Render();
                 editor.Close();
             }

@@ -9,3 +9,8 @@ tabs are removed; manual connections remain available through MCP.
 `Controls/` contains reusable gain readouts, meters, symbols, LEDs and dials.
 `App` owns the shared session; external MCP writes trigger a UI refresh.
 Source headers describe code responsibilities; they are not UI metadata.
+
+`NativePresetInformation` displays preserved annotations read-only. Live editors
+can show cached delay/dynamics/FIR state while their Apply controls stay disabled;
+unknown FIR coefficients produce no curve. Offline operational/mute writes are
+disabled until fresh telemetry returns.

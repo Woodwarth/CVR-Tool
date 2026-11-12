@@ -18,6 +18,7 @@ public sealed partial class MainWindow
 {
     private void ShowDeviceName()
     {
+        editingDeviceName = false;
         var button = new Button
         {
             Content = Text(service.GetDevice(deviceId).Name, 16),
@@ -35,6 +36,7 @@ public sealed partial class MainWindow
 
     private void EditDeviceName()
     {
+        editingDeviceName = true;
         if (nameEditor.Parent is Panel previous)
             previous.Children.Remove(nameEditor);
         nameEditor.Text = service.GetDevice(deviceId).Name;
@@ -71,8 +73,14 @@ public sealed partial class MainWindow
         nameEditor.SelectAll();
     }
 
-    private void SaveDeviceName()
+    private async void SaveDeviceName()
     {
+        if (liveReadOnly)
+        {
+            var selected = deviceId; var requestedName = nameEditor.Text ?? "";
+            await RunLiveChange(selected, () => service.RenameDevice(selected, requestedName), "Device name");
+            return;
+        }
         try
         {
             service.RenameDevice(deviceId, nameEditor.Text ?? "");

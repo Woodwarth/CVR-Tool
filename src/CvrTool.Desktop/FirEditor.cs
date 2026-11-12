@@ -73,6 +73,14 @@ public sealed partial class MainWindow
         editor.MinHeight = 570;
         void Refresh()
         {
+            if (!draft.CoefficientsKnown || draft.Coefficients.Count == 0)
+            {
+                info.Text = "FIR coefficients unknown · Not included in the received settings or preset";
+                impulse.Points = []; magnitude.Points = []; phase.Points = [];
+                export.IsEnabled = false; apply.IsEnabled = false;
+                return;
+            }
+            export.IsEnabled = true; apply.IsEnabled = true;
             var text = string.Join("\n", draft.Coefficients.Select(c => c.ToString("R", CultureInfo.InvariantCulture)));
             var analysis = FirFileAnalyzer.Analyze(text);
             var count = draft.Coefficients.Select((c, n) => (c, n)).Where(x => x.c != 0).Select(x => x.n + 1).DefaultIfEmpty(0).Max();
@@ -120,14 +128,15 @@ public sealed partial class MainWindow
             catch (Exception ex) { message.Text = ex.Message; }
         };
         remove.Click += (_, _) => { draft = new(channel, "", new double[] { 1 }, false); enabled.IsChecked = false; Refresh(); message.Text = "FIR removed from draft · Apply to commit."; };
-        apply.Click += (_, _) =>
+        apply.Click += async (_, _) =>
         {
             try
             {
                 var latest = service.GetFir(editedId, channel);
                 if (latest.Enabled != original.Enabled || latest.Name != original.Name || !latest.Coefficients.SequenceEqual(original.Coefficients))
                     throw new InvalidOperationException("Output FIR changed externally. Reopen this editor.");
-                service.SetFir(editedId, draft);
+                if (service.GetDevice(editedId).Readings?.ReadOnly == true) await Task.Run(() => service.SetFirEnabled(editedId,channel,draft.Enabled));
+                else service.SetFir(editedId, draft);
                 Render();
                 editor.Close();
             }

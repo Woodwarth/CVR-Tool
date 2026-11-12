@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Controls.Templates;
 using CvrTool.Core;
+using CvrTool.Application;
 
 namespace CvrTool.Desktop;
 
@@ -85,7 +86,8 @@ public sealed partial class MainWindow
             column.Children.Add(Centered(high ? "HP" : "LP", 14, Accent));
             var type = new ComboBox
             {
-                ItemsSource = CrossoverFilters.Options,
+                ItemsSource = !output && service.GetDevice(editedId).Readings?.ReadOnly == true && ObservedInputCrossovers.CanWrite(filter)
+                    ? ObservedInputCrossovers.Options : CrossoverFilters.Options,
                 SelectedItem = CrossoverFilters.Options.SingleOrDefault(o => o.Code == filter?.FilterType),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 MinWidth = 0,
@@ -143,6 +145,7 @@ public sealed partial class MainWindow
         content.Children.Add(cards);
         var footer = new StackPanel { Spacing = 10 };
         var message = Text("Drag numbered handles to adjust Hz/dB · 48 kHz preview · Bessel phase-normalized", 11, Muted);
+        message.Tag = "eq-help";
         footer.Children.Add(message);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         var apply = new Button { Content = "Apply", Tag = "apply-input-eq" };
@@ -162,7 +165,7 @@ public sealed partial class MainWindow
             editor.Width = Math.Min(editor.Width, screen.WorkingArea.Width / screen.Scaling - 40);
             editor.Height = Math.Min(editor.Height, screen.WorkingArea.Height / screen.Scaling - 40);
         }
-        apply.Click += (_, _) =>
+        apply.Click += async (_, _) =>
         {
             if (fields.Values.Any(f => f.Frequency.Value is null || f.Gain.Value is null || f.Q.Value is null))
             {
@@ -175,7 +178,8 @@ public sealed partial class MainWindow
                 var plan=output ? service.PlanOutputProcessing(change) : service.PlanInputProcessing(change);
                 if (plan.Before.EqEnabled != input.EqEnabled || !plan.Before.Bands.SequenceEqual(input.Bands) || plan.Before.HighPass != input.HighPass || plan.Before.LowPass != input.LowPass)
                     throw new InvalidOperationException("EQ changed externally. Reopen the editor before applying.");
-                if(output)service.ApplyOutputProcessing(plan.Id);else service.ApplyInputProcessing(plan.Id);
+                void Apply() { if(output) service.ApplyOutputProcessing(plan.Id); else service.ApplyInputProcessing(plan.Id); }
+                if (service.GetDevice(editedId).Readings?.ReadOnly == true) await Task.Run(Apply); else Apply();
                 Render();
                 editor.Close();
             }

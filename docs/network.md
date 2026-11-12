@@ -13,7 +13,16 @@ are accepted. Full-sync completion uses an empty status-3 confirmation. Settings
 and telemetry have separate timestamps; offline devices keep their last data
 with an error and a red connection point. No automatic settings retries occur.
 
-Live DSP editing is limited to output and routing mute. Display lock (17/status 1) and standby
+The observed profile permits input gain/mute, output trim/mute/delay/polarity,
+routing gain/mute, input delay, input Peak-EQ gain/frequency/Q and bypass,
+global input EQ bypass, HP/LP cutoff/type/bypass for BW-12 and BW-24,
+Low-Z/70V selection, noise-gate enable/threshold,
+FIR bypass and device renaming. Writes require fresh state and independent
+readback; unrelated native bytes must remain unchanged. Reset, bridge, 100V,
+limiters, other crossover/EQ types, output EQ, FIR coefficient transfer and device
+preset operations remain protected pending variant-specific evidence.
+
+Display lock (17/status 1) and standby
 (15/status 0) are writable through the shared Desktop/MCP session. Each change
 requires independent readback. Wink (83/status 0, byte 0/1) blinks the display;
 function-83 queries return status 1/channel 32/segment 10/side 0 with one state
@@ -36,12 +45,14 @@ coefficients and unqueried preset-slot names are explicitly unknown. No healthy
 status or unity FIR is synthesized. Known settings can be exported to PC.
 
 MCP `connect_amplifier` still accepts an explicit unicast IPv4/local interface
-with configurable ports and timeout; its default is the observed DSP-read-only
-profile with supported operational controls. `readOnly=false` selects the older
+with configurable ports and timeout; its default is the observed restricted
+profile with verified editing. The legacy `ReadOnly=true` option selects this
+profile, not a blanket prohibition on writes: individual capabilities govern
+permissions. `readOnly=false` selects the older
 individual-query implementation, whose physical compatibility remains unverified.
 The Network tab and manual connection/disconnect UI buttons are absent.
 
-Selected reads and operational writes were tested on one DSP-1004/106119. Output
+Selected reads and the enabled DSP writes were tested on one DSP-1004/106119. Output
 polarity and Low-Z/70V command encodings were also captured from the original
 controller. 100V was not selectable there; this does not establish a universal
 model limitation. Two-channel profiles use the same feature model and have
@@ -51,3 +62,18 @@ Desktop and MCP share one session owner. Protocol revisions are local estimates;
 firmware has no reliable transaction identifier. Do not operate another writer
 alongside the app. No firmware transfer is included. Captures, private presets,
 device identifiers and manufacturer files are excluded from source/packages.
+
+## Local fault-recovery changes after 0.7.3
+
+Queries ignore corrupt complete messages and retain bounded fragmented replies
+across identity announcements. Identical duplicate/out-of-order fragments are
+accepted; conflicting duplicates are discarded. At most four partial messages
+are retained, with oldest-first eviction. Stale draining is limited to 64
+packets. Timeouts do not automatically resend requests or writes. Connection
+handshakes run outside the device registry lock, keeping cached/demo reads free.
+The protocol has no transaction ID: a delayed otherwise identical reply cannot
+always be distinguished from a current one. Independent state readback remains
+required. Offline UI controls are disabled while cached settings stay viewable.
+
+See [preset/protocol/UI audit](preset-protocol-ui-audit.md) for preserved fields
+that still need controls or physical evidence.

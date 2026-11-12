@@ -154,6 +154,8 @@ finally
 }
 CvrPeerChecks.Run(Check);
 SnapshotPeerChecks.Run(Check);
+DatagramFaultChecks.Run(Check);
+DatagramFaultChecks.CheckSlowConnection(Check);
 var sessionLabel="stress-"+Guid.NewGuid();
 using (var sessionHost = new SessionHost(new DemoBackend(), sessionLabel))
 {
@@ -173,4 +175,5 @@ using (var sessionHost = new SessionHost(new DemoBackend(), sessionLabel))
     Check(true,"200 concurrent IPC reads retain complete crossover snapshots");
 }
 
+await BrowserServerChecks.Run(Check);
 Console.WriteLine($"PASS: {count} network checks (synthetic loopback peers; no physical amplifier)");

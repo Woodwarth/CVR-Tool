@@ -87,6 +87,8 @@ public sealed partial class CvrLanBackend : IAdvancedAmplifierBackend
         NativePresetCodec.Inspect(file);
         return file;
     }
+    public NativePresetMetadata GetNativePresetMetadata(string deviceId)
+    { lock (gate) { CheckId(deviceId); return NativePresetMetadata.Decode(Read(27)); } }
     public PresetDocument CapturePreset(string deviceId)
     {
         lock (gate)

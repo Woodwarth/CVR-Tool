@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../src/CvrTool.Application/CvrTool.Application.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../src/CvrTool.Application/CvrTool.Application.csproj" /><ProjectReference Include="../../src/CvrTool.Web/CvrTool.Web.csproj" /></ItemGroup>
 </Project>

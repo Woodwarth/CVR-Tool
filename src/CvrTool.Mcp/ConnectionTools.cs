@@ -14,7 +14,7 @@ namespace CvrTool.Mcp;
 [McpServerToolType]
 public sealed class ConnectionTools(AmplifierService service)
 {
-    [McpServerTool(Name = "connect_amplifier"), Description("Connect one explicitly selected CVR IPv4 amplifier through the shared session. DSP-read-only mode provides full settings, telemetry and verified display-lock/standby controls; readOnly=false selects the older individual-query path. No scan or broadcast.")]
+    [McpServerTool(Name = "connect_amplifier"), Description("Connect one explicitly selected CVR IPv4 amplifier through the shared session. The default observed profile provides settings, telemetry and capability-gated verified edits; readOnly=false selects the older individual-query path. This tool connects only the explicit target.")]
     public string Connect(string address, string localAddress, int localPort = 45454, int remotePort = 45455, int timeoutMs = 1000, bool readOnly = true)
         => System.Text.Json.JsonSerializer.Serialize(service.Connect(new NetworkTarget("CVR amplifier", address, remotePort, localAddress, localPort, timeoutMs, readOnly)));
 

@@ -10,7 +10,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 
 namespace CvrTool.Desktop;
-/// <summary>Demo route gain dial. Drag vertically, scroll, or use the keyboard; click to toggle mute.</summary>
+/// <summary>Route gain dial. Drag vertically, scroll, or use the keyboard; click to toggle mute.</summary>
 public sealed class RoutingDial : Control
 {
     private double gain;
@@ -18,6 +18,9 @@ public sealed class RoutingDial : Control
     private Point? pressed;
     private double startGain;
     private bool dragging;
+    public bool DeferGainUntilRelease { get; set; }
+    public event Action? InteractionStarted;
+    public event Action? InteractionEnded;
     public bool CanEditGain { get; set; } = true;
     public event Action<double>? GainChanged;
     public event Action? MuteRequested;
@@ -57,7 +60,7 @@ public sealed class RoutingDial : Control
         if (next == gain)
             return;
         GainDb = next;
-        GainChanged?.Invoke(next);
+        if (!DeferGainUntilRelease || pressed is null) GainChanged?.Invoke(next);
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -68,6 +71,7 @@ public sealed class RoutingDial : Control
         Focus();
         pressed = e.GetPosition(this);
         startGain = gain;
+        InteractionStarted?.Invoke();
         dragging = false;
         e.Pointer.Capture(this);
         e.Handled = true;
@@ -92,7 +96,7 @@ public sealed class RoutingDial : Control
         if (pressed is null)
             return;
         var toggle = !dragging;
-        pressed = null;
+        FinishInteraction();
         e.Pointer.Capture(null);
         if (toggle)
             MuteRequested?.Invoke();
@@ -101,9 +105,18 @@ public sealed class RoutingDial : Control
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
+        FinishInteraction();
+        base.OnPointerCaptureLost(e);
+    }
+
+    private void FinishInteraction()
+    {
+        if (pressed is null) return;
+        var changed = dragging && gain != startGain;
         pressed = null;
         dragging = false;
-        base.OnPointerCaptureLost(e);
+        InteractionEnded?.Invoke();
+        if (DeferGainUntilRelease && changed) GainChanged?.Invoke(gain);
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)

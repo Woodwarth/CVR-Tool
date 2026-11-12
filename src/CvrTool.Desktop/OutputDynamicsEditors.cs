@@ -12,12 +12,15 @@ namespace CvrTool.Desktop;
 
 public sealed partial class MainWindow
 {
-    private void CommitDynamics(OutputDynamicsChange change, OutputDynamicsState original)
+    private async Task CommitDynamics(OutputDynamicsChange change, OutputDynamicsState original)
     {
-        var plan = service.PlanOutputDynamics(change);
-        if (plan.Before != original)
-            throw new InvalidOperationException("Output dynamics changed externally. Reopen this editor.");
-        service.ApplyOutputDynamics(plan.Id);
+        void Apply()
+        {
+            var plan = service.PlanOutputDynamics(change);
+            if (plan.Before != original) throw new InvalidOperationException("Output dynamics changed externally. Reopen this editor.");
+            service.ApplyOutputDynamics(plan.Id);
+        }
+        if (liveReadOnly) await Task.Run(Apply); else Apply();
         ReloadSession();
         status.Text = "Output settings applied";
     }
@@ -29,7 +32,8 @@ public sealed partial class MainWindow
         var original = service.GetOutputDynamics(editedId, channel);
         var panel = new StackPanel { Margin = new Thickness(24), Spacing = 18 };
         panel.Children.Add(Heading($"Mode · Output {(char)('A' + channel - 1)}"));
-        var mode = new ComboBox { ItemsSource = OutputLoadModes.Options, SelectedIndex = original.LoadMode is >= 0 and <= 2 ? original.LoadMode.Value : -1, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = "output-mode-choice" };
+        var choices = service.GetDevice(editedId).Readings?.ReadOnly == true ? OutputLoadModes.Options.Take(2).ToArray() : OutputLoadModes.Options;
+        var mode = new ComboBox { ItemsSource = choices, SelectedIndex = original.LoadMode is { } selectedMode && selectedMode >= 0 && selectedMode < choices.Count ? selectedMode : -1, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = "output-mode-choice" };
         panel.Children.Add(mode);
         var message = Text(original.LoadMode is >= 3 ? "Current device mode: " + OutputLoadModes.Label(original.LoadMode) : "", 12, Muted);
         panel.Children.Add(message);
@@ -40,7 +44,7 @@ public sealed partial class MainWindow
         actions.Children.Add(cancel);
         panel.Children.Add(actions);
         var editor = EditorWindow("Output mode", panel, 440, 280);
-        apply.Click += (_, _) => { try { if (mode.SelectedIndex < 0) throw new ArgumentException("Choose an output mode."); CommitDynamics(new(editedId, channel, LoadMode: mode.SelectedIndex), original); editor.Close(); } catch (Exception ex) { message.Text = ex.Message; } };
+        apply.Click += async (_, _) => { try { if (mode.SelectedIndex < 0) throw new ArgumentException("Choose an output mode."); await CommitDynamics(new(editedId, channel, LoadMode: mode.SelectedIndex), original); editor.Close(); } catch (Exception ex) { message.Text = ex.Message; } };
         cancel.Click += (_, _) => editor.Close();
         ShowInputEditor(editor, editedId, channel, "mode");
     }
@@ -56,7 +60,7 @@ public sealed partial class MainWindow
             var current = service.GetOutputDynamics(editedId, pairStart);
             var target = current.Bridged ? "Stereo" : "Bridge";
             if (!await ConfirmPresetAction("Switch to " + target, $"Switch outputs {(char)('A' + pairStart - 1)}/{(char)('A' + pairStart)} to {target}?")) return;
-            CommitDynamics(new(editedId, pairStart, Bridged: !current.Bridged), current);
+            await CommitDynamics(new(editedId, pairStart, Bridged: !current.Bridged), current);
         }
         catch (Exception ex) { status.Text = ex.Message; }
         finally { bridgeConfirmations.Remove((editedId, pairStart)); }
@@ -94,7 +98,7 @@ public sealed partial class MainWindow
         actions.Children.Add(cancel);
         panel.Children.Add(actions);
         var editor = EditorWindow("Output noise gate", panel, 440, 350);
-        apply.Click += (_, _) => { try { if (threshold.Value is null) return; if (decimal.Truncate(threshold.Value.Value) != threshold.Value.Value) throw new ArgumentException("Enter a whole dB value."); CommitDynamics(new(editedId, channel, NoiseGateEnabled: enabled.IsChecked == true, NoiseGateDb: original.NoiseGateDb is null ? null : checked((int)threshold.Value.Value)), original); editor.Close(); } catch (Exception ex) { message.Text = ex.Message; } };
+        apply.Click += async (_, _) => { try { if (threshold.Value is null) return; if (decimal.Truncate(threshold.Value.Value) != threshold.Value.Value) throw new ArgumentException("Enter a whole dB value."); await CommitDynamics(new(editedId, channel, NoiseGateEnabled: enabled.IsChecked == true, NoiseGateDb: original.NoiseGateDb is null ? null : checked((int)threshold.Value.Value)), original); editor.Close(); } catch (Exception ex) { message.Text = ex.Message; } };
         cancel.Click += (_, _) => editor.Close();
         ShowInputEditor(editor, editedId, channel, "noise-gate");
     }
@@ -153,7 +157,7 @@ public sealed partial class MainWindow
         var editor = EditorWindow("Output limiters", panel, 760, 590);
         editor.MinWidth = 720;
         editor.MinHeight = 570;
-        apply.Click += (_, _) =>
+        apply.Click += async (_, _) =>
         {
             try
             {
@@ -176,7 +180,7 @@ public sealed partial class MainWindow
                     HoldMs = checked((int)hold.Value!.Value),
                     ReleaseMs = checked((int)decay.Value!.Value)
                 };
-                CommitDynamics(new(editedId, channel, Rms: nextRms, Peak: nextPeak), original);
+                await CommitDynamics(new(editedId, channel, Rms: nextRms, Peak: nextPeak), original);
                 editor.Close();
             }
             catch (Exception ex) { message.Text = ex.Message; }

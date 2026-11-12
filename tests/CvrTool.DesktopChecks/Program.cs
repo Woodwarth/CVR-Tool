@@ -25,6 +25,13 @@ IEnumerable<T> All<T>() where T : class => root.GetLogicalDescendants().OfType<T
 T Tagged<T>(string tag) where T : Control => All<T>().Single(c => c.Tag?.ToString() == tag);
 Button Button(string content) => All<Button>().Single(b => b.Content?.ToString() == content);
 void Press(Button button) { button.RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Layout(); }
+void WaitUi(Func<bool> completed)
+{
+    var timeout=System.Diagnostics.Stopwatch.StartNew();
+    while (!completed() && timeout.Elapsed < TimeSpan.FromSeconds(4)) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(10); }
+    Layout();
+    if(!completed()) throw new Exception("Asynchronous UI action did not complete.");
+}
 void Click(string content) => Press(Button(content));
 void ConfirmBridge(string tag)
 {
@@ -288,6 +295,18 @@ Press(Tagged<Button>("software-updates")); var updateDialog=window.OwnedWindows.
 Check(window.OwnedWindows.Count==1 && ReferenceEquals(updateDialog,window.OwnedWindows.Single()), "Only one software update dialog is opened");
 Check(updateDialog.GetLogicalDescendants().OfType<Button>().Any(b=>b.Tag?.ToString()=="check-for-updates") && !updateDialog.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="install-update").IsEnabled,"Updater starts with an explicit check and no implicit download"); updateDialog.Close();
 window.Close();
+var nativeService = new AmplifierService(new DemoBackend());
+var nativeFixture = nativeService.ExportNativePreset("demo-1004");
+System.Text.Encoding.ASCII.GetBytes("Input annotation").CopyTo(nativeFixture, 36 + 378);
+System.Text.Encoding.ASCII.GetBytes("Speaker label").CopyTo(nativeFixture, 36 + 394);
+nativeService.LoadPresetFile("demo-1004", "fixture.sd", nativeFixture[..2687]);
+window = new MainWindow(nativeService); window.Show(); root = (Control)window.Content!; Layout();
+Click("☰   Presets");
+Check(Tagged<Control>("native-preset-information") is not null && Text("Input annotation") && Text("Speaker label") && Text("Input mute"), "Native metadata is visible in Presets for imported files"); Save("native-preset-metadata");
+Click("◖   Outputs"); Check(Tagged<Button>("output-speaker-A").GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "Speaker label"), "Output tile displays the saved speaker label");
+Press(Tagged<Button>("output-fir-A")); var unknownFirViewer = window.OwnedWindows.Single();
+Check(unknownFirViewer.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("FIR coefficients unknown") == true) && !unknownFirViewer.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag?.ToString() == "fir-export").IsEnabled, "Sync-only preset FIR opens without fake coefficients or export");
+unknownFirViewer.Close(); window.Close();
 window = new MainWindow(new AmplifierService(new TelemetryFixture())); window.Show(); root = (Control)window.Content!; Layout();
 var clipped = Tagged<Control>("channel-clip-A").GetLogicalDescendants().OfType<TextBlock>().ToArray();
 var notClipped = Tagged<Control>("channel-clip-B").GetLogicalDescendants().OfType<TextBlock>().ToArray();
@@ -302,20 +321,100 @@ Device(LiveDesktopFixture.LiveId); Layout();
 Check(All<Button>().Count(b => b.Tag?.ToString()?.StartsWith("demo-") == true) == 3, "All three demos remain listed beside the live device");
 Check(Tagged<TextBlock>("device-dot-" + LiveDesktopFixture.LiveId).Foreground is ISolidColorBrush liveGreen && liveGreen.Color == Color.Parse("#00CE63"), "Connected live device point is green");
 Check(Tagged<ToggleButton>("device-wink").IsEffectivelyEnabled, "Live Wink control follows evidenced capability");
-Check(Tagged<ToggleButton>("device-lock").IsEffectivelyEnabled && Tagged<ToggleButton>("device-standby").IsEffectivelyEnabled && !Tagged<Button>("device-name-display").IsEffectivelyEnabled, "Live lock and standby are enabled while DSP/name editing stays protected");
-Check(All<Slider>().All(s => !s.IsEnabled) && Tagged<ToggleButton>("mute-output-A").IsEnabled, "Live main gain stays protected while mute is available");
+Check(Tagged<ToggleButton>("device-lock").IsEffectivelyEnabled && Tagged<ToggleButton>("device-standby").IsEffectivelyEnabled && Tagged<Button>("device-name-display").IsEffectivelyEnabled, "Live header controls and verified device rename are enabled");
+Check(All<Slider>().All(s => s.IsEnabled) && Tagged<ToggleButton>("mute-output-A").IsEnabled && Tagged<ToggleButton>("mute-input-A").IsEnabled, "Live Main exposes verified input gain and independent input/output mutes");
+var liveFader=Tagged<Slider>("input-gain-A");
+liveFader.RaiseEvent(new KeyEventArgs { RoutedEvent=InputElement.KeyDownEvent, Key=Key.Up }); Layout();
+Check(liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1).State.GainDb==0, "Live fader previews locally before key release commits the value");
+liveFader.RaiseEvent(new KeyEventArgs { RoutedEvent=InputElement.KeyUpEvent, Key=Key.Up });
+WaitUi(()=>liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1).State.GainDb==.5 && Tagged<Slider>("input-gain-A").IsEffectivelyEnabled);
+Check(Tagged<TextBlock>("gain-A").Text=="0.5 dB", "Live Main commits half-dB input gain and shows authoritative readback");
+Tagged<ToggleButton>("mute-input-A").IsChecked=true;
+WaitUi(()=>liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1).State.Muted==true && Tagged<ToggleButton>("mute-input-A").IsEffectivelyEnabled);
+Check(Tagged<ToggleButton>("mute-input-A").IsChecked==true, "Live Main input mute commits through the shared application service");
+Press(Tagged<Button>("device-name-display")); Tagged<TextBox>("device-name").Text="Renamed live fixture"; Press(Tagged<Button>("save-name"));
+WaitUi(()=>liveFixture.LiveName=="Renamed live fixture" && Tagged<Button>("device-name-display").IsEffectivelyEnabled);
+Check(Tagged<Button>("device-name-display").GetLogicalDescendants().OfType<TextBlock>().Any(t=>t.Text=="Renamed live fixture"), "Live Main device-name edit shows confirmed identity state");
 Check(Tagged<Control>("channel-clip-A").GetLogicalDescendants().OfType<StatusLed>().Single().Value is null, "Input clip does not copy output clip on live devices");
 Click("ⓘ   Details");
 Check(Text("Fixture-106119-DSP-1004") && Text("Fixture preset") && Text("RMS timing") && Text("Peak timing") && Text("Routing matrix") && Text("coefficients not received"), "Live details include identity, processing, routing, dynamics and unknown FIR state");
 Click("◉   Inputs");
-Check(All<RoutingDial>().All(d => d.IsEnabled && !d.CanEditGain) && Tagged<Button>("input-eq-1").IsEnabled, "Live matrix permits mute while gain remains protected and EQ viewable");
+Check(All<RoutingDial>().All(d => d.IsEnabled && d.CanEditGain) && Tagged<Button>("input-eq-1").IsEnabled, "Live matrix exposes verified gain/mute with EQ viewable");
+var liveRoute = Tagged<RoutingDial>("route-dial-1-1");
+var routeBefore = liveFixture.GetRouting(LiveDesktopFixture.LiveId).Cells.Single(c => c.Input == 1 && c.Output == 1);
+var pointer = new Pointer(101, PointerType.Mouse, true);
+var routeOrigin = liveRoute.TranslatePoint(new Point(37,37), window)!.Value;
+liveRoute.RaiseEvent(new PointerPressedEventArgs(liveRoute, pointer, window, routeOrigin, 1, new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 1));
+liveRoute.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent, liveRoute, pointer, window, routeOrigin + new Vector(0,-10), 2, new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.Other), KeyModifiers.None));
+Check(liveRoute.GainDb != routeBefore.GainDb && liveFixture.GetRouting(LiveDesktopFixture.LiveId).Cells.Single(c => c.Input == 1 && c.Output == 1).GainDb == routeBefore.GainDb, "Live matrix drag previews without sending intermediate gain writes");
+var expectedRouteGain = liveRoute.GainDb;
+liveRoute.RaiseEvent(new PointerReleasedEventArgs(liveRoute, pointer, window, routeOrigin + new Vector(0,-10), 3, new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased), KeyModifiers.None, MouseButton.Left));
+WaitUi(() => liveFixture.GetRouting(LiveDesktopFixture.LiveId).Cells.Single(c => c.Input == 1 && c.Output == 1).GainDb == expectedRouteGain && Tagged<RoutingDial>("route-dial-1-1").IsEffectivelyEnabled);
+Check(liveFixture.GetRouting(LiveDesktopFixture.LiveId).Cells.Single(c => c.Input == 1 && c.Output == 1).Muted == routeBefore.Muted, "Live route gain commits on release and preserves mute");
+
 Press(Tagged<Button>("input-eq-1")); var liveEq = window.OwnedWindows.Single();
-Check(liveEq.Title!.Contains("Read-only") && !liveEq.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag?.ToString() == "apply-input-eq").IsEnabled, "Live EQ viewer disables apply"); liveEq.Close();
-Click("◖   Outputs"); Check(!Tagged<Button>("output-mode-A").IsEnabled && Tagged<Button>("output-eq-A").IsEnabled, "Live output settings remain visible and protected");
+Check(liveEq.Title!.Contains("Live") && liveEq.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag?.ToString() == "apply-input-eq").IsEnabled && liveEq.GetLogicalDescendants().OfType<ComboBox>().Single(b => b.Tag?.ToString() == "hp-type") is { IsEnabled: true, ItemCount: 2 }, "Live EQ offers only evidenced BW-12/BW-24 crossover types");
+var liveGraph = liveEq.GetLogicalDescendants().OfType<EqualizerGraph>().Single();
+var originalHp = liveGraph.HighPass;
+liveGraph.MoveCrossover(true, 300);
+Check(liveGraph.IsEffectivelyEnabled && liveGraph.CanEditCrossovers && liveGraph.HighPass?.FrequencyHz == 300 && liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1).State.HighPass == originalHp, "Live HP graph adjusts a draft without sending until Apply");
+liveGraph.MoveCrossover(false,18000);
+var peakBandsBefore = liveGraph.Bands;
+liveGraph.Bands = peakBandsBefore.Select(b => b.Number == 2 ? b with { FilterType = 1 } : b).ToArray();
+var protectedBandBefore = liveGraph.Bands.Single(b => b.Number == 2);
+liveGraph.MoveBand(2, 3000, 8);
+Check(liveGraph.Bands.Single(b => b.Number == 2) == protectedBandBefore, "Live graph leaves unsupported band types unchanged");
+liveGraph.Bands = peakBandsBefore;
+liveGraph.MoveBand(1, 1200, 3.5);
+Check(liveGraph.Bands.Single(b => b.Number == 1) is { FrequencyHz: 1200, GainDb: 3.5 } && liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1).State.Bands[0].GainDb != 3.5, "Live graphical EQ edits remain drafts until Apply");
+liveEq.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag?.ToString() == "apply-input-eq").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+WaitUi(() => !window.OwnedWindows.Contains(liveEq));
+Check(liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1).State.Bands[0] is { FrequencyHz: 1200, GainDb: 3.5 }, "Live graphical Peak edit applies through the shared service");
+Check(liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1).State is { HighPass.FrequencyHz: 300, LowPass.FrequencyHz: 18000 }, "Live graphical HP/LP edits apply through the shared service");
+Click("◉   Inputs");
+var liveOutputGain = Tagged<GainReadout>("routing-output-gain-A");
+Check(liveOutputGain.GetLogicalDescendants().OfType<Button>().Single().IsEffectivelyEnabled, "Live Inputs output gain has an enabled click target");
+Press(liveOutputGain.GetLogicalDescendants().OfType<Button>().Single());
+var liveGainEntry = liveOutputGain.GetLogicalDescendants().OfType<TextBox>().Single();
+liveGainEntry.Text = "-6,5";
+var inputEditTimer = System.Diagnostics.Stopwatch.StartNew();
+while (inputEditTimer.Elapsed < TimeSpan.FromMilliseconds(1300)) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(10); }
+Check(ReferenceEquals(liveGainEntry, Tagged<GainReadout>("routing-output-gain-A").GetLogicalDescendants().OfType<TextBox>().Single()) && liveGainEntry.Text == "-6,5", "Automatic live refresh preserves an in-progress Inputs gain draft");
+liveGainEntry.RaiseEvent(new KeyEventArgs { RoutedEvent=InputElement.KeyDownEvent, Key=Key.Enter });
+WaitUi(() => liveFixture.GetChannel(LiveDesktopFixture.LiveId,1).State.GainDb == -6.5 && Tagged<GainReadout>("routing-output-gain-A").IsEffectivelyEnabled);
+Check(Tagged<GainReadout>("routing-output-gain-A").Value == -6.5, "Live Inputs output gain accepts decimal comma and shows confirmed value");
+var unsupportedHpOriginal = liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1);
+liveFixture.ApplyInputProcessing(new(LiveDesktopFixture.LiveId,1,HighPass:unsupportedHpOriginal.State.HighPass! with {FilterType=1}),unsupportedHpOriginal.Revision);
+window.ReloadSession(); Layout(); Press(Tagged<Button>("input-eq-1"));
+var unsupportedHpEditor=window.OwnedWindows.Single();
+Check(!unsupportedHpEditor.GetLogicalDescendants().OfType<ComboBox>().Single(c=>c.Tag?.ToString()=="hp-type").IsEffectivelyEnabled && unsupportedHpEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(c=>c.Tag?.ToString()=="lp-frequency").IsEffectivelyEnabled, "An unverified stored HP type stays protected while known LP remains editable");
+var unsupportedGraph=unsupportedHpEditor.GetLogicalDescendants().OfType<EqualizerGraph>().Single();
+var unsupportedFilterBefore=unsupportedGraph.HighPass;
+unsupportedGraph.MoveCrossover(true,500);
+Check(unsupportedGraph.HighPass==unsupportedFilterBefore, "Protected stored crossover types cannot be changed through graph handles");
+unsupportedHpEditor.Close();
+var unsupportedHpCurrent=liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1);
+liveFixture.ApplyInputProcessing(new(LiveDesktopFixture.LiveId,1,HighPass:unsupportedHpOriginal.State.HighPass),unsupportedHpCurrent.Revision);
+window.ReloadSession(); Layout();
+
+Click("◖   Outputs"); Check(Tagged<Button>("output-mode-A").IsEnabled && Tagged<Button>("output-eq-A").IsEnabled, "Live output settings can be inspected through protected editors");
+foreach (var tag in new[] { "output-mode-A", "output-delay-A", "output-noise-A", "output-limiters-A", "output-fir-A" })
+{
+    Press(Tagged<Button>(tag)); var viewer = window.OwnedWindows.Single();
+    var writesAllowed = tag != "output-limiters-A";
+    Check(viewer.Title!.Contains(writesAllowed ? "Live" : "Read-only") && viewer.GetLogicalDescendants().OfType<Button>().Where(b => b.Tag?.ToString()?.StartsWith("apply-") == true).All(b => b.IsEffectivelyEnabled == writesAllowed), "Live editor permits only verified writes for " + tag);
+    if(tag=="output-mode-A") Check(viewer.GetLogicalDescendants().OfType<ComboBox>().Single(b=>b.Tag?.ToString()=="output-mode-choice").ItemCount==2,"Live mode offers only verified Low-Z and 70V variants");
+    if (tag == "output-fir-A") Check(viewer.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("FIR coefficients unknown") == true), "Unread live FIR coefficients show unknown instead of an invented curve");
+    viewer.Close();
+}
 Click("☰   Presets"); Check(!All<ComboBox>().Any(), "Live preset save offers only native .sd format");
 Click("☰   Presets"); Check(Tagged<Button>("snapshot-save-pc").IsEnabled && !All<ComboBox>().Any(c => c.Tag?.ToString() == "device-preset-slot"), "Unknown device slots are not invented and known settings can be saved");
 liveFixture.Error = "Offline fixture"; window.ReloadSession(); Layout();
 Check(Tagged<TextBlock>("device-dot-" + LiveDesktopFixture.LiveId).Foreground is ISolidColorBrush liveRed && liveRed.Color == Color.Parse("#F05462"), "Disconnected live device point turns red");
+Click("⌂   Main");
+Check(!Tagged<ToggleButton>("device-lock").IsEffectivelyEnabled && !Tagged<ToggleButton>("device-standby").IsEffectivelyEnabled && !Tagged<ToggleButton>("device-wink").IsEffectivelyEnabled && !Tagged<ToggleButton>("mute-output-A").IsEffectivelyEnabled, "Offline device retains readings while operational controls and mute are disabled");
+liveFixture.Error = null; window.ReloadSession(); Layout();
+Check(Tagged<ToggleButton>("device-wink").IsEffectivelyEnabled && Tagged<ToggleButton>("mute-output-A").IsEffectivelyEnabled, "Fresh connection restores only the supported live controls");
 Device("demo-2002"); Click("⌂   Main"); Check(All<Slider>().All(s => s.IsEnabled), "Switching back to a demo restores editable controls");
 window.Close(); Console.WriteLine($"PASS: {count} desktop checks");
 
