@@ -58,7 +58,7 @@ public sealed partial class CvrSnapshotBackend
                 [unchecked((byte)(after.Enabled ? after.FilterType : -after.FilterType - 1))], segment: slot);
     }
 
-    private void WriteSettingsBytes(CvrUdpClient client, byte function, byte channel, byte side, int offset, byte[] body, byte segment = 0, byte messageStatus = 1)
+    private void WriteSettingsBytes(CvrUdpClient client, byte function, byte channel, byte side, int offset, byte[] body, byte segment = 0, byte messageStatus = 1, bool requireUnchangedRemainder = true)
     {
         byte[] expected;
         lock (gate)
@@ -76,7 +76,7 @@ public sealed partial class CvrSnapshotBackend
             if (deadline.Elapsed >= TimeSpan.FromSeconds(2)) throw new InvalidOperationException("Settings readback did not confirm the requested value.");
             Thread.Sleep(75);
         }
-        lock (gate) if (!native.SequenceEqual(expected)) throw new InvalidOperationException("Other settings changed during editing; current readings were refreshed.");
+        lock (gate) if (requireUnchangedRemainder && !native.SequenceEqual(expected)) throw new InvalidOperationException("Other settings changed during editing; current readings were refreshed.");
     }
     public DeviceSnapshot Rename(string deviceId, string name, long expectedRevision)
     {

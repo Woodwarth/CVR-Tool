@@ -15,6 +15,7 @@ public sealed partial class AmplifierService(IAmplifierBackend backend, TimeProv
     private readonly Dictionary<Guid, ChangePlan> plans = new();
     public IReadOnlyList<DeviceSnapshot> ListDevices() => backend.ListDevices();
     public DeviceSnapshot GetDevice(string id) => backend.GetDevice(id);
+    public long SettingsRevision(string id) => backend.GetChannel(id, 1).Revision;
     // These ranges are simulation constraints, not asserted hardware capabilities.
     /// <summary>Validate demo ranges and merge only supplied parameters; the original snapshot stays unchanged.</summary>
     public static ChannelState Merge(ChannelState before, ChannelChange change)

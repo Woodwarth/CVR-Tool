@@ -42,7 +42,7 @@ if (-not $code) {
 if (-not $code) { throw 'VS Code nicht gefunden. Terminal neu starten.' }
 $codePath = if ($code.Source) { $code.Source } else { $code.FullName }
 if ($InstallExtensions) {
-    foreach ($extension in @('ms-dotnettools.csharp','AvaloniaTeam.vscode-avalonia','openai.chatgpt')) {
+    foreach ($extension in @('ms-dotnettools.csharp','AvaloniaTeam.vscode-avalonia')) {
         & $codePath --install-extension $extension
         if ($LASTEXITCODE -ne 0) { throw "VS-Code-Erweiterung konnte nicht installiert werden: $extension" }
     }
@@ -54,32 +54,5 @@ if ($LASTEXITCODE -ne 0) { throw 'Build fehlgeschlagen.' }
 & dotnet run --project tests/CvrTool.Checks --no-build
 if ($LASTEXITCODE -ne 0) { throw 'Verhaltenspruefungen fehlgeschlagen.' }
 
-# Only project-local configuration; existing unrelated settings are preserved.
-$assembly = Join-Path $root 'src\CvrTool.Mcp\bin\Debug\net10.0\CvrTool.Mcp.dll'
-$dotnetPath = (Get-Command dotnet).Source
-$codexDirectory = Join-Path $root '.codex'
-New-Item -ItemType Directory -Path $codexDirectory -Force | Out-Null
-$codexConfig = Join-Path $codexDirectory 'config.toml'
-$section = '[mcp_servers.cvr_tool_demo]'
-$existingConfig = if (Test-Path -LiteralPath $codexConfig) { [string](Get-Content -LiteralPath $codexConfig -Raw) } else { '' }
-if ($existingConfig.Contains($section)) {
-    Write-Host 'Vorhandene CVR-MCP-Konfiguration bleibt erhalten. Bei Ordnerwechsel Pfade pruefen.'
-} else {
-    $toml = "`n$section`ncommand = $($dotnetPath | ConvertTo-Json -Compress)`nargs = [$($assembly | ConvertTo-Json -Compress)]`nstartup_timeout_sec = 30`n"
-    [System.IO.File]::WriteAllText($codexConfig, $existingConfig + $toml, (New-Object System.Text.UTF8Encoding($false)))
-}
-$claudeConfig = Join-Path $root '.mcp.json'
-$claude = if (Test-Path -LiteralPath $claudeConfig) { Get-Content -LiteralPath $claudeConfig -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
-if (-not $claude.PSObject.Properties['mcpServers']) {
-    $claude | Add-Member -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{})
-}
-if (-not $claude.mcpServers.PSObject.Properties['cvr-tool-demo']) {
-    $claude.mcpServers | Add-Member -NotePropertyName 'cvr-tool-demo' -NotePropertyValue ([pscustomobject]@{
-        command = $dotnetPath; args = @($assembly)
-    })
-    [System.IO.File]::WriteAllText($claudeConfig, ($claude | ConvertTo-Json -Depth 20), (New-Object System.Text.UTF8Encoding($false)))
-}
-Write-Host 'Build und Pruefungen erfolgreich. MCP lokal fuer dieses Projekt konfiguriert.'
-Write-Host 'Codex: Projekt vertrauen, Codex-Seitenleiste oeffnen und anmelden.'
-Write-Host 'Claude Code: Projekt-MCP-Konfiguration beim naechsten Start bestaetigen.'
+Write-Host "Build and checks passed. Optional MCP client setup: python scripts/configure-mcp.py"
 if ($OpenProject) { & $codePath (Join-Path $root 'CVR-Tool.code-workspace') }

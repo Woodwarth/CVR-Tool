@@ -34,6 +34,7 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
     private bool standbyState;
     private bool standbyKnown;
     private OutputAllocation[]? allocation;
+    private readonly Dictionary<int, FirState> firByChannel = new();
     private DevicePresetSlot[] presetSlots = [];
     private uint? operatingMinutes;
     private DateTimeOffset metadataCheckedAt;
@@ -110,6 +111,20 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
         catch (Exception ex) when (ex is TimeoutException or IOException or NotSupportedException or System.Net.Sockets.SocketException)
         { lock (gate) allocation = null; }
         finally { metadataCheckedAt = DateTimeOffset.UtcNow; }
+
+        int count;
+        lock (gate) count = settings.Outputs.Count;
+        for (int channel = 1; channel <= count; channel++)
+        {
+            try
+            {
+                var raw = client.ReadInspection(43, (byte)(channel - 1), 0, 1);
+                var fir = ProcessingWire.DecodeFir(channel, raw, false);
+                lock (gate) firByChannel[channel] = fir;
+            }
+            catch (Exception ex) when (ex is TimeoutException or IOException or NotSupportedException or System.Net.Sockets.SocketException)
+            { lock (gate) firByChannel.Remove(channel); }
+        }
     }
     private void ReadTelemetry(CvrUdpClient client)
     {
@@ -162,6 +177,7 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
                 LoadOhms: current > 0 ? voltage / current : null,
                 TemperatureC: compact ? null : ProcessingWire.Float(bytes, i * 4), Status: flags,
                 InputMeterDb: bytes.Length is 72 or 88 or 92 or 96 ? MeterDb(BitConverter.ToSingle(bytes, 56 + i * 4), 1) : null,
+                LimitDb: bytes.Length is 88 or 92 or 96 && float.IsFinite(BitConverter.ToSingle(bytes,72+i*4)) ? -BitConverter.ToSingle(bytes,72+i*4) : null,
                 InputClip: bytes.Length is 92 or 96 ? bytes[88 + i] == 0 : null);
         }).ToArray();
     }
@@ -226,7 +242,17 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
     public (OutputDynamicsState State, long Revision) GetOutputDynamics(string deviceId, int channel)
     { lock (gate) { CheckId(deviceId); CheckChannel(channel); return (settings.Dynamics!.Single(c => c.Channel == channel), revision); } }
     public (FirState State, long Revision) GetFir(string deviceId, int channel)
-    { lock (gate) { CheckId(deviceId); CheckChannel(channel); return (new(channel, "Unknown", [], native[36 + (channel - 1) * 515 + 368] == 0, CoefficientsKnown: false), revision); } }
+    {
+        lock (gate)
+        {
+            CheckId(deviceId);
+            CheckChannel(channel);
+            bool enabled = native[36 + (channel - 1) * 515 + 368] == 0;
+            return (firByChannel.TryGetValue(channel, out var fir)
+                ? fir with { Enabled = enabled, Coefficients = fir.Coefficients.ToArray() }
+                : new(channel, "Unknown", [], enabled, CoefficientsKnown: false), revision);
+        }
+    }
     public DeviceControlState GetControlState(string deviceId)
     { lock (gate) { CheckId(deviceId); return new(native[33] != 0, standbyState, StandbyKnown: standbyKnown, Wink: winkState); } }
     public DevicePresetState GetDevicePresets(string deviceId)
@@ -237,13 +263,56 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
     { lock (gate) { CheckId(deviceId); return JsonSerializer.Deserialize<PresetDocument>(JsonSerializer.Serialize(settings with { Name = device.Name }))!; } }
 
     private static NotSupportedException ReadOnly() => new("Only physically evidenced command variants are writable on this live connection.");
-    public InputProcessingState ApplyOutputProcessing(InputProcessingChange change, long expectedRevision) => throw ReadOnly();
-    public FirState ApplyFir(string deviceId, FirState state, long expectedRevision) => throw ReadOnly();
-    public DeviceSnapshot ApplyPreset(string deviceId, PresetDocument preset, long expectedRevision) => throw ReadOnly();
-    public DeviceOperationResult StoreDevicePreset(string deviceId, int slot, string name, long expectedRevision) => throw ReadOnly();
-    public DeviceOperationResult RecallDevicePreset(string deviceId, int slot, long expectedRevision) => throw ReadOnly();
-    public DeviceOperationResult FactoryReset(string deviceId, long expectedRevision) => throw ReadOnly();
-    public DeviceOperationResult ClearDevicePresets(string deviceId, long expectedRevision) => throw ReadOnly();
+    public InputProcessingState ApplyOutputProcessing(InputProcessingChange change, long expectedRevision)
+    {
+        if (change.DelayMs.HasValue || change.GainDb.HasValue || change.Muted.HasValue)
+            throw new NotSupportedException("Use the output channel controls for gain, mute and delay.");
+        MutateSettings(change.DeviceId, expectedRevision, client =>
+        {
+            CheckChannel(change.Channel);
+            var index = change.Channel - 1;
+            var offset = 36 + index * 515 + 226;
+            var before = settings.OutputProcessing![index];
+            var after = AmplifierService.MergeInput(before, change);
+            var block = ProcessingWire.EncodeEq(after, native[offset..(offset + 141)]);
+            WriteSettingsBytes(client, 52, (byte)index, 1, offset, block, messageStatus: 0);
+        });
+        return GetOutputProcessing(change.DeviceId, change.Channel).State;
+    }
+    public FirState ApplyFir(string deviceId, FirState state, long expectedRevision)
+    {
+        state = AmplifierService.ValidateFir(state);
+        MutateSettings(deviceId, expectedRevision, client =>
+        {
+            CheckChannel(state.Channel);
+            byte ch = (byte)(state.Channel - 1);
+            var prior = client.ReadInspection(43, ch, 0, 1);
+            var bytes = ProcessingWire.EncodeFir(state, prior.Length == 2080);
+            if (!bytes.SequenceEqual(prior))
+            {
+                client.Write(43, bytes, ch, side: 1);
+                var confirmed = client.ReadInspection(43, ch, 0, 1);
+                lock (gate) firByChannel[state.Channel] = ProcessingWire.DecodeFir(state.Channel, confirmed, false);
+                if (!confirmed.SequenceEqual(bytes))
+                    throw new InvalidOperationException("The amplifier did not confirm the new FIR coefficients.");
+                lock (gate) revision++;
+            }
+            WriteSettingsBytes(client, 44, ch, 1, 36 + ch * 515 + 368, [(byte)(state.Enabled ? 0 : 1)]);
+        });
+        return GetFir(deviceId, state.Channel).State;
+    }
+    public DeviceOperationResult FactoryReset(string deviceId, long expectedRevision)
+    {
+        MutateSettings(deviceId, expectedRevision, client =>
+        {
+            lock (gate) { firByChannel.Clear(); presetSlots = []; }
+            client.Command(16, [1]);
+            ReadSettings(client);
+            ReadMetadata(client);
+            ReadTelemetry(client);
+        });
+        return new("Factory reset", true, "Reset acknowledged; device settings refreshed.");
+    }
     public void Dispose()
     {
         timer.Dispose();

@@ -24,7 +24,31 @@ public sealed partial class MainWindow
         var sidebar = new StackPanel { Spacing = 12, Margin = new Thickness(12) };
         sidebar.Children.Add(Heading("Devices"));
         sidebar.Children.Add(navigation);
-        sidebar.Children.Add(Text("MCP shares this session", 11, Muted));
+        var manage = new Button { Content = "+", Width = 48, Height = 44, FontSize = 29, Padding = new Thickness(0), BorderThickness = new Thickness(0), BorderBrush = Brushes.Transparent, Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Tag = "manage-demos" };
+        Avalonia.Automation.AutomationProperties.SetName(manage, "Manage demo devices");
+        manage.Click += async (_, _) =>
+        {
+            var models = new ComboBox { ItemsSource = CvrTool.Core.DeviceProfiles.TargetModels.Select(p => p.Model).ToArray(), SelectedItem = "DSP-1004" };
+            var demos = service.ListDevices().Where(d => d.IsDemo).ToArray();
+            var existing = new ComboBox { ItemsSource = demos.Select(d => d.Name).ToArray(), SelectedIndex = Array.FindIndex(demos,d => d.Id == deviceId) };
+            var add = new Button { Content = "Add demo" };
+            var remove = new Button { Content = "Remove demo", IsEnabled = existing.SelectedIndex >= 0 };
+            existing.SelectionChanged += (_, _) => remove.IsEnabled = existing.SelectedIndex >= 0;
+            var panel = new StackPanel { Margin = new Thickness(18), Spacing = 12 };
+            panel.Children.Add(Field("Model",models)); panel.Children.Add(add);
+            panel.Children.Add(Field("Session demos",existing)); panel.Children.Add(remove);
+            var dialog = EditorWindow("Demo devices",panel,420,340);
+            add.Click += (_, _) => { if(models.SelectedItem is string model) { Select(service.AddDemo(model).Id); dialog.Close(); } };
+            remove.Click += (_, _) =>
+            {
+                var id = demos[existing.SelectedIndex].Id;
+                service.RemoveDemo(id);
+                if (deviceId == id) deviceId = service.ListDevices().FirstOrDefault()?.Id ?? "";
+                ReloadSession(); dialog.Close();
+            };
+            await dialog.ShowDialog(this);
+        };
+        sidebar.Children.Add(manage);
         center.Children.Add(new Border { Background = Brush.Parse("#192129"), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 1, 0), Child = sidebar });
         var workspace = new Grid { RowDefinitions = new RowDefinitions("108,48,*"), RowSpacing = 12, Margin = new Thickness(16), Tag = "workspace" };
         workspace.Children.Add(DeviceHeader());
@@ -51,8 +75,25 @@ public sealed partial class MainWindow
                 e.Handled = true;
             }
         };
-        return new Viewbox { Child = shell, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.Both, Tag = "scaled-shell" };
+        return new WorkspaceViewbox(shell) { Child = shell, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.Both, Tag = "scaled-shell" };
     }
+    // Grow the logical workspace on wide or tall displays while keeping controls proportional.
+    private sealed class WorkspaceViewbox(Grid surface) : Viewbox
+    {
+        protected override Size MeasureOverride(Size available)
+        {
+            if (double.IsFinite(available.Width) && double.IsFinite(available.Height) && available.Width > 0 && available.Height > 0)
+            {
+                var scale = Math.Min(available.Width / 1680, available.Height / 980);
+                surface.Width = available.Width / scale;
+                surface.Height = available.Height / scale;
+                base.MeasureOverride(available);
+                return available;
+            }
+            return base.MeasureOverride(available);
+        }
+    }
+
     private void FitInitialWindow()
     {
         var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;

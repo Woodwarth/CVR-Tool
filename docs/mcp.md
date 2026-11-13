@@ -59,7 +59,7 @@ for compatibility with isolated test clients and does not share GUI state.
   as new LoadMode edits. Older JSON without LoadMode preserves the active mode.
 
 Channel numbers start at 1. Physical IDs are `cvr:ADDRESS:PORT`; local models
-are `demo-1004`, `demo-2002` and `demo-1502`. Local state is volatile. Exported
+start with `demo-1004`. Use `add_demo_device` for another model. Local state is volatile. Exported
 schema 6 JSON includes inputs, outputs, routing, output EQ/FIR and dynamics; schema 2â€“5
 files remain readable. Native `.sd` supports B-series 106118/106119 layouts. Unknown readings are null, never fabricated.
 

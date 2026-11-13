@@ -17,10 +17,11 @@ public sealed partial class MainWindow
         DisableLiveEdits(editor, true);
         var snapshot = service.GetDevice(device);
         var allowed = ConnectionAvailable(snapshot) && snapshot.Readings?.CanSetVerifiedDsp == true &&
-            kind is "delay" or "output-delay" or "eq" or "mode" or "noise-gate" or "fir";
+            kind is "delay" or "output-delay" or "output-eq" or "eq" or "mode" or "noise-gate" or "fir" or "limiters";
         editor.Title += allowed ? " · Live" : " · Read-only";
         if (!allowed) return;
         var input = kind == "eq" ? service.GetInputProcessing(device, channel) : null;
+        var snapshotOutput = kind == "output-eq" ? service.GetOutputProcessing(device, channel) : null;
         foreach (var control in editor.GetLogicalDescendants().OfType<Control>())
         {
             var tag = control.Tag?.ToString() ?? "";
@@ -31,7 +32,11 @@ public sealed partial class MainWindow
                 graph.CanEditCrossovers = ObservedInputCrossovers.CanWrite(input!.HighPass) && ObservedInputCrossovers.CanWrite(input.LowPass);
                 graph.PeakBandsOnly = true;
                 graph.IsEnabled = true;
-                ToolTip.SetTip(graph, "Drag Peak bands to change frequency and gain. BW-12/BW-24 HP/LP are editable; other filter types stay protected.");
+            }
+            if (kind == "output-eq" && control is EqualizerGraph outputGraph)
+            {
+                outputGraph.IsEnabled = true;
+                outputGraph.PeakBandsOnly = true;
             }
             var enable = kind switch
             {
@@ -39,7 +44,14 @@ public sealed partial class MainWindow
                 "mode" => tag is "output-mode-choice" or "apply-output-mode",
                 "noise-gate" => tag is "noise-gate-enabled" or "apply-noise-gate" ||
                     (tag == "noise-gate-db" && service.GetOutputDynamics(device, channel).NoiseGateDb is not null),
-                "fir" => tag is "fir-enabled" or "apply-fir",
+                "limiters" => tag.StartsWith("limiter-") || tag == "apply-limiters" || tag.StartsWith("peak-") ||
+                    (tag.StartsWith("rms-") && (tag is not ("rms-attack" or "rms-release") ||
+                    !service.GetOutputDynamics(device, channel).Rms.Automatic)),
+                "fir" => tag is "fir-enabled" or "apply-fir" or "fir-import" or "fir-remove",
+                "output-eq" => tag is "input-eq-enabled" or "apply-input-eq" ||
+                    tag.StartsWith("hp-") || tag.StartsWith("lp-") ||
+                    (tag.StartsWith("eq-") && int.TryParse(tag.Split('-').Last(), out var number) &&
+                        snapshotOutput!.Bands.Any(b => b.Number == number && b.FilterType == 0)),
                 "eq" => tag is "input-eq-enabled" or "apply-input-eq" ||
                     (tag is "hp-type" or "hp-frequency" or "hp-enabled" && ObservedInputCrossovers.CanWrite(input!.HighPass)) ||
                     (tag is "lp-type" or "lp-frequency" or "lp-enabled" && ObservedInputCrossovers.CanWrite(input!.LowPass)) ||
@@ -47,7 +59,7 @@ public sealed partial class MainWindow
                         input!.Bands.Any(b => b.Number == band && b.FilterType == 0)),
                 _ => false
             };
-            if (enable) control.IsEnabled = true;
+            if (enable || tag is "editor-copy" or "eq-reset") control.IsEnabled = true;
         }
     }
 }

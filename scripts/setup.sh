@@ -12,7 +12,7 @@ dotnet build CvrTool.slnx --no-restore
 dotnet run --project tests/CvrTool.Checks --no-build
 python3 scripts/configure-mcp.py
 if command -v code >/dev/null 2>&1; then
-  for extension in ms-dotnettools.csharp AvaloniaTeam.vscode-avalonia openai.chatgpt; do
+  for extension in ms-dotnettools.csharp AvaloniaTeam.vscode-avalonia; do
     code --install-extension "$extension"
   done
   code "$cvr_root/CVR-Tool.code-workspace"

@@ -1,6 +1,6 @@
 # Target CVR DSP models
 
-The user-specified target catalog has twelve models. The last model digit is
+The target catalog has twelve models. The last model digit is
 the channel count. Functions share one implementation for two/four channels;
 power ratings, voltage limits, firmware profiles and physical compatibility
 are read from actual device data rather than inferred from the model number.

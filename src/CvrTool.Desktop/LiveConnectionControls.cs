@@ -18,7 +18,40 @@ public sealed partial class MainWindow
 {
     private readonly DispatcherTimer liveTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly Dictionary<string, TextBlock> deviceDots = new();
+    private long renderedRevision;
+    private bool renderedOnline;
+    private DeviceReadings? renderedReadings;
     private bool refreshingLive;
+
+    private void UpdateMainTelemetry()
+    {
+        var tagged = page.GetLogicalDescendants().OfType<Control>().Where(c => c.Tag is string)
+            .ToLookup(c => c.Tag!.ToString()!);
+        void Light(string tag, bool? value)
+        {
+            if (tagged[tag].FirstOrDefault() is not StackPanel panel) return;
+            panel.Children.OfType<StatusLed>().FirstOrDefault()?.Update(value);
+            if (panel.Children.OfType<TextBlock>().FirstOrDefault() is { } label)
+            {
+                label.Foreground = value == true ? Brushes.LightCoral : Muted;
+                ToolTip.SetTip(panel,label.Text + ": " + (value is null ? "Unknown" : value.Value ? "Active" : "Inactive"));
+            }
+        }
+        foreach (var t in service.GetTelemetry(deviceId))
+        {
+            var name = (char)('A' + t.Channel - 1);
+            (tagged[$"channel-meter-{name}"].FirstOrDefault() as ChannelMeter)?.Update(t.InputMeterDb);
+            (tagged[$"output-meter-{name}"].FirstOrDefault() as ChannelMeter)?.Update(t.OutputMeterDb);
+            Light($"channel-clip-{name}",t.InputClip);
+            var s = t.Status;
+            bool?[] flags = [s?.Fault,s?.Load,s?.Open,s?.OverTemperature,s?.Clip,s?.Standby,s?.HighImpedance,s?.Bridged,s?.Limiting];
+            for (int i=0;i<flags.Length;i++) Light($"output-status-{name}-{i}",flags[i]);
+            double?[] values = [t.Voltage,t.Current,t.LoadOhms,t.TemperatureC];
+            for (int i=0;i<values.Length;i++)
+                if(tagged[$"telemetry-{name}-{i}"].FirstOrDefault() is TextBlock field)
+                    field.Text = values[i]?.ToString("0.0") ?? "—";
+        }
+    }
     private int liveEditInteractions;
     private bool editingDeviceName;
     private DateTimeOffset preserveStatusUntil;
@@ -27,30 +60,43 @@ public sealed partial class MainWindow
     private static IBrush ConnectionColor(DeviceSnapshot device) => Brush.Parse(ConnectionAvailable(device) ? "#00CE63" : "#F05462");
     private void StartLiveRefresh()
     {
-        liveTimer.Tick += async (_, _) =>
-        {
-            if (refreshingLive) return;
-            refreshingLive = true;
-            var selected = deviceId;
-            try
-            {
-                var devices = await Task.Run(() => service.ListDevices());
-                foreach (var device in devices)
-                    if (deviceDots.TryGetValue(device.Id, out var dot)) dot.Foreground = ConnectionColor(device);
-                if (!liveReadOnly || OwnedWindows.Count != 0 || controlWritePending || liveEditInteractions > 0 || editingDeviceName || selected != deviceId) return;
-                var snapshot = devices.SingleOrDefault(d => d.Id == selected);
-                if (snapshot is null) return;
-                channels = snapshot.Outputs.Select(c => new ChannelDraft(c)).ToList();
-                Render();
-                var readings = snapshot.Readings!;
-                if (DateTimeOffset.UtcNow >= preserveStatusUntil) status.Text = readings.Error is null ? $"Live · Verified editing · Settings {readings.SettingsObservedAt.ToLocalTime():HH:mm:ss} · Status {readings.TelemetryObservedAt?.ToLocalTime():HH:mm:ss}" :
-                    "Connection unavailable · Last received values shown · " + readings.Error;
-            }
-            catch (Exception ex) { status.Text = "Live refresh failed: " + ex.Message; }
-            finally { refreshingLive = false; }
-        };
+        liveTimer.Tick += async (_, _) => await RefreshLiveAsync();
         liveTimer.Start();
         Closed += (_, _) => liveTimer.Stop();
+    }
+
+    public async Task RefreshLiveAsync()
+    {
+        if (refreshingLive) return;
+        refreshingLive = true;
+        var selected = deviceId;
+        try
+        {
+            var devices = await Task.Run(() => service.ListDevices());
+            foreach (var device in devices)
+                if (deviceDots.TryGetValue(device.Id, out var dot)) dot.Foreground = ConnectionColor(device);
+            if (!liveReadOnly || (activeTab == "Presets" && (page.GetLogicalDescendants().OfType<ComboBox>().Any(box => box.IsDropDownOpen) || page.GetLogicalDescendants().OfType<TextBox>().Any(box => box.IsKeyboardFocusWithin))) || OwnedWindows.Count != 0 || controlWritePending || liveEditInteractions > 0 || editingDeviceName || selected != deviceId) return;
+            var snapshot = devices.SingleOrDefault(d => d.Id == selected);
+            if (snapshot is null) return;
+            var metadata = snapshot.Readings!;
+            if (renderedRevision != service.SettingsRevision(selected) || renderedOnline != ConnectionAvailable(snapshot) ||
+                renderedReadings?.CanSetWink != metadata.CanSetWink || renderedReadings?.CanSetStandby != metadata.CanSetStandby ||
+                (nameSlot.Content as Button)?.Content is TextBlock name && name.Text != snapshot.Name)
+            {
+                channels = snapshot.Outputs.Select(c => new ChannelDraft(c)).ToList();
+                Render();
+            }
+            else
+            {
+                RefreshDeviceInfo();
+                if (activeTab == "Main") UpdateMainTelemetry();
+            }
+            var readings = snapshot.Readings!;
+            if (DateTimeOffset.UtcNow >= preserveStatusUntil) status.Text = readings.Error is null ? $"Live · Verified editing · Settings {readings.SettingsObservedAt.ToLocalTime():HH:mm:ss} · Status {readings.TelemetryObservedAt?.ToLocalTime():HH:mm:ss}" :
+                "Connection unavailable · Last received values shown · " + readings.Error;
+        }
+        catch (Exception ex) { status.Text = "Live refresh failed: " + ex.Message; }
+        finally { refreshingLive = false; }
     }
     private async void SetDeviceWink(bool enabled)
     {
@@ -117,7 +163,7 @@ public sealed partial class MainWindow
     {
         foreach (var control in root.GetLogicalDescendants().OfType<Control>().Prepend(root))
         {
-            if (editor && Equals(control.Tag, "eq-phase")) continue;
+            if (editor && control.Tag is "generate-eq-fir" or "fir-export" or "editor-channel") continue;
             if (control is RoutingDial dial)
             { dial.CanEditGain = canVerifiedDsp; dial.IsEnabled = dial.IsEnabled && (canMute || canVerifiedDsp); }
             else if (control is ToggleButton toggle && (toggle.Tag?.ToString()?.StartsWith("mute-") ?? false))
@@ -136,7 +182,7 @@ public sealed partial class MainWindow
                     tag.StartsWith("input-eq-") || tag.StartsWith("output-eq-") ||
                     tag.StartsWith("input-delay-") || tag.StartsWith("output-delay-") ||
                     tag.StartsWith("output-mode-") || tag.StartsWith("output-noise-") ||
-                    tag.StartsWith("output-limiters-") || tag.StartsWith("output-fir-") || tag is "snapshot-save-pc" or "inspect-protocol" || (canMute && tag.StartsWith("mute-")) || (canVerifiedDsp && (tag.StartsWith("output-trim-") || tag.StartsWith("output-polarity-")));
+                    tag.StartsWith("output-source-") || tag.StartsWith("output-speaker-") || (canVerifiedDsp && tag.StartsWith("output-bridge-")) || tag.StartsWith("output-limiters-") || tag.StartsWith("output-fir-") || tag is "snapshot-save-pc" or "inspect-protocol" || (canMute && tag.StartsWith("mute-")) || (canVerifiedDsp && (tag.StartsWith("output-trim-") || tag.StartsWith("output-polarity-")));
                 if (!allowed) button.IsEnabled = false;
             }
         }

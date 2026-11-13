@@ -13,8 +13,8 @@ public sealed partial class DemoBackend
     private readonly Dictionary<(string, int), OutputDynamicsState> dynamics = new();
     private OutputDynamicsState DefaultDynamics(string id, int channel)
     {
-        var rms = id == "demo-1502" ? 113.1f : 93.8f;
-        var peak = id == "demo-1502" ? 159.9f : 132.6f;
+        var rms = 93.8f;
+        var peak = 132.6f;
         return new(channel, false, false, -100, new(true, rms, 25, 16, false, rms), new(true, peak, 50, 300, peak), 0);
     }
     public (OutputDynamicsState State, long Revision) GetOutputDynamics(string id, int channel)

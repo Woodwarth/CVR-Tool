@@ -82,6 +82,15 @@ try {
 
     // Input events alone update dB and transmit while the pointer is still held.
     const inputSlider = page.locator('input[data-gain="input"]').first();
+    const rect = await inputSlider.boundingBox();
+    await page.mouse.move(rect.x + rect.width/2, rect.y + rect.height*0.75);
+    await page.mouse.down();
+    const confirmedTop = page.waitForResponse(r => r.url().endsWith("/api/change") &&
+      r.request().postDataJSON()?.processing?.gainDb === 18);
+    await page.mouse.move(rect.x + rect.width/2, rect.y - 10, {steps:12});
+    assert((await confirmedTop).ok(), "Dragging the fader upwards confirms its maximum before release");
+    await page.mouse.up();
+    await page.waitForTimeout(250);
     const liveResponse = page.waitForResponse(
       (r) =>
         r.url().endsWith("/api/change") &&
@@ -210,14 +219,28 @@ try {
       fullPage: true,
     });
     await page.locator('[data-tab="Outputs"]').click();
+    await page.setViewportSize({ width: 1680, height: 980 });
+    assert.equal(await page.locator(".signal-row").first().locator(":scope > *").count(),12);
+    for (const [action,field] of [["limiters","#r-v"],["gate-editor","#gate-enabled"],["fir-editor","#fir-enabled"]]) {
+      await page.locator(`[data-action="${action}"]`).first().click();
+      await page.locator(field).waitFor();
+      await page.locator('[value="cancel"]').click();
+      await page.locator("#editor").waitFor({state:"hidden"});
+    }
+    await page.screenshot({path:"artifacts/web-desktop-outputs.png"});
+    for (const bridged of [true,false]) {
+      page.once("dialog",d=>d.accept());
+      await page.locator('[data-action="bridge"]').first().click();
+      await page.waitForFunction(expected => document.querySelectorAll(".signal-row")[1].querySelector('[data-action="eq"]').disabled === expected,bridged);
+    }
     await page.locator("[data-mode]").first().selectOption("1");
     await page.waitForFunction(
       () =>
         document.querySelector("#status").textContent === "Change confirmed",
     );
-    await page.locator('[data-device="demo-2002"]').click();
+
     await page.waitForFunction(
-      () => document.querySelectorAll("#page .card").length === 2,
+      () => document.querySelectorAll("#page .card").length === 4,
     );
     await page.setViewportSize({ width: 390, height: 844 });
     assert(

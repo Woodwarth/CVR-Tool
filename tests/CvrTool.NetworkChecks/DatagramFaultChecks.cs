@@ -74,7 +74,7 @@ static class DatagramFaultChecks
         var cached = Task.Run(() => backend.ListDevices());
         var responsive = cached.Wait(TimeSpan.FromMilliseconds(500));
         attempt.GetAwaiter().GetResult();
-        check(responsive && cached.Result.Count == 3, "Slow connection handshakes do not block cached reads and demo navigation");
+        check(responsive && cached.Result.Count == 1, "Slow connection handshakes do not block cached reads and demo navigation");
     }
     private static void WithPeer(Func<UdpClient, IPEndPoint, int, CancellationToken, Task> reply, Action<CvrUdpClient> run)
     {

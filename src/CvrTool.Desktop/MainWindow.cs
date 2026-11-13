@@ -7,6 +7,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using CvrTool.Application;
 using CvrTool.Core;
@@ -91,16 +92,36 @@ public sealed partial class MainWindow : Window
     {
         try
         {
+            var previous = FocusManager?.GetFocusedElement() as Control;
+            var tag = previous?.Tag as string;
             RenderPage();
+            if (IsActive && tag is not null && previous?.IsFocused != true &&
+                FocusManager?.GetFocusedElement() is null)
+            {
+                this.GetLogicalDescendants().OfType<Control>()
+                    .FirstOrDefault(c => Equals(c.Tag,tag) && c.Focusable && c.IsEffectivelyEnabled)?.Focus();
+            }
         }
         catch (Exception ex) { status.Text = "Device refresh failed: " + ex.Message; }
     }
 
     private void RenderPage()
     {
+        if (deviceId.Length == 0)
+        {
+            navigation.Children.Clear(); knownDevices.Clear(); deviceDots.Clear(); tabs.Children.Clear();
+            deviceName.Text = ""; nameSlot.IsEnabled = false; deviceActions.Content = null;
+            page.Content = Heading("No devices"); liveReadOnly = false;
+            return;
+        }
         var selectedDevice = service.GetDevice(deviceId);
         liveReadOnly = selectedDevice.Readings?.ReadOnly == true;
-        if (!liveReadOnly && activeTab == "Details") activeTab = "Main";
+        if (liveReadOnly)
+        {
+            renderedRevision = service.SettingsRevision(deviceId);
+            renderedOnline = ConnectionAvailable(selectedDevice);
+            renderedReadings = selectedDevice.Readings;
+        }
         deviceName.Text = selectedDevice.Capabilities.Model;
         nameSlot.IsEnabled = !controlWritePending && (!liveReadOnly || (ConnectionAvailable(selectedDevice) && selectedDevice.Readings!.CanRename));
         deviceActions.IsEnabled = !controlWritePending && ConnectionAvailable(selectedDevice) && (!liveReadOnly || selectedDevice.Readings!.CanSetDisplayLock || selectedDevice.Readings.CanSetStandby || selectedDevice.Readings.CanSetWink);
@@ -145,16 +166,23 @@ public sealed partial class MainWindow : Window
             navigation.Children.Add(button);
         }
 
-        tabs.Children.Clear();
+
         var pageTabs = new List<(string Name, string Symbol)>
         {
             ("Main", "⌂"), ("Inputs", "◉"), ("Outputs", "◖"), ("Presets", "☰")
         };
-        if (liveReadOnly) pageTabs.Add(("Details", "ⓘ"));
         foreach (var (name, symbol) in pageTabs)
         {
+            var existing = tabs.Children.OfType<Button>().FirstOrDefault(b => Equals(b.Tag, name));
+            if (existing is not null)
+            {
+                existing.Background = activeTab == name ? Brush.Parse("#007F7D") : Brushes.Transparent;
+                existing.BorderBrush = activeTab == name ? Accent : Brushes.Transparent;
+                continue;
+            }
             var button = new Button
             {
+                Tag = name,
                 Content = symbol + "   " + name,
                 MinWidth = 106,
                 Margin = new Thickness(0, 0, 6, 6),
@@ -173,15 +201,15 @@ public sealed partial class MainWindow : Window
             tabs.Children.Add(button);
         }
 
+
         page.Content = activeTab switch
         {
             "Inputs" => InputsPage(),
             "Outputs" => OutputsPage(),
-            "Presets" => liveReadOnly ? LivePresetPage() : PresetsPage(),
-            "Details" => LiveDetailsPage(),
+            "Presets" => PresetsPage(),
             _ => MainPage()
         };
-        if (liveReadOnly && page.Content is Control livePage) DisableLiveEdits(livePage, false, ConnectionAvailable(selectedDevice) && selectedDevice.Readings?.CanSetMutes == true && !controlWritePending, ConnectionAvailable(selectedDevice) && selectedDevice.Readings?.CanSetInputGain == true && !controlWritePending, ConnectionAvailable(selectedDevice) && selectedDevice.Readings?.CanSetVerifiedDsp == true && !controlWritePending);
+        if (liveReadOnly && activeTab != "Presets" && page.Content is Control livePage) DisableLiveEdits(livePage, false, ConnectionAvailable(selectedDevice) && selectedDevice.Readings?.CanSetMutes == true && !controlWritePending, ConnectionAvailable(selectedDevice) && selectedDevice.Readings?.CanSetInputGain == true && !controlWritePending, ConnectionAvailable(selectedDevice) && selectedDevice.Readings?.CanSetVerifiedDsp == true && !controlWritePending);
     }
 
     public void ReloadSession()
@@ -191,7 +219,8 @@ public sealed partial class MainWindow : Window
             var devices = service.ListDevices();
             var added = devices.FirstOrDefault(d => !d.IsDemo && !knownDevices.Contains(d.Id));
             if (added is not null) { deviceId = added.Id; activeTab = "Main"; }
-            else if (!devices.Any(d => d.Id == deviceId)) deviceId = "demo-1004";
+            else if (!devices.Any(d => d.Id == deviceId)) deviceId = devices.FirstOrDefault()?.Id ?? "";
+            if (deviceId.Length == 0) { Render(); return; }
             channels = service.GetDevice(deviceId).Outputs.Select(c => new ChannelDraft(c)).ToList();
             Render();
             status.Text = "Shared session updated via MCP";

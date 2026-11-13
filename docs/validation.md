@@ -86,7 +86,7 @@ No scans of IP ranges, firmware transfers or manufacturer files are included.
 
 Direct output and route muting passed on the same physical amplifier, followed
 by byte-for-byte restoration of its original settings. The function-71 operating
-time matches the user reference and is shown in the header/details. Delay typing
+time matches the front-panel reading and is shown in the header/details. Delay typing
 links metres/ms in both directions; Trim opens from the whole tile; Stereo/Bridge
 requires confirmation; PC loading/saving offers only .sd. Structured JSON API
 interchange remains supported. Final runs passed: 283 core, 198 network and 149 desktop checks, plus the shared-session MCP smoke check; the Release build completed without warnings or errors.

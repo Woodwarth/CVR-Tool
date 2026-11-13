@@ -17,6 +17,7 @@ namespace CvrTool.Desktop;
 
 public sealed partial class MainWindow
 {
+    private readonly Dictionary<(string Device, int Slot), string> presetNames = new();
     private int selectedPresetSlot = 1;
     private Control PresetsPage()
     {
@@ -30,7 +31,13 @@ public sealed partial class MainWindow
         selectedPresetSlot = Math.Clamp(selectedPresetSlot, 1, Math.Max(1, presets.Slots.Count));
         var slot = new ComboBox { ItemsSource = presets.Slots, SelectedIndex = selectedPresetSlot - 1, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = "device-preset-slot", ItemTemplate = new FuncDataTemplate<DevicePresetSlot>((s, _) => new TextBlock { Text = $"{s?.Number:00} · {s?.Name}" }) };
         var name = new TextBox { Text = presets.Slots.Count == 0 ? "" : presets.Slots[selectedPresetSlot - 1].Occupied ? presets.Slots[selectedPresetSlot - 1].Name : "Preset " + selectedPresetSlot, MaxLength = 32, Tag = "device-preset-name" };
-        slot.SelectionChanged += (_, _) => { if (slot.SelectedItem is DevicePresetSlot selected) { selectedPresetSlot = selected.Number; name.Text = selected.Occupied ? selected.Name : "Preset " + selected.Number; } };
+        string SlotName(int number, DevicePresetSlot? item) =>
+            presetNames.TryGetValue((editedId, number), out var draft) ? draft :
+            item?.Occupied == true ? item.Name : $"Preset {number}";
+        name.Text = SlotName(selectedPresetSlot, presets.Slots.ElementAtOrDefault(selectedPresetSlot - 1));
+        var draftSlot = selectedPresetSlot;
+        name.TextChanged += (_, _) => presetNames[(editedId, draftSlot)] = name.Text ?? "";
+        slot.SelectionChanged += (_, _) => { if (slot.SelectedItem is DevicePresetSlot selected) { selectedPresetSlot = draftSlot = selected.Number; name.Text = SlotName(selected.Number, selected); } };
         AddColumn(selection, Field(presets.Slots.Count == 0 ? "Preset slots unavailable" : $"Preset slot · 1–{presets.Slots.Count}", slot), 0);
         AddColumn(selection, Field("Preset name", name), 1);
         AddColumn(selection, Field("Current preset", Text(presets.CurrentName ?? "—", 14, Accent)), 2);
@@ -39,6 +46,9 @@ public sealed partial class MainWindow
         Button Action(string label, string tag, Func<Task> action, bool danger = false)
         {
             var button = new Button { Content = label, Tag = tag, Padding = new Thickness(18, 12), Background = Brush.Parse(danger ? "#762A37" : "#007F7D") };
+            button.IsEnabled = !liveReadOnly || tag == "preset-save-pc" ||
+                (ConnectionAvailable(service.GetDevice(editedId)) &&
+                 (tag is "preset-load-pc" or "preset-factory-reset" || presets.Slots.Count > 0));
             button.Click += async (_, _) => { button.IsEnabled = false; try { await action(); } catch (Exception ex) { status.Text = ex.Message; } finally { button.IsEnabled = true; } };
             return button;
         }
@@ -87,7 +97,7 @@ public sealed partial class MainWindow
         files.Children.Add(Action("Save to PC", "preset-save-pc", async () =>
         {
             const string extension = "sd";
-            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "Save preset to PC", SuggestedFileName = deviceName.Text + "." + extension, DefaultExtension = extension, FileTypeChoices = [new("CVR native preset") { Patterns = ["*." + extension] }] });
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "Save preset to PC", SuggestedFileName = string.Concat((string.IsNullOrWhiteSpace(name.Text) ? (deviceName.Text ?? "Preset") : name.Text).Split(Path.GetInvalidFileNameChars())) + "." + extension, DefaultExtension = extension, FileTypeChoices = [new("CVR native preset") { Patterns = ["*." + extension] }] });
             if (file is null)
                 return;
             if (!file.Name.EndsWith(".sd", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Save the preset with the .sd extension.");
@@ -99,7 +109,7 @@ public sealed partial class MainWindow
         }));
         pc.Children.Add(files);
         content.Children.Add(Card(pc));
-        if (NativePresetInformation() is { } information) content.Children.Add(information);
+
         return content;
     }
     private async Task<bool> ConfirmPresetAction(string title, string text)

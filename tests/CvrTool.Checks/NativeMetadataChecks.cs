@@ -11,10 +11,10 @@ static class NativeMetadataChecks
 {
     public static void Run(Action<bool, string> check)
     {
-        foreach (var id in new[] { "demo-1004", "demo-1502" })
+        foreach (var id in new[] { "demo-1004", "demo-2002" })
         foreach (var legacy in new[] { false, true })
         {
-            var service = new AmplifierService(new DemoBackend());
+            var service = new AmplifierService(new DemoBackend()); service.AddDemo("DSP-2002");
             check(service.GetNativePresetMetadata(id) is null, "Fresh demos do not invent native source metadata");
             var full = service.ExportNativePreset(id);
             var syncLength = legacy ? 2232 : 2687;

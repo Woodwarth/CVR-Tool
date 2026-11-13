@@ -29,7 +29,7 @@ public sealed partial class CvrSnapshotBackend
             byte side = function is 43 or 50 or 52 or 54 or 55 ? (byte)1 : (byte)0;
             byte[] reply = [];
             CvrEndpointGate.UseClient(target, client => reply = function == 59 ? client.ReadPresetNames() :
-                client.Read((byte)function, (byte)address, (byte)segment, side));
+                client.ReadInspection((byte)function, (byte)address, (byte)segment, side));
             int offset = 36 + index * 515;
             string Match(int start, int size) => reply.Length != size ? "Unexpected layout" :
                 reply.AsSpan().SequenceEqual(snapshot.AsSpan(start, size)) ? "Matches last full settings" : "Differs from last full settings";

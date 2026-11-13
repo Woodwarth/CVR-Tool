@@ -10,9 +10,9 @@ static class InputMuteChecks
 {
     public static void Run(Action<bool,string> check)
     {
-        foreach (var id in new[] { "demo-1004", "demo-1502" })
+        foreach (var id in new[] { "demo-1004", "demo-2002" })
         {
-            var service = new AmplifierService(new DemoBackend());
+            var service = new AmplifierService(new DemoBackend()); service.AddDemo("DSP-2002");
             var before = service.ExportNativePreset(id);
             check(service.GetInputProcessing(id,1).Muted == false, "Demo input starts independently unmuted");
             service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,Muted:true)).Id);

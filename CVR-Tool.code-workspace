@@ -10,8 +10,7 @@
   "extensions": {
     "recommendations": [
       "ms-dotnettools.csharp",
-      "AvaloniaTeam.vscode-avalonia",
-      "openai.chatgpt"
+      "AvaloniaTeam.vscode-avalonia"
     ]
   }
 }

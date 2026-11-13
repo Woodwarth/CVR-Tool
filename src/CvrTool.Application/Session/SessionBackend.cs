@@ -10,7 +10,7 @@ using CvrTool.Core;
 
 namespace CvrTool.Application;
 
-public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend, INativePresetMetadataSource
+public sealed class SessionBackend(string? pipeName = null) : IDemoManagement, IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend, INativePresetMetadataSource
 {
     private T Call<T>(string method, object arguments) where T : class => CallAsync<T>(method, arguments).GetAwaiter().GetResult();
     private async Task<T> CallAsync<T>(string method, object arguments) where T : class
@@ -34,6 +34,8 @@ public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend,
         }
         catch (OperationCanceledException) { throw new InvalidOperationException("CVR Tool session is unavailable. Start the desktop app or a session host first."); }
     }
+    public DeviceSnapshot AddDemo(string model) => Call<DeviceSnapshot>("add-demo",new { Model = model });
+    public void RemoveDemo(string id) => Call<string>("remove-demo",new { Id = id });
     public IReadOnlyList<DeviceSnapshot> ListDevices() => Call<DeviceSnapshot[]>("list", new { });
     public DeviceSnapshot Connect(CvrTool.Protocol.NetworkTarget target) => Call<DeviceSnapshot>("connect", new { Target = target });
     public DisconnectionResult Disconnect(string deviceId) => Call<DisconnectionResult>("disconnect", new { Id = deviceId });

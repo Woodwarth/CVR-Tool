@@ -14,15 +14,11 @@ public sealed partial class DemoBackend : IAmplifierBackend, INativePresetMetada
     private readonly Dictionary<string, RoutingCellState[]> routing = new()
     {
         ["demo-1004"] = CreateRouting(4),
-        ["demo-1502"] = CreateRouting(2),
-        ["demo-2002"] = CreateRouting(2)
     };
     private static RoutingCellState[] CreateRouting(int count) => Enumerable.Range(1, count).SelectMany(output => Enumerable.Range(1, count).Select(input => new RoutingCellState(input, output, 0, input != output))).ToArray();
     private readonly Dictionary<string, (DeviceSnapshot Device, long Revision)> devices = new()
     {
         ["demo-1004"] = (Create("demo-1004", DeviceProfiles.Dsp1004), 0),
-        ["demo-2002"] = (Create("demo-2002", DeviceProfiles.Dsp2002), 0),
-        ["demo-1502"] = (Create("demo-1502", DeviceProfiles.Dsp1502), 0)
     };
     private static DeviceSnapshot Create(string id, DeviceCapabilities profile) => new(id, profile.Model + " · Demo", profile, true, DateTimeOffset.UtcNow, Enumerable.Range(1, profile.OutputCount).Select(n => new ChannelState(n, ((char)('A' + n - 1)).ToString(), 0, true, 0, false)).ToArray());
     private static DeviceSnapshot Copy(DeviceSnapshot device) => device with

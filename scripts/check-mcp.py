@@ -88,6 +88,8 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
             "connect_amplifier", "disconnect_amplifier", "get_device_controls", "set_device_controls", "set_device_wink", "get_input_processing", "plan_input_processing", "apply_input_processing"}
         assert expected <= names, names
         a.reject("connect_amplifier", address="localhost", localAddress="127.0.0.1")
+        assert [d["Id"] for d in a.call("list_devices")] == ["demo-1004"]
+        a.call("add_demo_device", model="DSP-2002")
         assert a.call("set_device_wink", deviceId="demo-2002", enabled=True)["Wink"] is True
         assert b.call("get_device_controls", deviceId="demo-2002")["Wink"] is True
         assert b.call("set_device_wink", deviceId="demo-2002", enabled=False)["Wink"] is False

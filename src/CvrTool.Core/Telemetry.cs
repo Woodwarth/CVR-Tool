@@ -24,4 +24,4 @@ public sealed record OutputTelemetry(
     double? Current = null,
     double? LoadOhms = null,
     double? TemperatureC = null,
-    OutputStatus? Status = null, double? OutputMeterDb = null, double? InputMeterDb = null, bool? InputClip = null);
+    OutputStatus? Status = null, double? OutputMeterDb = null, double? InputMeterDb = null, bool? InputClip = null, double? LimitDb = null);

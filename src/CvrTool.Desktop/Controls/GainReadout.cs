@@ -97,14 +97,18 @@ public sealed class GainReadout : ContentControl
                 return;
             }
 
-            editing = false;
-            EditingEnded?.Invoke();
             Value = parsed;
+            ShowValue();
         }
 
         editor.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Enter)
+            if (e.Key is Key.Up or Key.Down && double.TryParse(editor.Text?.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var current))
+            {
+                editor.Text = Math.Clamp(current + (e.Key == Key.Up ? .5 : -.5), -80, 18).ToString("0.0", CultureInfo.InvariantCulture);
+                editor.SelectAll(); e.Handled = true;
+            }
+            else if (e.Key == Key.Enter)
             {
                 Commit();
                 e.Handled = true;

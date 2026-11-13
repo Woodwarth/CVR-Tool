@@ -19,7 +19,13 @@ void Reject<T>(Action action) where T : Exception
     throw new Exception("Expected " + typeof(T).Name);
 }
 var service = new AmplifierService(new DemoBackend());
-Check(service.GetDevice("demo-1502").Outputs.Count == 2 && !service.GetDevice("demo-1502").Capabilities.VerifiedOnHardware, "DSP-1502 is a two-output unverified demo");
+Check(service.ListDevices().Single().Id == "demo-1004", "Only DSP-1004 starts by default");
+var addedDemo = service.AddDemo("DSP-1502");
+Check(addedDemo.Outputs.Count == 2 && service.ListDevices().Count == 2, "Additional demo is an independent session device");
+service.RemoveDemo(addedDemo.Id);
+Check(service.ListDevices().All(d => d.Id != addedDemo.Id), "Removing a demo leaves the other devices in the session");
+service.AddDemo("DSP-2002");
+Check(service.GetDevice("demo-2002").Outputs.Count == 2 && !service.GetDevice("demo-2002").Capabilities.VerifiedOnHardware, "DSP-2002 is a two-output unverified demo");
 Check(service.GetDevice("demo-1004").Outputs.Count == 4, "Four outputs");
 Check(service.GetDevice("demo-2002").Outputs.Count == 2, "Two outputs");
 Check(service.ListDevices().All(d => d.IsDemo && d.Capabilities.InputCount == d.Outputs.Count), "Uniform two-/four-channel topology");
@@ -45,6 +51,7 @@ var preset = JsonSerializer.Deserialize<PresetDocument>(service.ExportPreset("de
 Check(preset.SchemaVersion == 7 && preset.Outputs.Count == 2 && preset.IsDemo, "Preset export");
 var clock = new ManualClock();
 var timed = new AmplifierService(new DemoBackend(), clock);
+timed.AddDemo("DSP-2002");
 var expiring = timed.Plan(new("demo-1004", 1, Muted: false));
 clock.Now = clock.Now.AddMinutes(3);
 Reject<InvalidOperationException>(() => timed.Apply(expiring.Id));
@@ -55,11 +62,11 @@ var controlStale = service.Plan(new("demo-1004", 1, GainDb: -6));
 Check(service.SetControlState("demo-1004", displayLocked: true) == new DeviceControlState(true, false, Wink: false), "Display lock is simulated independently");
 Reject<InvalidOperationException>(() => service.Apply(controlStale.Id));
 Check(service.SetControlState("demo-1004", standby: true) == new DeviceControlState(true, true, Wink: false), "Standby preserves display lock");
-Check(service.GetControlState("demo-1502") == new DeviceControlState(Wink: false), "Demo controls isolate devices");
+Check(service.GetControlState("demo-2002") == new DeviceControlState(Wink: false), "Demo controls isolate devices");
 Check(service.SetControlState("demo-1004", displayLocked: false, standby: false) == new DeviceControlState(Wink: false), "Demo controls can be turned off");
 var routes = service.GetRouting("demo-1004");
 Check(routes.InputCount == 4 && routes.OutputCount == 4 && routes.Cells.Count == 16, "Four-by-four demo routing");
-Check(service.GetRouting("demo-1502").Cells.Count == 4, "Two-by-two demo routing");
+Check(service.GetRouting("demo-2002").Cells.Count == 4, "Two-by-two demo routing");
 Check(service.GetRouting("demo-2002").Cells.Count == 4, "DSP-2002 has the same routing features");
 Reject<ArgumentOutOfRangeException>(() => service.PlanRouting(new("demo-1004", 0, 1, GainDb: 0)));
 Reject<ArgumentOutOfRangeException>(() => service.PlanRouting(new("demo-1004", 1, 5, GainDb: 0)));
@@ -72,7 +79,7 @@ Check(service.ApplyRouting(routePlan.Id) is { GainDb: -80, Muted: true }, "Minim
 Reject<ArgumentException>(() => service.ApplyRouting(routePlan.Id));
 Check(service.ApplyRouting(service.PlanRouting(new("demo-1004", 2, 1, Muted: false)).Id) is { GainDb: -80, Muted: false }, "Unmute preserves route gain");
 Check(service.ApplyRouting(service.PlanRouting(new("demo-1004", 2, 1, GainDb: 18)).Id).GainDb == 18, "Maximum route gain accepted");
-Check(service.GetRouting("demo-1004").Cells.Single(c => c.Input == 3 && c.Output == 1) is { GainDb: 0, Muted: true } && service.GetRouting("demo-1502").Cells.Single(c => c.Input == 2 && c.Output == 1).GainDb == 0, "Route changes isolate cells and devices");
+Check(service.GetRouting("demo-1004").Cells.Single(c => c.Input == 3 && c.Output == 1) is { GainDb: 0, Muted: true } && service.GetRouting("demo-2002").Cells.Single(c => c.Input == 2 && c.Output == 1).GainDb == 0, "Route changes isolate cells and devices");
 var routeCopy = service.GetRouting("demo-1004");
 ((RoutingCellState[])routeCopy.Cells)[0] = routeCopy.Cells[0] with { GainDb = 17 };
 Check(service.GetRouting("demo-1004").Cells[0].GainDb == 0, "Routing snapshots are defensive");
@@ -91,7 +98,7 @@ foreach(var name in new[]{new string('x',32),"Ampli\u00e9"}) Reject<ArgumentExce
 Check(AmplifierService.NormalizeDeviceName(new string('x',32)).Length==32,"Local demo name validation retains its 32-character limit");
 var renamedPreset = JsonSerializer.Deserialize<PresetDocument>(service.ExportPreset("demo-1004"))!;
 Check(renamedPreset.Name == "Front amplifier" && renamedPreset.Routing?.Count == 16, "Preset exports name and routing");
-Check(service.GetDevice("demo-1502").Name != "Front amplifier", "Names isolate devices");
+Check(service.GetDevice("demo-2002").Name != "Front amplifier", "Names isolate devices");
 var telemetry = service.GetTelemetry("demo-1004");
 Check(telemetry.Count == 4 && telemetry.Select(t => t.Channel).Distinct().Count() == 4 && telemetry.All(t => t is { LevelDbFs: null, Voltage: null, Current: null, LoadOhms: null, TemperatureC: null } && t.Status == new OutputStatus()), "Per-output telemetry stays explicitly unknown");
 var routeExpiring = timed.PlanRouting(new("demo-1004", 1, 1, GainDb: 0));

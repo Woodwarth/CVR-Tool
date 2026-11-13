@@ -11,7 +11,7 @@ static class AdvancedChecks
 {
     public static void Run(Action<bool,string> check)
     {
-        var backend=new DemoBackend();var service=new AmplifierService(backend);const string id="demo-1004";
+        var backend=new DemoBackend();var service=new AmplifierService(backend); service.AddDemo("DSP-2002");const string id="demo-1004";
         void Reject(Action action,string label) {try{action();}catch(ArgumentException){check(true,label);return;}catch(InvalidOperationException){check(true,label);return;}catch(NotSupportedException){check(true,label);return;}throw new Exception(label);}
         var input=service.GetInputProcessing(id,1);
         var bands=service.GetOutputProcessing(id,1).Bands.Select(b=>b with {GainDb=b.Number==1 ? 6 : 0}).ToArray();
@@ -34,7 +34,7 @@ static class AdvancedChecks
         service.Apply(service.Plan(new(id,1,GainDb:-20)).Id);Reject(()=>service.LoadPresetFile(id,"preset.json",System.Text.Encoding.UTF8.GetBytes(json)),"JSON file loading rejected");service.LoadPreset(id,captured);
         check(service.GetDevice(id).Outputs[0].GainDb==captured.Outputs[0].GainDb && service.GetFir(id,1).Name=="Delay","JSON restores full session");
         foreach(var slot in Enumerable.Range(1,16))service.StoreDevicePreset(id,slot,"Slot "+slot);
-        check(service.GetDevicePresets(id).Slots.All(s=>s.Occupied) && service.GetDevicePresets("demo-1502").Slots.All(s=>!s.Occupied),"All sixteen slots store independently per device");
+        check(service.GetDevicePresets(id).Slots.All(s=>s.Occupied) && service.GetDevicePresets("demo-2002").Slots.All(s=>!s.Occupied),"All sixteen slots store independently per device");
         service.SetFir(id,new(1,"Changed",new double[]{1},false));service.RecallDevicePreset(id,16);
         check(service.GetFir(id,1).Name=="Delay" && service.GetOutputProcessing(id,1).Bands[0].GainDb==6,"Device recall restores FIR and output EQ");
         foreach(var slot in new[]{0,17})Reject(()=>service.StoreDevicePreset(id,slot,"Bad"),"Invalid preset slot rejected");
@@ -50,7 +50,7 @@ static class AdvancedChecks
         var noNames=native[..2687].Concat(Enumerable.Range(0,4).SelectMany(n=>native[(2687+n*2080+32)..(2687+(n+1)*2080)])).Concat(new byte[16]).ToArray();
         System.Text.Encoding.ASCII.GetBytes("FIR==2048").CopyTo(noNames,noNames.Length-16);
         service.LoadPresetFile(id,"legacy.sd",noNames);check(service.ExportNativePreset(id).SequenceEqual(noNames),"Legacy unnamed FIR layout round-trips");
-        Reject(()=>service.LoadPresetFile("demo-1502","wrong.sd",native),"Native model mismatch rejected");
+        Reject(()=>service.LoadPresetFile("demo-2002","wrong.sd",native),"Native model mismatch rejected");
         var unknown=native.ToArray();unknown[9]=(byte)'9';Reject(()=>service.LoadPresetFile(id,"unknown.sd",unknown),"Unknown native firmware rejected");
         Reject(()=>service.LoadPreset(id,captured with {Firs=[new(1,"Invalid",new double[]{double.NaN})]}),"Invalid bulk data rejected before mutation");
         check(service.GetDevice(id).Outputs[0].GainDb==0,"Failed bulk operation leaves existing output untouched");

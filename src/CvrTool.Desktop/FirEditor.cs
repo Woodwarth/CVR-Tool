@@ -136,7 +136,12 @@ public sealed partial class MainWindow
                 var latest = service.GetFir(editedId, channel);
                 if (latest.Enabled != original.Enabled || latest.Name != original.Name || !latest.Coefficients.SequenceEqual(original.Coefficients))
                     throw new InvalidOperationException("Output FIR changed externally. Reopen this editor.");
-                if (service.GetDevice(editedId).Readings?.ReadOnly == true) await Task.Run(() => service.SetFirEnabled(editedId,channel,draft.Enabled));
+                if (service.GetDevice(editedId).Readings?.ReadOnly == true) await Task.Run(() =>
+                {
+                    if (draft.Name == original.Name && draft.Coefficients.SequenceEqual(original.Coefficients))
+                        return service.SetFirEnabled(editedId, channel, draft.Enabled);
+                    return service.SetFir(editedId, draft);
+                });
                 else service.SetFir(editedId, draft);
                 Render();
                 editor.Close();

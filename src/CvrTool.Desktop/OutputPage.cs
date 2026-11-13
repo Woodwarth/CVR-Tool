@@ -35,13 +35,12 @@ public sealed partial class MainWindow
     {
         var panel = new StackPanel { Spacing = 16, Tag = "outputs-page" };
         var metadata = service.GetNativePresetMetadata(deviceId);
-        panel.Children.Add(Heading("Outputs · " + deviceName.Text));
         foreach (var output in service.GetDevice(deviceId).Outputs)
         {
             var eq = service.GetOutputProcessing(deviceId, output.Number);
             var fir = service.GetFir(deviceId, output.Number);
             var dynamics = service.GetOutputDynamics(deviceId, output.Number);
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("108", 12))), ColumnSpacing = 8, Height = 100, Tag = "output-flow-" + output.Name };
+            var row = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("108", 12))), ColumnSpacing = 8, Height = 100, Tag = "output-flow-" + output.Name };
             Button Block(string title, string value, string tag, Action action)
             {
                 var caption = Centered(value, 12, Accent); caption.MaxWidth = 94; caption.TextTrimming = TextTrimming.CharacterEllipsis;

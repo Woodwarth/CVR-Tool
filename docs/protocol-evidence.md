@@ -121,11 +121,11 @@ after reopening independently confirmed the preceding input-A volume at +4.5 dB.
 The live 2687-byte settings block also round-trips through the native codec;
 sync-only exports now preserve the absence of FIR blocks and their footer.
 
-A user-confirmed controlled output-A mute test identifies function 10/status 1,
+A observed controlled output-A mute test identifies function 10/status 1,
 channel/segment/side 0/0/1, body 00 for mute and 01 for unmute. This corrects
 an earlier inverted interpretation. Native output flag offset 48 also decodes
 1 as unmuted in the independently captured pre-test full sync, matching the
-user-confirmed initial state. Backend reads/writes and native import/export
+observed initial state. Backend reads/writes and native import/export
 now map this active-low flag to the app's ordinary true=muted boolean. Existing
 App-JSON booleans are not reinterpreted. Routing flags have independent semantics
 and are not changed from this observation. All four 92-byte telemetry status
@@ -133,7 +133,7 @@ fields remained code 8 throughout the test; they do not report this mute change.
 Transport ACKs followed both commands; no individual mute-query response or
 post-test settings readback was captured.
 
-A controlled delay capture, explicitly identified by the user as Output A,
+A controlled delay capture, identified as Output A,
 confirms function 14/status 1, channel/segment/side 0/0/1. Float32 LE bodies
 are 8.89 ms (8.890000343322754 on decode) and 0 ms. Both have following transport
 ACKs; no independent setting readback was captured. This validates the output
@@ -144,11 +144,11 @@ channel/segment/side 0/0/0 with float32 LE 8.89 and 0 ms. This independently
 confirms the side-0 input versus side-1 output distinction. Both commands have
 following transport ACKs; individual query responses remain unobserved.
 
-A user-confirmed Input 1 -> Output A matrix test sends function 12/status 1,
+A observed Input 1 -> Output A matrix test sends function 12/status 1,
 channel/segment/side 0/0/0, five-byte bodies: float32 gain 0 dB followed by 00
 (muted) then 01 (enabled). Routing mute is therefore active-low as independently
 established by this test, correcting the earlier assumption. The native pre-test
-route 1-A flag is also 1, matching its user-confirmed enabled state. Backend and
+route 1-A flag is also 1, matching its observed enabled state. Backend and
 native route flags are corrected; JSON true=muted semantics remain unchanged.
 A diagonal route cannot establish axis order. Controlled off-diagonal evidence
 and independent post-test readback are still pending.
@@ -160,7 +160,7 @@ may exist. IDs counted: 0, 6, 9, 10, 12, 14, 17 and 27.
 
 An off-diagonal controlled Input 2 -> Output A test establishes routing wire
 coordinates: function 12/status 1, channel 0 (output A), segment 1 (input 2),
-side 0. This corrects the former transposed backend addressing. The user had to
+side 0. This corrects the former transposed backend addressing. The test required an operator to
 unmute to edit in the original controller and dragged with the mouse. Captured
 gain values were 0, -0.5, -2.7, -1.7, -1.2, 0 and +0.2 dB while enabled, followed
 by mute with +0.2 dB retained. Do not report a return to zero: the last transmitted
@@ -174,7 +174,7 @@ establishes native output-major routing storage: record `36+(output-1)*515`,
 float gain at `24+(input-1)*5`, active-low flag immediately following. The codec
 now uses that order for both decode and encode. The original controller then
 sent a full function-27/status-1 settings write; a subsequent device full sync
-shows the route at 0 dB/muted. The user selected No at the close/save prompt.
+shows the route at 0 dB/muted. The editor was closed without saving.
 Do not interpret that prompt as a guarantee of no device writes or establish
 power-loss persistence from this sequence. Unknown changed bytes after offset
 2160 remain opaque. Both captured settings blocks round-trip byte-for-byte.
@@ -243,7 +243,7 @@ unassigned and expands the progress denominator. Current count: 14/37 IDs (38%).
 Output A load-mode testing confirms function 49 uses status 0 (not ordinary
 setting-write status 1), channel/segment/side 0/0/1, bodies 01 for 70V then
 00 for Low-Z. Output A was muted during switching and subsequently unmuted.
-100V could not be selected in the user's controller/device combination; no
+100V could not be selected in the tested controller/device combination; no
 100V command is claimed as physically tested, and this observation is not a
 global model capability declaration. Existing individual-query backend mode
 writes now use status 0. Transport ACKs are not semantic mode readback.
@@ -260,7 +260,7 @@ were successfully set/restored on the real device; original native settings
 matched byte-for-byte afterwards. Current progress: 16/37 IDs (43%).
 
 Extended identity function 71 is now directly validated: the minute counter at
-offset 74 matches the user's operating-hours reference. The embedded header at
+offset 74 matches the front-panel operating time. The embedded header at
 42..73 must match the connected device; malformed/mismatched metadata is rejected.
 Direct application tests also confirm output and matrix mute writes with fresh
 full-settings readback; route gain is preserved. Only previously active paths
@@ -285,7 +285,7 @@ Function 10 already had output-side evidence, so progress stays 18/38 IDs (47%).
 Controlled Output A noise-gate on/off confirms function 69/status 1,
 channel/segment/side 0/0/1: byte 00 enabled, 01 bypassed. The valid commands
 are approximately 3.57 seconds apart and bracketed by output mute/unmute.
-The user confirms the gate was originally off; no threshold write occurred.
+The initial gate state was off; no threshold write occurred.
 Final independent full-settings readback remains pending. This adds one
 live-evidenced function: 19/38 documented IDs (50%).
 
@@ -401,14 +401,14 @@ The final native block matches the immediate pre-write baseline byte-for-byte.
 Only types 0/BW-12 and 4/BW-24 are enabled in UI/backend/MCP; unverified stored
 or requested types remain protected. Progress stays 22/38 IDs (58%).
 
-The short dedicated HP-type capture expired before the user operated the
-controller (zero packets); the actual sequence was recovered from the user's
+The short dedicated HP-type capture expired before operation of the
+controller (zero packets); the actual sequence was recovered from the
 continuously running Wireshark capture and extracted privately. Controlled
 Input 1 HP selection confirms function 30/status 1/channel 0/segment 0/side 0:
 01 = 12 dB Bessel, 02 = 12 dB Linkwitz-Riley, 03 = 18 dB Butterworth, then
 00 = BW-12 and FF = bypass. Original Wireshark frames 63746/63902/64159/
 64477/64539 have valid checksums. Frequency 20 Hz and gain 0 are repeated.
-User explicitly reports no intermediate HP bypass/re-enable: this establishes
+There was no intermediate HP bypass/re-enable: this establishes
 enabled type selection only, not FE/FD/FC bypass values. Current HP state is
 command-restored to BW-12 off at 20 Hz. Independent native readback and bypass
 variants for types 1/2/3 remain pending. No new function IDs: 22/38 (58%).
@@ -545,3 +545,12 @@ These are receive layouts in the multi-model controller. For each capture, recor
 | 81 | Allocation, 40 bytes: four mode bytes, four sensitivity bytes, four binary32 load values and four binary32 voltages, indexed by output. | Compare configured values per output, separately from telemetry. |
 
 Reset remains protected. Additional IDs in this offline comparison are multi-model candidates pending evidence on target hardware.
+
+## DSP-1004 automatic bench verification, 2026-11-13
+
+Six reversible control groups passed with an independent final full-settings read identical to the baseline. For status-2 read requests the amplifier returned status 1, the addressed channel and side, and segment 10 for FIR (43), bridge (50), peak (54) and RMS (55). Output EQ (52) and source alignment (62) echoed the segment. All four FIR replies held 512 taps with a name field. Both bridge flags, four output EQ blocks and all eight limiter blocks matched the full settings byte for byte. Function 59 returned forty 32-byte name fields. The operator confirmed that all 40 preset slots are selectable on the DSP-1004 front-panel display. Store and recall through the network protocol remain unverified. All twelve source-alignment replies matched the corresponding eight-byte native records at their current zero values.
+
+Original 38-ID cohort: 37/38 (97%) have at least partial hardware evidence; reset remains untested. Additional ID 62 has read evidence. Extended inspection candidates 82, 88 and 93 timed out. The run did not calibrate meters with an input signal or visually verify display blinking.
+
+
+A DSP-1004 output EQ write was verified with all outputs muted. A status-0 function 52 output block changed Output A Peak band 1 gain from 0 to -0.5 dB. Full settings confirmed the change and matched the original byte for byte after restoring the band and mutes. Other band values and crossover variants were not individually exercised by this test.

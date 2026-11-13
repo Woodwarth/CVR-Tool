@@ -13,7 +13,8 @@ using CvrTool.Desktop;
 using System.Text.Json;
 
 AppBuilder.Configure<App>().UsePlatformDetect().SetupWithoutStarting();
-var window = new MainWindow(); window.Show();
+var demoService = new AmplifierService(new DemoBackend()); demoService.AddDemo("DSP-2002");
+var window = new MainWindow(demoService); window.Show();
 var root = (Control)window.Content!;
 var count = 0;
 void Layout(int width = 1680, int height = 960)
@@ -53,25 +54,25 @@ PresetDocument Preset() { Click("☰   Presets"); return JsonSerializer.Deserial
 Layout(); Save("main-1004");
 // Browser status remains visible outside the pairing dialog.
 var browserStatusServer=(CvrTool.Web.BrowserControlServer)typeof(MainWindow).GetField("browserServer",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(window)!;
-Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · Off","Header shows stopped browser server");
+Check(Avalonia.Automation.AutomationProperties.GetName(Tagged<Button>("browser-control"))=="Browser control · Off","Header shows stopped browser server");
 browserStatusServer.StartAsync(System.Net.IPAddress.Loopback,0).GetAwaiter().GetResult(); Layout();
-Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · On","Starting browser server updates the persistent header indicator");
+Check(Avalonia.Automation.AutomationProperties.GetName(Tagged<Button>("browser-control"))=="Browser control · On","Starting browser server updates the persistent header indicator");
 using(var browserStatusClient=new System.Net.Http.HttpClient())
 {
     browserStatusClient.DefaultRequestHeaders.Authorization=new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",browserStatusServer.AccessKey);
     browserStatusClient.DefaultRequestHeaders.Add("X-CVR-Client",new string('d',32));
     browserStatusClient.GetAsync(browserStatusServer.Address+"/api/health").GetAwaiter().GetResult().EnsureSuccessStatusCode(); Layout();
-    Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · Connected","Connected browser is visible in the app header");
+    Check(Avalonia.Automation.AutomationProperties.GetName(Tagged<Button>("browser-control"))=="Browser control · Connected","Connected browser is visible in the app header");
     Press(Tagged<Button>("browser-control"));
     var browserStatusWindow=window.OwnedWindows.Single();
     Check(browserStatusWindow.GetLogicalDescendants().OfType<TextBlock>().Any(t=>t.Text?.Contains("1/1 browser connected")==true),"Pairing dialog shows the single occupied browser slot");
     browserStatusWindow.Close(); Layout(); Save("main-web-active");
-    Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · Connected","Closing the pairing dialog keeps the active indicator visible");
+    Check(Avalonia.Automation.AutomationProperties.GetName(Tagged<Button>("browser-control"))=="Browser control · Connected","Closing the pairing dialog keeps the active indicator visible");
     browserStatusClient.PostAsync(browserStatusServer.Address+"/api/disconnect",null).GetAwaiter().GetResult(); Layout();
-    Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · On","Browser disconnect leaves the server active and waiting");
+    Check(Avalonia.Automation.AutomationProperties.GetName(Tagged<Button>("browser-control"))=="Browser control · On","Browser disconnect leaves the server active and waiting");
 }
 browserStatusServer.DisposeAsync().AsTask().GetAwaiter().GetResult(); Layout();
-Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · Off","Stopping the server clears the active indicator");
+Check(Avalonia.Automation.AutomationProperties.GetName(Tagged<Button>("browser-control"))=="Browser control · Off","Stopping the server clears the active indicator");
 
 var fourChannelSize = Tagged<Border>("input-channel-A").Bounds.Size;
 Check(window.Icon is not null, "Window icon loads from embedded application assets");
@@ -126,6 +127,13 @@ foreach (var dial in All<RoutingDial>().ToArray())
     dial.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Home });
     Check(dial.GainDb == -80 && dial.Muted == originalMute, "Every circle supports minimum gain without changing mute: " + dial.Tag);
 }
+var typedDial = Tagged<RoutingDial>("route-dial-2-1");
+typedDial.RaiseEvent(new TextInputEventArgs { RoutedEvent = InputElement.TextInputEvent, Text = "-12,5" });
+typedDial.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+Check(demoService.GetRouting("demo-1004").Cells.Single(c => c.Input == 2 && c.Output == 1).GainDb == -12.5, "Typed matrix gain accepts a decimal comma and commits with Enter");
+typedDial.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Up });
+Check(typedDial.GainDb == -12, "Routing arrows adjust gain in half-decibel steps");
+typedDial.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Home });
 var route = Tagged<RoutingDial>("route-dial-2-1"); route.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space });
 preset = Preset(); Check(preset.Routing!.Single(c => c.Input == 2 && c.Output == 1) is { GainDb: -80, Muted: false }, "Dial-only routing changes persist through shared service");
 Click("◉   Inputs"); route = Tagged<RoutingDial>("route-dial-2-1");
@@ -141,14 +149,14 @@ Tagged<TextBox>("device-name").RaiseEvent(new KeyEventArgs { RoutedEvent = Input
 Check(Tagged<Button>("device-name-display").Content is TextBlock kept && kept.Text == "Front amplifier", "Escape cancels name edit");
 Press(Tagged<Button>("device-name-display")); Tagged<TextBox>("device-name").Text = " "; Press(Tagged<Button>("save-name"));
 Check(All<TextBox>().Any(t => t.Tag?.ToString() == "device-name"), "Invalid name keeps editor open"); Press(Tagged<Button>("cancel-name"));
-Device("demo-1502"); Device("demo-1004");
+Device("demo-2002"); Device("demo-1004");
 Check(Tagged<Button>("device-name-display").Content is TextBlock retained && retained.Text == "Front amplifier" && Preset().Name == "Front amplifier", "Renamed device survives switching and exports");
 Check(Tagged<ToggleButton>("device-wink").IsEnabled && !Tagged<ToggleButton>("device-wink").GetLogicalDescendants().OfType<TextBlock>().Any(), "Wink is a symbol-only header control beside lock and standby");
 try { window.LoadPresetFile("not-native.json", System.Text.Encoding.UTF8.GetBytes(window.ExportSelectedPreset())); throw new Exception("JSON file accepted"); }
 catch (ArgumentException) { Check(true, "Desktop preset loading rejects JSON files"); }
 Check(Tagged<ToggleButton>("device-lock").IsEnabled && Tagged<ToggleButton>("device-standby").IsEnabled && !Tagged<ToggleButton>("device-lock").GetLogicalDescendants().OfType<TextBlock>().Any(), "Lock and standby are enabled symbol-only controls");
 Tagged<ToggleButton>("device-lock").IsChecked = true; Tagged<ToggleButton>("device-standby").IsChecked = true;
-Device("demo-1502"); Check(Tagged<ToggleButton>("device-lock").IsChecked == false && Tagged<ToggleButton>("device-standby").IsChecked == false, "Demo lock and standby isolate devices");
+Device("demo-2002"); Check(Tagged<ToggleButton>("device-lock").IsChecked == false && Tagged<ToggleButton>("device-standby").IsChecked == false, "Demo lock and standby isolate devices");
 Device("demo-1004"); Check(Tagged<ToggleButton>("device-lock").IsChecked == true && Tagged<ToggleButton>("device-standby").IsChecked == true, "Demo lock and standby survive device switching");
 Tagged<ToggleButton>("device-lock").IsChecked = false; Tagged<ToggleButton>("device-standby").IsChecked = false;
 Click("◖   Outputs"); Save("outputs");
@@ -161,10 +169,45 @@ Click("◖   Outputs");
 Press(Tagged<Button>("output-eq-A"));var outputEq=window.OwnedWindows.Single();Press(Tagged<Button>("output-eq-A"));
 Check(window.OwnedWindows.Count==1 && ReferenceEquals(outputEq,window.OwnedWindows.Single()),"Output EQ reuses its channel editor");
 Check(outputEq.GetLogicalDescendants().OfType<ComboBox>().Count(c=>c.Tag?.ToString() is "hp-type" or "lp-type")==2,"Output EQ includes HP and LP controls");
-outputEq.GetLogicalDescendants().OfType<EqualizerGraph>().Single().MoveBand(2,2000,-5);
+var eqView = outputEq.GetLogicalDescendants().OfType<EqualizerGraph>().Single();
+eqView.MoveBand(2,2000,-5);
+Press(outputEq.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Tag,"eq-reset")));
+Check(eqView.Bands.All(b=>b.GainDb==0) && eqView.Bands[1].FrequencyHz==132 && eqView.HighPass?.Enabled==false && eqView.LowPass?.Enabled==false,
+    "EQ reset restores the flat channel draft and bypasses crossovers");
+eqView.MoveBand(2,2000,-5);
+void CopyPair(Window source)
+{
+    Press(source.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Tag,"editor-copy")));
+    var confirm = window.OwnedWindows.Single(w => w.Title == "Copy settings");
+    Press(confirm.GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Tag,"confirm-preset-operation")));
+}
+CopyPair(outputEq);
+WaitUi(()=>demoService.GetOutputProcessing("demo-1004",2).Bands[1].GainDb == -5);
+Check(demoService.GetOutputProcessing("demo-1004",1).Bands[1].GainDb == 0,"EQ copy commits the displayed draft to B only");
 outputEq.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-input-eq").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
 Check(Preset().OutputProcessing![0].Bands[1].GainDb==-5 && Preset().Inputs![0].Bands[1].GainDb==0,"Output EQ applies independently of input EQ");
-Click("◖   Outputs");Press(Tagged<Button>("output-fir-A"));var firWindow=window.OwnedWindows.Single();Press(Tagged<Button>("output-fir-A"));
+Click("◖   Outputs");
+Press(Tagged<Button>("output-limiters-A"));
+window.OwnedWindows.Single().GetLogicalDescendants().OfType<ComboBox>().Single(b=>Equals(b.Tag,"editor-channel")).SelectedIndex=2;
+Layout();
+var limiterC = window.OwnedWindows.Single();
+using (var preview = new RenderTargetBitmap(new PixelSize(700,650)))
+{
+    limiterC.Measure(new Size(700,650)); limiterC.Arrange(new Rect(0,0,700,650)); limiterC.UpdateLayout();
+    preview.Render(limiterC); preview.Save("artifacts/limiter-panel.png",PngBitmapEncoderOptions.Default);
+}
+NumericUpDown LimiterValue(string tag) => limiterC.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>Equals(n.Tag,tag));
+LimiterValue("limiter-load").Value=8;
+LimiterValue("rms-threshold").Value=80;
+Check(LimiterValue("rms-power").Value==800,"80 Vrms at 8 ohms shows 800 W");
+LimiterValue("peak-power").Value=1600;
+Check(LimiterValue("peak-threshold").Value==113.14m,"1600 W peak at 8 ohms sets 113.14 Vp");
+limiterC.GetLogicalDescendants().OfType<NumericUpDown>().Single(b=>Equals(b.Tag,"peak-threshold")).Value=11;
+CopyPair(limiterC);
+WaitUi(()=>demoService.GetOutputDynamics("demo-1004",4).Peak.ThresholdVolts==11);
+Check(demoService.GetOutputDynamics("demo-1004",3).Peak.ThresholdVolts!=11,"Limiter channel switch and C to D draft copy preserve C");
+limiterC.Close();Layout();
+Press(Tagged<Button>("output-fir-A"));var firWindow=window.OwnedWindows.Single();Press(Tagged<Button>("output-fir-A"));
 Check(window.OwnedWindows.Count==1 && firWindow.GetLogicalDescendants().OfType<ResponsePlot>().Count()==3,"FIR has one editor with impulse, frequency and phase plots");
 Check(firWindow.GetLogicalDescendants().OfType<Button>().Count(b=>b.Tag?.ToString() is "fir-import" or "fir-export" or "fir-remove")==3,"FIR exposes import, export and remove controls");
 firWindow.GetLogicalDescendants().OfType<CheckBox>().Single(b=>b.Tag?.ToString()=="fir-enabled").IsChecked=true;
@@ -241,8 +284,7 @@ Check(All<Slider>().Count() == 2 && All<Control>().Count(c => c.Tag?.ToString()?
 Check(Tagged<Border>("input-channel-A").Bounds.Size == fourChannelSize && Tagged<Border>("output-channel-A").Bounds.Size == fourChannelSize, "Two- and four-channel models retain identical group dimensions");
 Save("main-2002"); Save("main-small", 1080, 680);
 Click("◉   Inputs"); Check(All<RoutingDial>().Count() == 4, "DSP-2002 exposes the same two-channel matrix features");
-Device("demo-1502");
-Check(All<RoutingDial>().Count() == 4, "DSP-1502 has four editable circles"); Save("routing-1502");
+Device("demo-2002");
 Check(!All<Button>().Any(b=>b.Content?.ToString() is "≋   EQ" or "∿   FIR" or "⌁   Network"), "EQ, FIR and Network tabs are removed");
 var presetArgument = Array.IndexOf(args, "--preset");
 if (presetArgument >= 0)
@@ -261,10 +303,10 @@ foreach (var (width, height) in new[] { (1008,588), (1080,720), (1680,980), (192
     var startPoint = firstGroup.TranslatePoint(new Point(), root)!.Value;
     var endPoint = d.TranslatePoint(new Point(d.Bounds.Width,d.Bounds.Height),root)!.Value;
     var origin = canvas.TranslatePoint(new Point(),root)!.Value;
-    var corner = canvas.TranslatePoint(new Point(1680,980),root)!.Value;
-    Check(canvas.Bounds.Size == new Size(1680,980) && firstGroup.Bounds.Size == fourChannelSize &&
+    var corner = canvas.TranslatePoint(new Point(canvas.Bounds.Width,canvas.Bounds.Height),root)!.Value;
+    Check(Math.Abs(corner.X-width) <= 1 && Math.Abs(corner.Y-root.Bounds.Height) <= 1 && Math.Abs(origin.X) <= 1 && Math.Abs(origin.Y) <= 1 && firstGroup.Bounds.Size == fourChannelSize &&
         startPoint.X >= 0 && endPoint.X <= width + 1 && endPoint.Y <= height + 1 &&
-        Math.Abs((corner.X-origin.X)/1680-(corner.Y-origin.Y)/980) < .001,
+        Math.Abs((corner.X-origin.X)/canvas.Bounds.Width-(corner.Y-origin.Y)/canvas.Bounds.Height) < .001,
         $"Uniform scale preserves all channel positions and visibility at {width}x{height}");
     Save($"main-scaled-{width}",width,height);
 }
@@ -333,7 +375,7 @@ System.Text.Encoding.ASCII.GetBytes("Speaker label").CopyTo(nativeFixture, 36 + 
 nativeService.LoadPresetFile("demo-1004", "fixture.sd", nativeFixture[..2687]);
 window = new MainWindow(nativeService); window.Show(); root = (Control)window.Content!; Layout();
 Click("☰   Presets");
-Check(Tagged<Control>("native-preset-information") is not null && Text("Input annotation") && Text("Speaker label") && Text("Input mute"), "Native metadata is visible in Presets for imported files"); Save("native-preset-metadata");
+Check(!All<Control>().Any(c => Equals(c.Tag, "native-preset-information")), "Presets shows the original controls without a metadata section");
 Click("◖   Outputs"); Check(Tagged<Button>("output-speaker-A").GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "Speaker label"), "Output tile displays the saved speaker label");
 Press(Tagged<Button>("output-fir-A")); var unknownFirViewer = window.OwnedWindows.Single();
 Check(unknownFirViewer.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("FIR coefficients unknown") == true) && !unknownFirViewer.GetLogicalDescendants().OfType<Button>().Single(b => b.Tag?.ToString() == "fir-export").IsEnabled, "Sync-only preset FIR opens without fake coefficients or export");
@@ -349,12 +391,18 @@ var liveFixture = new LiveDesktopFixture();
 window = new MainWindow(new AmplifierService(liveFixture)); window.Show(); root = (Control)window.Content!; Layout();
 Check(!All<Button>().Any(b => b.Content?.ToString() is "Manual connection" or "Connect device" or "Disconnect"), "Automatic device view has no manual connection/disconnect buttons");
 Device(LiveDesktopFixture.LiveId); Layout();
-Check(All<Button>().Count(b => b.Tag?.ToString()?.StartsWith("demo-") == true) == 3, "All three demos remain listed beside the live device");
+Check(All<Button>().Count(b => b.Tag?.ToString()?.StartsWith("demo-") == true) == 2, "Both demos remain listed beside the live device");
 Check(Tagged<TextBlock>("device-dot-" + LiveDesktopFixture.LiveId).Foreground is ISolidColorBrush liveGreen && liveGreen.Color == Color.Parse("#00CE63"), "Connected live device point is green");
 Check(Tagged<ToggleButton>("device-wink").IsEffectivelyEnabled, "Live Wink control follows evidenced capability");
 Check(Tagged<ToggleButton>("device-lock").IsEffectivelyEnabled && Tagged<ToggleButton>("device-standby").IsEffectivelyEnabled && Tagged<Button>("device-name-display").IsEffectivelyEnabled, "Live header controls and verified device rename are enabled");
 Check(All<Slider>().All(s => s.IsEnabled) && Tagged<ToggleButton>("mute-output-A").IsEnabled && Tagged<ToggleButton>("mute-input-A").IsEnabled, "Live Main exposes verified input gain and independent input/output mutes");
 var liveFader=Tagged<Slider>("input-gain-A");
+liveFader.Focus();
+liveFixture.TestVoltage=41;
+var refreshTask=window.RefreshLiveAsync(); WaitUi(()=>refreshTask.IsCompleted); refreshTask.GetAwaiter().GetResult();
+WaitUi(()=>Tagged<TextBlock>("telemetry-A-0").Text == 41d.ToString("0.0"));
+Check(ReferenceEquals(liveFader,Tagged<Slider>("input-gain-A")) && liveFader.IsFocused,
+    "New live telemetry updates the reading without replacing the focused fader");
 liveFader.RaiseEvent(new KeyEventArgs { RoutedEvent=InputElement.KeyDownEvent, Key=Key.Up }); Layout();
 Check(liveFixture.GetInputProcessing(LiveDesktopFixture.LiveId,1).State.GainDb==0, "Live fader previews locally before key release commits the value");
 liveFader.RaiseEvent(new KeyEventArgs { RoutedEvent=InputElement.KeyUpEvent, Key=Key.Up });
@@ -367,8 +415,6 @@ Press(Tagged<Button>("device-name-display")); Tagged<TextBox>("device-name").Tex
 WaitUi(()=>liveFixture.LiveName=="Renamed live fixture" && Tagged<Button>("device-name-display").IsEffectivelyEnabled);
 Check(Tagged<Button>("device-name-display").GetLogicalDescendants().OfType<TextBlock>().Any(t=>t.Text=="Renamed live fixture"), "Live Main device-name edit shows confirmed identity state");
 Check(Tagged<Control>("channel-clip-A").GetLogicalDescendants().OfType<StatusLed>().Single().Value is null, "Input clip does not copy output clip on live devices");
-Click("ⓘ   Details");
-Check(Text("Fixture-106119-DSP-1004") && Text("Fixture preset") && Text("RMS timing") && Text("Peak timing") && Text("Routing matrix") && Text("coefficients not received"), "Live details include identity, processing, routing, dynamics and unknown FIR state");
 Click("◉   Inputs");
 Check(All<RoutingDial>().All(d => d.IsEnabled && d.CanEditGain) && Tagged<Button>("input-eq-1").IsEnabled, "Live matrix exposes verified gain/mute with EQ viewable");
 var liveRoute = Tagged<RoutingDial>("route-dial-1-1");
@@ -428,18 +474,20 @@ var unsupportedHpCurrent=liveFixture.GetInputProcessing(LiveDesktopFixture.LiveI
 liveFixture.ApplyInputProcessing(new(LiveDesktopFixture.LiveId,1,HighPass:unsupportedHpOriginal.State.HighPass),unsupportedHpCurrent.Revision);
 window.ReloadSession(); Layout();
 
-Click("◖   Outputs"); Check(Tagged<Button>("output-mode-A").IsEnabled && Tagged<Button>("output-eq-A").IsEnabled, "Live output settings can be inspected through protected editors");
-foreach (var tag in new[] { "output-mode-A", "output-delay-A", "output-noise-A", "output-limiters-A", "output-fir-A" })
+var heldOutputsTab = Tagged<Button>("Outputs");
+window.ReloadSession(); Layout();
+Check(ReferenceEquals(heldOutputsTab, Tagged<Button>("Outputs")), "Live refresh retains the tab through a press/release");
+Press(heldOutputsTab); Check(Tagged<Button>("output-mode-A").IsEnabled && Tagged<Button>("output-eq-A").IsEnabled, "Live output settings can be inspected through protected editors");
+foreach (var tag in new[] { "output-eq-A", "output-mode-A", "output-delay-A", "output-noise-A", "output-limiters-A", "output-fir-A" })
 {
     Press(Tagged<Button>(tag)); var viewer = window.OwnedWindows.Single();
-    var writesAllowed = tag != "output-limiters-A";
+    var writesAllowed = true;
     Check(viewer.Title!.Contains(writesAllowed ? "Live" : "Read-only") && viewer.GetLogicalDescendants().OfType<Button>().Where(b => b.Tag?.ToString()?.StartsWith("apply-") == true).All(b => b.IsEffectivelyEnabled == writesAllowed), "Live editor permits only verified writes for " + tag);
     if(tag=="output-mode-A") Check(viewer.GetLogicalDescendants().OfType<ComboBox>().Single(b=>b.Tag?.ToString()=="output-mode-choice").ItemCount==2,"Live mode offers only verified Low-Z and 70V variants");
     if (tag == "output-fir-A") Check(viewer.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text?.Contains("FIR coefficients unknown") == true), "Unread live FIR coefficients show unknown instead of an invented curve");
     viewer.Close();
 }
-Click("☰   Presets"); Check(!All<ComboBox>().Any(), "Live preset save offers only native .sd format");
-Click("☰   Presets"); Check(Tagged<Button>("snapshot-save-pc").IsEnabled && !All<ComboBox>().Any(c => c.Tag?.ToString() == "device-preset-slot"), "Unknown device slots are not invented and known settings can be saved");
+Click("☰   Presets"); Check(Tagged<Button>("preset-save-pc").IsEnabled && Tagged<ComboBox>("device-preset-slot").Items.Count == 0 && Tagged<Button>("preset-factory-reset").IsEnabled, "Live presets expose the shared layout and protect unavailable actions");
 liveFixture.Error = "Offline fixture"; window.ReloadSession(); Layout();
 Check(Tagged<TextBlock>("device-dot-" + LiveDesktopFixture.LiveId).Foreground is ISolidColorBrush liveRed && liveRed.Color == Color.Parse("#F05462"), "Disconnected live device point turns red");
 Click("⌂   Main");

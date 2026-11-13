@@ -37,7 +37,6 @@ public sealed class EqualizerGraph : Control
             InvalidateVisual();
         }
     }
-    public bool ShowPhase { get; set; }
     private int selected = 1;
     private bool dragging;
     public event Action<EqualizerBand>? BandChanged;
@@ -57,7 +56,7 @@ public sealed class EqualizerGraph : Control
             InvalidateVisual();
         }
     }
-    private Rect Plot => new(46, 12, Math.Max(1, Bounds.Width - 62), Math.Max(1, Bounds.Height - 45));
+    private Rect Plot => new(46, 12, Math.Max(1, Bounds.Width - 96), Math.Max(1, Bounds.Height - 45));
     public EqualizerGraph()
     {
         Height = 330;
@@ -87,13 +86,16 @@ public sealed class EqualizerGraph : Control
         {
             var y = plot.Y + (24 - db) / 48.0 * plot.Height;
             context.DrawLine(new Pen(Brush.Parse(db == 0 ? "#65828C" : "#34454F"), 1), new(plot.Left, y), new(plot.Right, y));
-            var text = Label(ShowPhase ? $"{db * 7.5:0}°" : db.ToString(), 11, Brushes.LightGray);
+            var text = Label(db.ToString(), 11, Brushes.LightGray);
+            context.DrawText(Label($"{db * 7.5:0}°", 11, Brush.Parse("#F0BD71")), new(plot.Right + 6, y - 7));
             context.DrawText(text, new(Plot.X - text.Width - 9, y - 7));
         }
         var available = bands.All(b => !b.Enabled || b.FilterType == 0) && new[] { highPass, lowPass }.All(f => f is null || !f.Enabled || CrossoverFilters.Options.Any(o => o.Code == f.FilterType));
         if (available)
         {
             var geometry = new StreamGeometry();
+            var phaseGeometry = new StreamGeometry();
+            using (var phase = phaseGeometry.Open())
             using (var path = geometry.Open())
             {
                 double previous = 0;
@@ -107,24 +109,29 @@ public sealed class EqualizerGraph : Control
                         foreach (var band in bands)
                             response *= EqualizerResponse.Transfer(band, frequency);
                     }
-                    var db = ShowPhase ? response.Phase * 24 / Math.PI : 20 * Math.Log10(response.Magnitude);
-                    if (ShowPhase && pixel > 0 && Math.Abs(previous - db) > 24)
-                        path.EndFigure(false);
-                    var start = pixel == 0 || ShowPhase && Math.Abs(previous - db) > 24;
-                    previous = db;
-                    var point = new Point(plot.X + pixel / 500.0 * plot.Width, plot.Y + (24 - Math.Clamp(db, -24, 24)) / 48 * plot.Height);
-                    if (start)
+                    var db = 20 * Math.Log10(response.Magnitude);
+                    double degrees = response.Phase * 180 / Math.PI;
+                    double x = plot.X + pixel / 500.0 * plot.Width;
+                    var phasePoint = new Point(x, plot.Y + (180 - degrees) / 360 * plot.Height);
+                    bool wrap = pixel > 0 && Math.Abs(previous - degrees) > 180;
+                    if (wrap) phase.EndFigure(false);
+                    if (pixel == 0 || wrap) phase.BeginFigure(phasePoint, false);
+                    else phase.LineTo(phasePoint);
+                    previous = degrees;
+                    var point = new Point(x, plot.Y + (24 - Math.Clamp(db, -24, 24)) / 48 * plot.Height);
+                    if (pixel == 0)
                         path.BeginFigure(point, false);
                     else
                         path.LineTo(point);
                 }
+                phase.EndFigure(false);
                 path.EndFigure(false);
             }
             context.DrawGeometry(null, new Pen(Brush.Parse(enabled ? "#00CEBD" : "#71838E"), 2), geometry);
+            context.DrawGeometry(null, new Pen(Brush.Parse("#F0BD71"), 1.5, DashStyle.Dash), phaseGeometry);
         }
         else
             context.DrawText(Label("Curve unavailable for device filter type", 12, Brushes.LightGray), new(plot.Left + 12, plot.Top + 10));
-        if (ShowPhase) return;
         foreach (var band in bands)
         {
             var point = BandPosition(band);
@@ -175,7 +182,7 @@ public sealed class EqualizerGraph : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (ShowPhase || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || bands.Count == 0)
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || bands.Count == 0)
             return;
         var point = e.GetPosition(this);
         double Distance(EqualizerBand b)
@@ -234,7 +241,6 @@ public sealed class EqualizerGraph : Control
     }
     protected override void OnKeyDown(KeyEventArgs e)
     {
-        if (ShowPhase) return;
         if (selected is 0 or 9)
         {
             var filter = selected == 0 ? highPass : lowPass;

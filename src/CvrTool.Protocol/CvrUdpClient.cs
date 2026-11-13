@@ -13,10 +13,12 @@ public sealed class CvrUdpClient : IDisposable
 {
     private readonly UdpClient socket;
     private readonly int timeoutMs;
+    private readonly bool targetSnapshotAck;
     public CvrUdpClient(NetworkTarget target)
     {
         target = NetworkPreparation.Validate(target).Target;
         timeoutMs = target.TimeoutMs;
+        targetSnapshotAck = target.ReadOnlySnapshot;
         var candidate = new UdpClient(AddressFamily.InterNetwork) { ExclusiveAddressUse = true };
         try
         {
@@ -29,6 +31,15 @@ public sealed class CvrUdpClient : IDisposable
     public byte[] Read(byte function, byte channel = 0, byte segment = 0, byte side = 0, byte[]? requestBody = null) => Exchange(function, channel, segment, side, requestBody ?? [], 2, 0).GetAwaiter().GetResult();
     private byte[]? identityBody;
     public byte[]? ObservedIdentity => Volatile.Read(ref identityBody)?.ToArray();
+
+    // DSP-1004 returns data status and uses segment 10 for these block reads.
+    public byte[] ReadInspection(byte function, byte channel, byte segment, byte side)
+    {
+        if (function is not (43 or 50 or 52 or 54 or 55 or 62))
+            return Read(function, channel, segment, side);
+        byte replySegment = function is 43 or 50 or 54 or 55 ? (byte)10 : segment;
+        return Exchange(function, channel, segment, side, [], 2, 1, replySegment: replySegment).GetAwaiter().GetResult();
+    }
 
     public byte[] ReadAllocation() =>
         Exchange(81, 0, 0, 0, [], 2, 0, controllerTable: true).GetAwaiter().GetResult();
@@ -69,7 +80,7 @@ public sealed class CvrUdpClient : IDisposable
                     try
                     {
                         var header=CvrWire.Header(response);
-                        if(header.Ack && response.AsSpan(4,4).SequenceEqual(packet.AsSpan(4,4)))break;
+                        if(header.Ack && (response.AsSpan(4,4).SequenceEqual(packet.AsSpan(4,4)) || targetSnapshotAck && header.Count == 0))break;
                         if(!header.Ack){var ack=response[..10];ack[8]=1;socket.Send(ack,ack.Length);}
                     }
                     catch(InvalidDataException) { }
@@ -78,7 +89,7 @@ public sealed class CvrUdpClient : IDisposable
         }
         finally { serial.Release(); }
     }
-    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side, byte[] body, byte sendStatus, byte responseStatus, bool observedBulk = false, bool controllerTable = false)
+    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side, byte[] body, byte sendStatus, byte responseStatus, bool observedBulk = false, bool controllerTable = false, byte? replySegment = null)
     {
         // All backend operations hold their own gate; the transport also serializes standalone callers.
         await serial.WaitAsync().ConfigureAwait(false);
@@ -152,7 +163,7 @@ public sealed class CvrUdpClient : IDisposable
                         await socket.SendAsync(confirmation).ConfigureAwait(false);
                     }
                 }
-                else if (message.Function != function || message.Status != responseStatus || message.Channel != channel || message.Segment != segment || message.Side != side)
+                else if (message.Function != function || message.Status != responseStatus || message.Channel != channel || message.Segment != (replySegment ?? segment) || message.Side != side)
                     continue;
                 return message.Body;
             }

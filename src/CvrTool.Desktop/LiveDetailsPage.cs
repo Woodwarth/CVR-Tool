@@ -104,7 +104,7 @@ public sealed partial class MainWindow
                 ("Polarity", output.Inverted ? "180°" : "0°"), ("Mode", OutputLoadModes.Label(dynamics.LoadMode)),
                 ("Stereo / bridge", dynamics.Bridged ? "Bridge" : "Stereo"),
                 ("Noise gate", OnOff(dynamics.NoiseGateEnabled) + " · " + (dynamics.NoiseGateDb?.ToString() ?? "—") + " dB"),
-                ("FIR", OnOff(fir.Enabled) + " · coefficients not received"),
+                ("FIR", OnOff(fir.Enabled) + (fir.CoefficientsKnown ? $" · {fir.Coefficients.Count} taps · {fir.Name}" : " · coefficients not received")),
                 ("Voltage / current / load", Known(reading.Voltage, " V") + " · " + Known(reading.Current, " A") + " · " + Known(reading.LoadOhms, " Ω")),
                 ("Temperature", Known(reading.TemperatureC, " °C")),
                 ("Status code", data.StatusCodes?[ch - 1].ToString() ?? "—"),

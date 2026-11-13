@@ -5,8 +5,8 @@
       "cvrtool.application": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Core": "[0.7.5, )",
-          "CvrTool.Protocol": "[0.7.5, )"
+          "CvrTool.Core": "[0.8.0, )",
+          "CvrTool.Protocol": "[0.8.0, )"
         }
       },
       "cvrtool.core": {
@@ -15,13 +15,13 @@
       "cvrtool.protocol": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Core": "[0.7.5, )"
+          "CvrTool.Core": "[0.8.0, )"
         }
       },
       "cvrtool.web": {
         "type": "Project",
         "dependencies": {
-          "CvrTool.Application": "[0.7.5, )"
+          "CvrTool.Application": "[0.8.0, )"
         }
       }
     }

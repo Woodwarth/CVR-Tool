@@ -67,7 +67,7 @@ function renderConnection() {
         ? "connecting"
         : connectionProblem;
   const messages = {
-    connected: ["Connected to desktop app", "Browser controls are up to date."],
+    connected: ["Connected", "Browser controls are up to date."],
     connecting: [
       "Connecting to desktop app…",
       "Controls are paused until the current session is loaded.",
@@ -92,6 +92,7 @@ function renderConnection() {
   const [title, detail] = messages[kind];
   $("#app-connection").dataset.state = kind;
   $("#connection-title").textContent = title;
+  $("#app-connection .led").className = "led " + (ready ? "good" : "bad");
   $("#connection-detail").textContent =
     detail +
     (kind === "disconnected" && lastHeartbeat
@@ -209,11 +210,15 @@ async function change(operation, data = {}) {
     busy = false;
   }
 }
+const pressedPointers = new Set();
+document.addEventListener("pointerdown", e => pressedPointers.add(e.pointerId), true);
+for (const event of ["pointerup","pointercancel"]) window.addEventListener(event,e=>pressedPointers.delete(e.pointerId),true);
+window.addEventListener("blur",()=>pressedPointers.clear());
 async function refresh(force = false) {
   if (!key) return;
   if (
     !force &&
-    (busy ||
+    (busy || pressedPointers.size ||
       gainSending ||
       gainQueue.size ||
       gainActive.size ||
@@ -235,6 +240,7 @@ async function refresh(force = false) {
           `<option value="${esc(d.id)}" ${d.id === selected ? "selected" : ""}>${esc(d.name)} · ${esc(d.capabilities.model)}</option>`,
       )
       .join("");
+    if (!force && pressedPointers.size) return;
     renderDeviceList(devices);
     if (!selected) {
       state = null;
@@ -244,10 +250,12 @@ async function refresh(force = false) {
       renderConnection();
       return;
     }
-    state = await (
+    const received = await (
       await api("/api/state?id=" + encodeURIComponent(selected))
     ).json();
     if (epoch !== accessEpoch || generation !== stateGeneration) return;
+    if (!force && (gainSending || gainQueue.size || gainActive.size || pressedPointers.size || $("#editor").open || document.activeElement?.matches("input,select"))) return;
+    state = received;
     stateFresh = true;
     render();
     renderConnection();
@@ -355,6 +363,12 @@ function render() {
         : tab === "Outputs"
           ? outputs()
           : presets();
+  if ($("#preset-name")) {
+    const slot = state.presets.slots.find(s => s.number === Number($("#preset-slot").value));
+    $("#preset-name").value = presetDrafts.get(presetKey(slot?.number)) ?? (slot?.occupied ? slot.name : "Preset " + (slot?.number ?? 1));
+    $("#preset-name").oninput = e => presetDrafts.set(presetKey(slot?.number), e.target.value);
+    $("#preset-slot").onchange = e => { presetSlots.set(selected, Number(e.target.value)); render(); };
+  }
   const matrix = document.querySelector(".matrix");
   if (matrix) {
     matrix.style.gridTemplateColumns = `repeat(${state.routing.inputCount}, minmax(50px, 1fr))`;
@@ -365,11 +379,11 @@ function render() {
     meter.querySelector(".meter-fill").style.height =
       db == null
         ? "0%"
-        : Math.max(0, Math.min(100, ((db + 60) / 60) * 100)) + "%";
+        : Math.max(0, Math.min(100, ((db - Number(meter.dataset.floor)) / -Number(meter.dataset.floor)) * 100)) + "%";
   }
 }
 function meter(db = null) {
-  return `<div class="meter" data-db="${db ?? ""}" aria-label="${db == null ? "Level unknown" : fmt(db, " dBFS")}"><div class="meter-fill"></div>${db == null ? "<span>—</span>" : ""}</div>`;
+  return `<div class="meter" data-floor="${live() ? -40 : -60}" data-db="${db ?? ""}" aria-label="${db == null ? "Level unknown" : fmt(db, live() ? " dB" : " dBFS")}"><div class="meter-fill"></div>${db == null ? "<span>—</span>" : ""}</div>`;
 }
 function clip(value) {
   return `<span class="clip"><i class="led ${value === true ? "bad" : value === false ? "" : "unknown"}"></i>Clip</span>`;
@@ -378,6 +392,7 @@ function gain(side, ch, value, vertical = false) {
   const enabled =
     allow(side === "input" ? "canSetInputGain" : "canSetVerifiedDsp") &&
     value != null;
+  const reading = state.telemetry.find(t => t.channel === ch);
   const readout = button(
     value == null ? "—" : Number(value).toFixed(1) + " dB",
     "gain",
@@ -385,7 +400,7 @@ function gain(side, ch, value, vertical = false) {
     enabled,
     "value",
   );
-  return `<div class="gain-control ${vertical ? "vertical-gain" : ""}" data-gain-side="${side}" data-gain-channel="${ch}"><div class="fader-row"><input aria-label="${side} ${ch} gain" type="range" min="-80" max="18" step="0.5" value="${value ?? 0}" data-gain="${side}" data-channel="${ch}"${dis(enabled)}>${vertical ? meter() : ""}</div>${vertical ? clip(null) : ""}${readout}</div>`;
+  return `<div class="gain-control ${vertical ? "vertical-gain" : ""}" data-gain-side="${side}" data-gain-channel="${ch}"><div class="fader-row"><input aria-label="${side} ${ch} gain" type="range" min="-80" max="18" step="0.5" value="${value ?? 0}" data-gain="${side}" data-channel="${ch}"${dis(enabled)}>${vertical ? meter(live() ? reading?.inputMeterDb : reading?.levelDbFs) : ""}</div>${vertical ? clip(live() ? reading?.inputClip : reading?.status?.clip) : ""}${readout}</div>`;
 }
 function mute(side, ch, muted) {
   return button(
@@ -412,6 +427,7 @@ function flags(ch) {
     ["standby", "Stby"],
     ["highImpedance", "Hi-Z"],
     ["bridged", "Bridge"],
+    ["limiting", "Limit"],
   ]
     .map(
       ([k, label]) =>
@@ -420,17 +436,23 @@ function flags(ch) {
     .join("")}</div>`;
 }
 function main() {
-  return `<div class="main-panels"><section class="section-panel"><h2>Inputs</h2><div class="channel-grid">${state.inputs.map((i) => `<article class="card channel-card"><h3>${String.fromCharCode(64 + i.channel)}</h3>${gain("input", i.channel, i.gainDb, true)}${mute("input", i.channel, i.muted)}</article>`).join("")}</div></section><section class="section-panel"><h2>Outputs</h2><div class="channel-grid">${state.device.outputs.map((o) => `<article class="card channel-card"><h3>${esc(o.name)}</h3><div class="output-meter-stage">${meter(state.telemetry.find((t) => t.channel === o.number)?.levelDbFs)}${flags(o.number)}</div>${mute("output", o.number, o.muted)}${measurements(o.number)}</article>`).join("")}</div></section></div>`;
+  return `<div class="main-panels"><section class="section-panel"><h2>Inputs</h2><div class="channel-grid">${state.inputs.map((i) => `<article class="card channel-card"><h3>${String.fromCharCode(64 + i.channel)}</h3>${gain("input", i.channel, i.gainDb, true)}${mute("input", i.channel, i.muted)}</article>`).join("")}</div></section><section class="section-panel"><h2>Outputs</h2><div class="channel-grid">${state.device.outputs.map((o) => `<article class="card channel-card"><h3>${esc(o.name)}</h3><div class="output-meter-stage">${meter(state.telemetry.find((t) => t.channel === o.number)?.[live() ? "outputMeterDb" : "levelDbFs"])}${flags(o.number)}</div>${mute("output", o.number, o.muted)}${measurements(o.number)}</article>`).join("")}</div></section></div>`;
+}
+function routeFace(cell) {
+  const angle = (135 + 270 * Math.max(0,Math.min(1,(cell.gainDb+80)/98))) * Math.PI / 180;
+  const x = 40+32*Math.cos(angle), y=40+32*Math.sin(angle);
+  const arc = cell.muted ? "" : `<path d="M17.37 62.63 A32 32 0 ${cell.gainDb > -14.67 ? 1 : 0} 1 ${x} ${y}" fill="none" stroke="#00cebd" stroke-width="6"/>`;
+  return `<svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="32" fill="#202830" stroke="#46525d" stroke-width="7"/>${arc}<circle cx="40" cy="40" r="26" fill="#202830" stroke="${cell.muted?"#ed5d6f":"#edf2f5"}" stroke-width="2"/><circle cx="${x}" cy="${y}" r="4" fill="#111c22" stroke="white"/>${cell.muted?'<path d="M32 38h3l5-4v12l-5-4h-3z M44 37l6 6m0-6l-6 6" fill="none" stroke="#ed5d6f" stroke-width="2"/>':`<text x="40" y="44" text-anchor="middle" fill="white" font-size="12">${fmt(cell.gainDb)}</text>`}</svg>`;
 }
 function inputs() {
   const r = state.routing;
-  return `<div class="routing-layout"><section class="processing-column"><h3>Input processing</h3>${state.inputs.map((i) => `<div class="processing-pair">${button(`<strong>Delay</strong><span>${fmt(i.delayMs * 0.343, " m")}</span><small>${fmt(i.delayMs, " ms")}</small>`, "delay", { side: "input", channel: i.channel, value: i.delayMs }, allow(), "function-tile")}${button(`<strong>EQ</strong><span>${i.eqEnabled ? "On" : "Off"}</span>`, "eq", { side: "input", channel: i.channel }, true, "function-tile")}</div>`).join("")}</section><section class="section-panel matrix-panel"><div class="matrix">${state.inputs.map((i) => `<span>Source ${i.channel}</span>`).join("")}${state.device.outputs
+  return `<div class="routing-layout"><section class="processing-column">${state.inputs.map((i) => `<div class="processing-pair">${button(`<strong>Delay</strong><span>${fmt(i.delayMs * 0.343, " m")}</span><small>${fmt(i.delayMs, " ms")}</small>`, "delay", { side: "input", channel: i.channel, value: i.delayMs }, allow(), "function-tile")}${button(`<strong>EQ</strong><span>${i.eqEnabled ? "On" : "Off"}</span>`, "eq", { side: "input", channel: i.channel }, true, "function-tile")}</div>`).join("")}</section><section class="section-panel matrix-panel"><div class="matrix">${state.inputs.map((i) => `<span>Source ${i.channel}</span>`).join("")}${state.device.outputs
     .map((o) =>
       r.cells
         .filter((c) => c.output === o.number)
         .map((c) =>
           button(
-            c.muted ? symbol("mute") : fmt(c.gainDb),
+            routeFace(c),
             "route",
             {
               input: c.input,
@@ -446,21 +468,47 @@ function inputs() {
     )
     .join(
       "",
-    )}</div></section><section class="processing-column output-gain-column"><h3>Output gain</h3>${state.device.outputs.map((o) => `<div class="volume-tile"><small>Volume ${esc(o.name)}</small>${button(Number(o.gainDb).toFixed(1) + " dB", "gain", { side: "output", channel: o.number, value: o.gainDb }, allow(), "value")}</div>`).join("")}</section></div>`;
+    )}</div></section><section class="processing-column output-gain-column">${state.device.outputs.map((o) => `<div class="volume-tile"><small>Volume ${esc(o.name)}</small>${button(Number(o.gainDb).toFixed(1) + " dB", "gain", { side: "output", channel: o.number, value: o.gainDb }, allow(), "value")}</div>`).join("")}</section></div>`;
+}
+function outputRow(o) {
+  const ch = o.number, d = state.dynamics.find(item => item.channel === ch);
+  const fir = state.fir.find(item => item.channel === ch);
+  const eq = state.outputProcessing.find(item => item.channel === ch);
+  const follower = d.bridged && ch % 2 === 0, editable = allow() && !follower;
+  function tile(title, text, action, args = {}, enabled = editable) {
+    return button(`<strong>${esc(title)}</strong><span>${esc(text)}</span>`,action,{channel:ch,...args},enabled,"function-tile");
+  }
+  const supported100V = /^DSP-(1502|1504|2002|2004|3002|3004|3302|4302)$/.test(state.device.capabilities.model);
+  const modes = ["Low-Z","70V",...(!live() && supported100V ? ["100V"] : [])];
+  const options = modes.map((label,i) => `<option value="${i}" ${i===d.loadMode?"selected":""}>${label}</option>`).join("");
+  const unknown = !modes[d.loadMode] ? '<option selected disabled>—</option>' : "";
+  return `<article class="card output-strip"><div class="signal-row">
+    ${tile("Source","Routing","navigate",{tab:"Inputs"},!follower)}
+    ${tile("FIR",fir.enabled?"On":"Off","fir-editor",{},!follower)}
+    ${tile("EQ",eq.eqEnabled?"On":"Off","eq",{side:"output"},!follower)}
+    ${tile("Trim",fmt(o.gainDb," dB"),"gain",{side:"output",value:o.gainDb})}
+    ${tile("Delay",fmt(o.delayMs," ms"),"delay",{side:"output",value:o.delayMs})}
+    ${tile("Polarity",o.inverted?"180°":"0°","output",{inverted:!o.inverted})}
+    ${tile("Limiters","Peak / RMS","limiters",{},!follower)}
+    <label class="function-tile mode-tile"><strong>Mode</strong><span>${esc(modes[d.loadMode] ?? "—")}</span><select data-mode="${ch}" aria-label="Output ${ch} mode"${dis(editable)}>${unknown}${options}</select></label>
+    ${tile("Noise Gate",(d.noiseGateEnabled?"On":"Off")+" · "+fmt(d.noiseGateDb," dB"),"gate-editor")}
+    <fieldset class="mute-cell"${dis(!follower)}>${mute("output",ch,o.muted)}</fieldset>
+    ${tile("Output "+o.name,"Speaker","navigate",{tab:"Main"},!follower)}
+    ${tile("",d.bridged?"Bridge":"Stereo","bridge",{enabled:!d.bridged},allow())}
+  </div></article>`;
 }
 function outputs() {
-  return `<div class="output-strips">${state.device.outputs
-    .map((o) => {
-      const d = state.dynamics.find((d) => d.channel === o.number),
-        f = state.fir.find((f) => f.channel === o.number);
-      return `<article class="card output-strip"><div class="output-heading"><h3>Output ${esc(o.name)}</h3>${mute("output", o.number, o.muted)}</div><div class="function-grid">${button(`<strong>Trim</strong><span>${Number(o.gainDb).toFixed(1)} dB</span>`, "gain", { side: "output", channel: o.number, value: o.gainDb }, allow(), "function-tile")}${button(`<strong>Delay</strong><span>${fmt(o.delayMs, " ms")}</span><small>${fmt(o.delayMs * 0.343, " m")}</small>`, "delay", { side: "output", channel: o.number, value: o.delayMs }, allow(), "function-tile")}${button(`<strong>EQ</strong><span>Output EQ</span>`, "eq", { side: "output", channel: o.number }, true, "function-tile")}${button(`<strong>Polarity</strong><span>${o.inverted ? "180°" : "0°"}</span>`, "output", { channel: o.number, inverted: !o.inverted }, allow(), "function-tile")}<label class="function-tile"><strong>Mode</strong><select data-mode="${o.number}"${dis(allow())}>${d.loadMode == null || (live() && ![0, 1].includes(d.loadMode)) ? `<option value="" selected disabled>${esc(d.loadMode == null ? "Unknown" : ["Low-Z", "70V", "100V", "BRDG Low-Z", "BRDG 70V", "BRDG 100V"][d.loadMode] || "Unknown")}</option>` : ""}${["Low-Z", "70V", ...(!live() ? ["100V"] : [])].map((s, n) => `<option value="${n}" ${d.loadMode === n ? "selected" : ""}>${s}</option>`).join("")}</select></label>${button(`<strong>Noise gate</strong><span>${d.noiseGateEnabled ? "On" : "Off"}</span>`, "dynamics", { channel: o.number, dynamics: { noiseGateEnabled: !d.noiseGateEnabled } }, allow(), "function-tile")}${button(`<strong>Gate threshold</strong><span>${fmt(d.noiseGateDb, " dB")}</span>`, "gate", { channel: o.number, value: d.noiseGateDb }, allow() && d.noiseGateDb != null, "function-tile")}${button(`<strong>FIR</strong><span>${f.enabled ? "On" : "Off"}</span>`, "fir", { channel: o.number, enabled: !f.enabled }, allow(), "function-tile")}</div><details><summary>Status and limiter settings</summary>${measurements(o.number)}${flags(o.number)}<p>RMS ${fmt(d.rms.thresholdVolts, " V")} · ${d.rms.enabled ? "On" : "Off"} / Peak ${fmt(d.peak.thresholdVolts, " V")} · ${d.peak.enabled ? "On" : "Off"}</p><small>${f.coefficientsKnown ? f.coefficients.length + " FIR taps" : "FIR coefficients unknown"} · Limiter/Bridge editing is available in Desktop when supported.</small></details></article>`;
-    })
-    .join("")}</div>`;
+  return `<h2>Outputs · ${esc(state.device.capabilities.model)}</h2><div class="output-strips">${state.device.outputs.map(outputRow).join("")}</div>`;
 }
+const presetDrafts = new Map(), presetSlots = new Map();
+function presetKey(slot) { return JSON.stringify([selected, slot]); }
 function presets() {
-  return `<div class="presets">${button("Save to PC / iPad (.sd)", "save")}${button("Load from PC / iPad (.sd)", "load", {}, !live())}<input id="preset-file" class="hidden" type="file" accept=".sd"><h3>Device presets</h3>${state.presets.slots.length ? `<select id="preset-slot">${state.presets.slots.map((s) => `<option value="${s.number}">${s.number} · ${esc(s.name || "Empty")}</option>`).join("")}</select>${button("Load from device", "recall-preset", {}, !live())}${button("Save to device", "store-preset", {}, !live())}${button("Clear all presets", "clear-presets", {}, !live())}` : "<p>Device preset slots have not been read.</p>"}<p class="subtle">Factory reset is unavailable in browser control.</p></div>`;
+  const slots = state.presets.slots;
+  const slot = slots.find(s => s.number === presetSlots.get(selected)) ?? slots[0];
+  return `<div class="presets"><section class="section-panel"><h3>On Device</h3><div class="preset-fields"><label>Preset slot<select id="preset-slot">${slots.map(s => `<option value="${s.number}" ${s === slot ? "selected" : ""}>${s.number} · ${esc(s.name)}</option>`).join("")}</select></label><label>Preset name<input id="preset-name" maxlength="32"></label><label>Current preset<span>${esc(state.presets.currentName || "—")}</span></label></div><div class="preset-actions">${button("Load from Device","recall-preset",{},!!slot && allow())}${button("Save to Device","store-preset",{},!!slot && allow())}${button("Clear All Presets","clear-presets",{},slots.length > 0 && allow())}</div></section><section class="section-panel"><h3>On PC</h3>${button("Load from PC","load",{},allow())}${button("Save to PC","save")}<input id="preset-file" class="hidden" type="file" accept=".sd"></section></div>`;
 }
 function dialog(title, html, apply) {
+  $("#editor-body").oninput = null;
   $("#editor-title").textContent = title;
   $("#editor-body").innerHTML = html;
   $("#editor-error").textContent = "";
@@ -487,10 +535,10 @@ function eq(side, ch) {
   const p = (side === "input" ? state.inputs : state.outputProcessing).find(
       (i) => i.channel === ch,
     ),
-    editable = allow() && (side === "input" || !live());
+    editable = allow();
   dialog(
     `${side === "input" ? "Input" : "Output"} ${ch} EQ`,
-    `<canvas id="curve" class="plot" width="850" height="180"></canvas><label><input id="eq-enabled" type="checkbox" ${p.eqEnabled ? "checked" : ""}${dis(editable)}> EQ On</label><div class="bands">${[
+    `<canvas id="curve" class="plot" width="1100" height="320"></canvas><label><input id="eq-enabled" type="checkbox" ${p.eqEnabled ? "checked" : ""}${dis(editable)}> EQ On</label><div class="bands">${[
       "highPass",
       "lowPass",
     ]
@@ -499,7 +547,7 @@ function eq(side, ch) {
           known =
             editable &&
             f &&
-            (!live() || state.liveCrossoverTypes.includes(f.filterType)),
+            (!live() || side === "output" || state.liveCrossoverTypes.includes(f.filterType)),
           opts =
             live() && side === "input"
               ? state.crossoverOptions.filter(
@@ -517,7 +565,7 @@ function eq(side, ch) {
       })
       .join(
         "",
-      )}</div><p class="subtle">48 kHz Peak-EQ preview. HP/LP curves are not included here. Unknown device filter types are not plotted.</p>`,
+      )}</div><p class="subtle">Gain (dB) · Phase (°) · 48 kHz</p><button type="button" id="generate-fir">Generate FIR…</button><span id="plot-status"></span>`,
     editable
       ? async () => {
           const processing = {
@@ -549,61 +597,124 @@ function eq(side, ch) {
         }
       : null,
   );
-  $("#editor-body").addEventListener("input", plot, { once: true });
-  plot();
-}
-function plot() {
   const canvas = $("#curve");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, 850, 180);
-  ctx.strokeStyle = "#34454f";
-  for (let y = 0; y <= 180; y += 30) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(850, y);
-    ctx.stroke();
+  function draft() {
+    function crossover(key) {
+      return p[key] && { frequencyHz: value(key+"-hz"), filterType: Number($("#"+key+"-type").value), enabled: $("#"+key+"-on").checked };
+    }
+    return { enabled: $("#eq-enabled").checked, highPass: crossover("highPass"), lowPass: crossover("lowPass"),
+      bands: p.bands.map(b => ({ ...b, frequencyHz: value("hz-"+b.number), gainDb: value("db-"+b.number), q: value("q-"+b.number), enabled: $("#on-"+b.number).checked })) };
   }
-  ctx.strokeStyle = "#00cebd";
-  ctx.beginPath();
-  const p = (tab === "Outputs" ? state.outputProcessing : state.inputs).find(
-    (i) =>
-      i.channel === Number($("#editor-title").textContent.match(/\d+/)?.[0]),
-  );
-  if (!p) return;
-  for (let x = 0; x <= 850; x++) {
-    const f = 20 * Math.pow(1000, x / 850),
-      w = (2 * Math.PI * f) / 48000;
-    let db = 0;
-    if ($("#eq-enabled").checked)
-      for (const b of p.bands) {
-        if (b.filterType !== 0 || !$("#on-" + b.number).checked) continue;
-        const hz = Number($("#hz-" + b.number).value),
-          gain = Number($("#db-" + b.number).value),
-          q = Number($("#q-" + b.number).value),
-          A = Math.pow(10, gain / 40),
-          wc = (2 * Math.PI * hz) / 48000,
-          alpha = Math.sin(wc) / (2 * q),
-          co = Math.cos(wc);
-        const mag = (a, b, c) =>
-          Math.hypot(
-            a + b * Math.cos(w) + c * Math.cos(2 * w),
-            -b * Math.sin(w) - c * Math.sin(2 * w),
-          );
-        db +=
-          20 *
-          Math.log10(
-            mag(1 + alpha * A, -2 * co, 1 - alpha * A) /
-              mag(1 + alpha / A, -2 * co, 1 - alpha / A),
-          );
-      }
-    const y = 90 - Math.max(-24, Math.min(24, db)) * 3.75;
-    if (x === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+  let version = 0, timer;
+  function redraw() {
+    const v = ++version;
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      if (!canvas.isConnected) return;
+      try {
+        const points = await (await api("/api/eq-preview", draft())).json();
+        if (v !== version || !canvas.isConnected) return;
+        const ctx = canvas.getContext("2d"), w = canvas.width, h = canvas.height;
+        ctx.clearRect(0,0,w,h);
+        const left=44,right=w-48,top=18,bottom=h-29;
+        const X=hz=>left+(right-left)*Math.log10(hz/20)/3;
+        const Y=db=>top+(bottom-top)*(24-db)/48;
+        ctx.font="12px system-ui"; ctx.setLineDash([]); ctx.lineWidth=1;
+        const grid=(x1,y1,x2,y2)=>{ctx.strokeStyle="#34454f";ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();};
+        for(const hz of [20,50,100,200,500,1000,2000,5000,10000,20000]){
+          const x=X(hz);grid(x,top,x,bottom);ctx.textAlign="center";ctx.fillStyle="#aebbc4";ctx.fillText(hz>=1000?(hz/1000)+"k":hz,x,bottom+18);
+        }
+        for(let db=-24;db<=24;db+=6){
+          const y=Y(db);grid(left,y,right,y);ctx.textAlign="right";ctx.fillStyle="#aebbc4";ctx.fillText(db,left-7,y+4);
+          ctx.textAlign="left";ctx.fillStyle="#f0bd71";ctx.fillText((db*7.5)+"°",right+6,y+4);
+        }
+        for (const [field,limit,color] of [["db",24,"#00cebd"],["phase",180,"#f0bd71"]]) {
+          ctx.strokeStyle=color;ctx.lineWidth=2; ctx.setLineDash(field==="db"?[]:[5,3]); ctx.beginPath();
+          points.forEach((point,i) => {
+            const x=left+i*(right-left)/(points.length-1), y=Y(point[field]*24/limit);
+            if (!i || field==="phase" && Math.abs(point.phase-points[i-1].phase)>180) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+          });
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        for(const b of draft().bands) {
+          ctx.beginPath();ctx.arc(X(b.frequencyHz),Y(b.gainDb),12,0,Math.PI*2);
+          ctx.fillStyle="#182129";ctx.fill();ctx.strokeStyle=b.enabled?"#edf2f5":"#71838e";ctx.stroke();
+          ctx.fillStyle="#edf2f5";ctx.textAlign="center";ctx.fillText(b.number,X(b.frequencyHz),Y(b.gainDb)+4);
+        }
+        $("#plot-status").textContent="";
+      } catch(e) { if(v===version && canvas.isConnected) {canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height); $("#plot-status").textContent=e.message;} }
+    },80);
   }
-  ctx.stroke();
+  let dragged=null;
+  function graphPoint(e) {
+    const box=canvas.getBoundingClientRect();
+    return [(e.clientX-box.left)*canvas.width/box.width,(e.clientY-box.top)*canvas.height/box.height];
+  }
+  canvas.onpointerdown=e=>{
+    if(!editable || e.button!==0) return;
+    const [x,y]=graphPoint(e);
+    dragged=draft().bands.find(b=>!$("#hz-"+b.number).disabled && Math.hypot(
+      x-(44+(canvas.width-92)*Math.log10(b.frequencyHz/20)/3),
+      y-(18+(canvas.height-47)*(24-b.gainDb)/48))<=17)?.number;
+    if(dragged!=null){canvas.setPointerCapture(e.pointerId);e.preventDefault();}
+  };
+  canvas.onpointermove=e=>{
+    if(dragged==null)return;
+    const [x,y]=graphPoint(e);
+    $("#hz-"+dragged).value=Math.round(Math.min(20000,Math.max(20,20*1000**((x-44)/(canvas.width-92)))));
+    $("#db-"+dragged).value=Math.max(-18,Math.min(18,24-(y-18)*48/(canvas.height-47))).toFixed(1);
+    redraw();
+  };
+  canvas.onlostpointercapture=()=>{dragged=null;};
+  $("#editor-body").oninput=redraw;
+  $("#generate-fir").onclick=async () => {
+    try {
+      const blob=await (await api("/api/eq-fir",draft())).blob(), url=URL.createObjectURL(blob), link=document.createElement("a");
+      link.href=url; link.download=side+"-"+ch+"-EQ.txt"; link.click(); setTimeout(()=>URL.revokeObjectURL(url),30000);
+    } catch(e) {status(e.message);}
+  };
+  redraw();
 }
 async function action(a, d) {
+  if (a === "navigate") return document.querySelector(`[data-tab="${d.tab}"]`).click();
+  if (a === "gate-editor") {
+    const gate = state.dynamics.find(x => x.channel === d.channel);
+    dialog("Noise gate · Output "+d.channel,
+      `<label><input id="gate-enabled" type="checkbox" ${gate.noiseGateEnabled?"checked":""}>On</label>` +
+      number("gate-db","Threshold · dB",gate.noiseGateDb ?? 0,-100,0,1,gate.noiseGateDb != null),
+      () => change("dynamics",{channel:d.channel,dynamics:{noiseGateEnabled:$("#gate-enabled").checked,
+        ...(gate.noiseGateDb != null ? {noiseGateDb:value("gate-db")} : {})}}));
+    return;
+  }
+  if (a === "fir-editor") {
+    const f=state.fir.find(x=>x.channel===d.channel);
+    dialog("Output FIR · Channel "+d.channel,
+      `<p>${esc(f.name)} · ${f.coefficientsKnown?f.coefficients.length+" taps":"Coefficients unavailable"}</p>
+      <label><input id="fir-enabled" type="checkbox" ${f.enabled?"checked":""}>FIR On</label>`,
+      allow() ? () => change("fir",{channel:d.channel,enabled:$("#fir-enabled").checked}) : null);
+    return;
+  }
+  if (a === "limiters") {
+    const {rms:r,peak:p} = state.dynamics.find(x=>x.channel===d.channel);
+    const toggle=(id,label,on)=>`<label><input type="checkbox" id="${id}" ${on?"checked":""}>${label}</label>`;
+    dialog("Limiters · Output "+d.channel,`<div class="limiter-columns"><section>${toggle("r-on","RMS On",r.enabled)}
+      ${number("r-v","Threshold · Vrms",r.thresholdVolts,0,r.maximumVolts,.01)}
+      ${toggle("r-auto","Automatic timing",r.automatic)}
+      ${number("r-at","Attack · ms",r.attackMs,1,2000,1)}${number("r-rel","Release × attack",r.releaseMultiplier,2,32,1)}</section>
+      <section>${toggle("p-on","Peak On",p.enabled)}${number("p-v","Threshold · Vpeak",p.thresholdVolts,0,p.maximumVolts,.01)}
+      ${number("p-h","Hold · ms",p.holdMs,0,2000,1)}${number("p-rel","Release · ms",p.releaseMs,20,1000,1)}</section></div>`,
+      allow()?()=>change("dynamics",{channel:d.channel,dynamics:{
+        rms:{...r,enabled:$("#r-on").checked,thresholdVolts:value("r-v"),automatic:$("#r-auto").checked,attackMs:value("r-at"),releaseMultiplier:value("r-rel")},
+        peak:{...p,enabled:$("#p-on").checked,thresholdVolts:value("p-v"),holdMs:value("p-h"),releaseMs:value("p-rel")}}}):null);
+    const timing=()=>{ $("#r-at").disabled=$("#r-rel").disabled=$("#r-auto").checked; };
+    $("#r-auto").onchange=timing; timing(); return;
+  }
+  if (a === "bridge") {
+    const first = Math.floor((d.channel - 1) / 2) * 2 + 1;
+    if (!confirm("Switch outputs " + String.fromCharCode(64+first) + "/" + String.fromCharCode(65+first) + " to " + (d.enabled ? "Bridge" : "Stereo") + "?")) return;
+    return change("dynamics", { channel:first, dynamics:{bridged:d.enabled} });
+  }
   if (a === "mute")
     return change(
       d.side === "input" ? "input" : "output",
@@ -647,7 +758,7 @@ async function action(a, d) {
   if (a === "route") {
     dialog(
       `Input ${d.input} → Output ${d.output}`,
-      `<input id="route-gain" type="range" min="-80" max="18" step=".1" value="${d.value}"><output id="route-value">${d.value} dB</output><label><input id="route-muted" type="checkbox" ${d.enabled ? "checked" : ""}> Mute</label>`,
+      `<input id="route-gain" type="range" min="-80" max="18" step="0.5" value="${d.value}"><output id="route-value">${d.value} dB</output><label><input id="route-muted" type="checkbox" ${d.enabled ? "checked" : ""}> Mute</label>`,
       () =>
         change("route", {
           input: d.input,
@@ -682,7 +793,7 @@ async function action(a, d) {
       url = URL.createObjectURL(blob),
       link = document.createElement("a");
     link.href = url;
-    link.download = "CVR-preset.sd";
+    link.download = ($("#preset-name")?.value.trim() || "CVR-preset") + ".sd";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 30000);
     return;
@@ -694,7 +805,7 @@ async function action(a, d) {
       slot: Number($("#preset-slot")?.value || 1),
       name:
         a === "store-preset"
-          ? prompt("Preset name", "Preset") || "Preset"
+          ? $("#preset-name").value.trim()
           : null,
       confirmed: true,
     });
@@ -703,6 +814,7 @@ async function action(a, d) {
 }
 // Gain gestures preview immediately and send the latest position without replay after failure.
 function cancelQueuedGains() {
+  faderPointers.clear();
   gainQueue.clear();
   gainActive.clear();
   if (gainTimer !== null) clearTimeout(gainTimer);
@@ -827,10 +939,29 @@ async function selectDevice(id) {
   if (refreshInFlight) await refreshInFlight.catch(() => {});
   await refresh(true);
 }
-document.addEventListener("pointerdown", (e) => {
-  if (e.target.dataset.gain === "input" && connectionReady())
-    gainActive.add(gainKey(selected, Number(e.target.dataset.channel)));
+// Map touch/mouse Y directly to gain. Keep pointer capture during a drag outside the track.
+const faderPointers = new Map();
+function dragGain(event, slider) {
+  const rect = slider.getBoundingClientRect(), inset = Math.min(13, rect.height / 4);
+  const fraction = Math.max(0, Math.min(1, (rect.bottom - inset - event.clientY) / (rect.height - 2 * inset)));
+  slider.value = String(Math.round((-80 + 98 * fraction) * 2) / 2);
+  queueInputGain(slider);
+}
+document.addEventListener("pointerdown", e => {
+  const slider=e.target;
+  if (slider.dataset.gain !== "input" || slider.disabled || !connectionReady() || e.button !== 0) return;
+  e.preventDefault(); slider.focus({preventScroll:true}); slider.setPointerCapture(e.pointerId);
+  faderPointers.set(e.pointerId,slider); dragGain(e,slider);
 });
+document.addEventListener("pointermove", e => {
+  const slider=faderPointers.get(e.pointerId);
+  if(slider && slider.isConnected) dragGain(e,slider);
+});
+for(const type of ["pointerup","pointercancel","lostpointercapture"])
+  document.addEventListener(type,e=>{
+    const slider=faderPointers.get(e.pointerId);
+    if(slider){faderPointers.delete(e.pointerId); finishGain(slider);}
+  });
 document.addEventListener("input", (e) => {
   if (!e.target.dataset.gain) return;
   paintGain(e.target, Number(e.target.value));
@@ -904,7 +1035,7 @@ document.addEventListener("change", async (e) => {
     status(e.message, true);
   }
 });
-$("#editor-body").addEventListener("input", () => plot());
+
 $("#apply").onclick = async () => {
   if (!dialogApply || !connectionReady()) return;
   $("#apply").disabled = true;

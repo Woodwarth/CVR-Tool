@@ -25,6 +25,14 @@ static class BrowserServerChecks
         check((await client.GetAsync("/api/health")).StatusCode == HttpStatusCode.Unauthorized, "Connection heartbeat requires the private session key");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", firstKey);
         client.DefaultRequestHeaders.Add("X-CVR-Client", new string('a',32));
+        var flatDraft = new BrowserEqDraft([], null, null, false);
+        using var curveReply = await client.PostAsJsonAsync("/api/eq-preview", flatDraft);
+        var curve = await curveReply.Content.ReadFromJsonAsync<JsonElement>();
+        check(curve.GetArrayLength() == 257 && curve[128].GetProperty("phase").GetDouble() == 0 &&
+            curve[128].GetProperty("db").GetDouble() == 0, "Browser preview returns the shared gain and phase response");
+        using var firReply = await client.PostAsJsonAsync("/api/eq-fir", flatDraft);
+        var firTaps = (await firReply.Content.ReadAsStringAsync()).Split('\n');
+        check(firTaps.Length == 512 && firTaps[256] == "1", "Browser exports a centered unity filter from a bypassed EQ");
         var health = await client.GetFromJsonAsync<JsonElement>("/api/health");
         check(health.GetProperty("status").GetString()=="ok" && browser.ConnectionUrl==browser.Address+"/#"+firstKey,"Authenticated heartbeat and pairing link describe the running browser session");
         check(browser.IsRunning && browser.ClientConnected,"Server status distinguishes a running listener and an active browser");
@@ -44,7 +52,7 @@ static class BrowserServerChecks
             check((await client.GetAsync("/api/health")).IsSuccessStatusCode,"A lost browser lease expires without waiting in the test");
         }
         var devices = await client.GetFromJsonAsync<JsonElement>("/api/devices");
-        check(devices.GetArrayLength() == 3, "Browser lists the same three demo devices as Desktop");
+        check(devices.GetArrayLength() == 1, "Browser lists the same initial demo as Desktop");
         using (var wrongOrigin = new HttpRequestMessage(HttpMethod.Get, "/api/devices"))
         {
             wrongOrigin.Headers.Add("Origin", "http://unrelated.example");
@@ -75,7 +83,14 @@ static class BrowserServerChecks
         await browser.StartAsync(IPAddress.Loopback,0);
         check(browser.AccessKey!=firstKey,"Restarting browser control rotates the access key");
         check((await client.GetAsync(browser.Address+"/api/health")).StatusCode==HttpStatusCode.Unauthorized,"A previous connection key cannot report a new server session as connected");
-        check(!BrowserControlServer.IsLocalAddress(IPAddress.Any) && !BrowserControlServer.IsLocalAddress(IPAddress.Parse("8.8.8.8")),"Browser listener refuses wildcard and public bind addresses");
+        await browser.DisposeAsync();
+        await browser.StartAsync(IPAddress.Any,0);
+        var localUrl = browser.ConnectionUrls.Single(url => new Uri(url).Host == "127.0.0.1");
+        using var wildcardClient = new HttpClient { BaseAddress = new Uri(localUrl) };
+        wildcardClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",browser.AccessKey);
+        wildcardClient.DefaultRequestHeaders.Add("X-CVR-Client",new string('c',32));
+        check((await wildcardClient.GetAsync("/api/health")).IsSuccessStatusCode && !browser.Address!.Contains("0.0.0.0"), "All-interface binding provides concrete authenticated pairing links");
+
     }
     private sealed class BrowserClock : TimeProvider
     {

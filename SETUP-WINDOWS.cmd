@@ -8,5 +8,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo Projekt eingerichtet. In VS Code Codex oeffnen und anmelden.
+echo Project setup complete.
 pause

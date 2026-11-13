@@ -50,14 +50,15 @@ public sealed class RoutingDial : Control
         Width = 74;
         Height = 74;
         Focusable = true;
+        LostFocus += (_, _) => EndEntry();
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
-        ToolTip.SetTip(this, "Drag up/down or scroll to adjust gain · Click to mute · Arrow keys: 0.1 dB · Page keys: 1 dB · Space: mute");
+        ToolTip.SetTip(this, "Drag up/down or scroll to adjust gain · Click to mute · Type dB and press Enter · Arrows, wheel and page keys: 0.5 dB · Space: mute");
     }
 
     private void Adjust(double value)
     {
         if (!CanEditGain) return;
-        var next = Math.Round(Math.Clamp(value, -80, 18), 1);
+        var next = Math.Round(Math.Clamp(value, -80, 18) * 2, MidpointRounding.AwayFromZero) / 2;
         if (next == gain)
             return;
         GainDb = next;
@@ -124,28 +125,53 @@ public sealed class RoutingDial : Control
     {
         base.OnPointerWheelChanged(e);
         if (!CanEditGain) return;
-        Adjust(gain + e.Delta.Y);
+        Adjust(gain + Math.Sign(e.Delta.Y) * .5);
         e.Handled = true;
     }
 
+    private string? typedGain;
+    protected override void OnTextInput(TextInputEventArgs e)
+    {
+        base.OnTextInput(e);
+        if (!CanEditGain || string.IsNullOrEmpty(e.Text) || !e.Text.All(c => "0123456789-+.,".Contains(c))) return;
+        if (typedGain is null) { typedGain = ""; InteractionStarted?.Invoke(); }
+        if (typedGain.Length < 8) typedGain += e.Text.Replace(',', '.');
+        InvalidateVisual();
+        e.Handled = true;
+    }
+    private void EndEntry()
+    {
+        if (typedGain is null) return;
+        typedGain = null;
+        InteractionEnded?.Invoke();
+        InvalidateVisual();
+    }
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        if (typedGain is not null)
+        {
+            if (e.Key == Key.Enter && double.TryParse(typedGain, NumberStyles.Float, CultureInfo.InvariantCulture, out var db) && db is >= -80 and <= 18)
+            { EndEntry(); Adjust(db); }
+            else if (e.Key == Key.Escape) EndEntry();
+            else if (e.Key == Key.Back && typedGain.Length > 0) typedGain = typedGain[..^1];
+            InvalidateVisual(); e.Handled = true; return;
+        }
         switch (e.Key)
         {
             case Key.Up:
             case Key.Right:
-                Adjust(gain + .1);
+                Adjust(gain + .5);
                 break;
             case Key.Down:
             case Key.Left:
-                Adjust(gain - .1);
+                Adjust(gain - .5);
                 break;
             case Key.PageUp:
-                Adjust(gain + 1);
+                Adjust(gain + .5);
                 break;
             case Key.PageDown:
-                Adjust(gain - 1);
+                Adjust(gain - .5);
                 break;
             case Key.Home:
                 Adjust(-80);
@@ -190,7 +216,7 @@ public sealed class RoutingDial : Control
 
         context.DrawEllipse(Brush.Parse("#202830"), new Pen(Brush.Parse(muted ? "#ED5D6F" : "#EDF2F5"), IsFocused ? 4 : 2.5), center, radius - 6, radius - 6);
         context.DrawEllipse(Brush.Parse("#111C22"), new Pen(Brushes.White, 1.5), At(end), 5, 5);
-        if (muted)
+        if (muted && typedGain is null)
         {
             // Mute hides the number without discarding the stored gain.
             using (context.PushTransform(Matrix.CreateTranslation(center.X - 9, center.Y - 9)))
@@ -201,7 +227,7 @@ public sealed class RoutingDial : Control
         }
         else
         {
-            var text = new FormattedText(gain.ToString("0.#", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 12, Brushes.White);
+            var text = new FormattedText(typedGain ?? gain.ToString("0.#", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 12, Brushes.White);
             context.DrawText(text, new Point(center.X - text.Width / 2, center.Y - text.Height / 2));
         }
     }

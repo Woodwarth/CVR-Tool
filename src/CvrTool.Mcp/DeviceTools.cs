@@ -11,6 +11,8 @@ namespace CvrTool.Mcp;
 
 public sealed partial class AmplifierTools
 {
+    [McpServerTool(Name = "add_demo_device"), Description("Add a simulated amplifier to the current session.")]
+    public string AddDemoDevice(string model) => Json(service.AddDemo(model));
     [McpServerTool(Name = "list_devices")]
     [Description("List devices in the running application session. Check IsDemo before assuming physical hardware.")]
     public string ListDevices() => Json(service.ListDevices());

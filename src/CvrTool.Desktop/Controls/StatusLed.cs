@@ -12,7 +12,8 @@ namespace CvrTool.Desktop;
 /// <summary>A round status light; unknown data stays hollow instead of suggesting a healthy state.</summary>
 public sealed class StatusLed(bool? value, Color onColor) : Control
 {
-    public bool? Value { get; } = value;
+    public bool? Value { get; private set; } = value;
+    public void Update(bool? next) { if (Value != next) { Value = next; InvalidateVisual(); } }
     public Color OnColor { get; } = onColor;
 
     protected override Size MeasureOverride(Size availableSize) => new(14, 14);

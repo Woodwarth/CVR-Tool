@@ -10,7 +10,7 @@ internal static class CrossoverChecks
 {
     public static void Run(Action<bool, string> check)
     {
-        var service = new AmplifierService(new DemoBackend());
+        var service = new AmplifierService(new DemoBackend()); service.AddDemo("DSP-2002");
         const string id = "demo-2002";
         check(CrossoverFilters.Options.Count == 11 && CrossoverFilters.Options.Select(o => o.ShortName).Distinct().Count() == 11, "Eleven distinct crossover types match the reference selection");
         var before = service.GetInputProcessing(id, 1);
@@ -49,6 +49,13 @@ internal static class CrossoverChecks
         check(Math.Abs(CrossoverResponse.GainDb(new(1000, 6, true), true, 1000) + 6.020599913279624) < 1e-9, "Linkwitz-Riley cutoff is -6.0206 dB");
         check(Math.Abs(CrossoverResponse.GainDb(new(1000, 1, true), false, 1000) + 4.771212547196624) < 1e-9, "Second-order phase-normalized Bessel cutoff matches its analytic polynomial");
         check(CrossoverResponse.GainDb(new(80, 9, false), true, 20) == 0, "Bypassed crossover has unity response");
+        var peak = new EqualizerBand(1, 1500, 6, 1);
+        var taps = EqualizerResponse.GenerateFir([peak], null, null, true);
+        var gain = taps.Select((v, n) => System.Numerics.Complex.FromPolarCoordinates(1, -2 * Math.PI * 1500 * n / 48000) * v)
+            .Aggregate(System.Numerics.Complex.Zero, (a, b) => a + b).Magnitude;
+        check(taps.Length == 512 && Math.Abs(20 * Math.Log10(gain) - 6) < .1, "Generated FIR reproduces a 6 dB peak at its center");
+        var flat = EqualizerResponse.GenerateFir([peak], null, null, false);
+        check(Math.Abs(flat[256] - 1) < 1e-9 && flat.Where((_, i) => i != 256).All(v => Math.Abs(v) < 1e-9), "Bypassed EQ exports a centered unity impulse");
         check(service.GetInputProcessing(id, 2).HighPass is { Enabled: false }, "Crossover edits remain isolated to the selected input");
     }
 }

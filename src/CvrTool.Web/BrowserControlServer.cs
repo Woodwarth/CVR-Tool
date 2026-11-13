@@ -28,6 +28,7 @@ public sealed class BrowserControlServer(AmplifierService service, TimeProvider?
     private ITimer? leaseTimer;
     public string AccessKey { get; private set; } = "";
     public string? Address { get; private set; }
+    public string[] ConnectionUrls { get; private set; } = [];
     public string? ConnectionUrl => Address is null ? null : Address + "/#" + AccessKey;
     public event Action? Changed;
     public event Action? StatusChanged;
@@ -53,7 +54,7 @@ public sealed class BrowserControlServer(AmplifierService service, TimeProvider?
     public async Task StartAsync(IPAddress address, int port = 8787)
     {
         if (host is not null) throw new InvalidOperationException("Browser control is already running.");
-        if (!IsLocalAddress(address)) throw new ArgumentException("Choose a local IPv4 network address.");
+        if (!address.Equals(IPAddress.Any) && !IsLocalAddress(address)) throw new ArgumentException("Choose a local IPv4 network address.");
         if (port is < 0 or > 65535) throw new ArgumentOutOfRangeException(nameof(port));
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [] });
         builder.Logging.ClearProviders(); // Never pollute integrated MCP stdout.
@@ -72,7 +73,8 @@ public sealed class BrowserControlServer(AmplifierService service, TimeProvider?
             context.Response.Headers.XContentTypeOptions = "nosniff";
             context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
             var requestedHost = context.Request.Host.Host;
-            if (requestedHost != address.ToString() && !(IPAddress.IsLoopback(address) && requestedHost == "localhost"))
+            var local = context.Connection.LocalIpAddress;
+            if (requestedHost != local?.ToString() && !(local is not null && IPAddress.IsLoopback(local) && requestedHost == "localhost"))
             { context.Response.StatusCode = 403; return; }
             if (context.Request.Headers.Origin is { Count: > 0 } origin &&
                 !string.Equals(origin.ToString(), $"http://{context.Request.Host}", StringComparison.OrdinalIgnoreCase))
@@ -110,6 +112,27 @@ public sealed class BrowserControlServer(AmplifierService service, TimeProvider?
         app.MapGet("/api/health", () => new { status = "ok" });
         app.MapGet("/api/devices", () => service.ListDevices());
         app.MapGet("/api/state", (string id) => State(id));
+        app.MapPost("/api/eq-preview", (BrowserEqDraft draft) =>
+        {
+            draft.Validate();
+            return Enumerable.Range(0, 257).Select(i =>
+            {
+                var hz = 20 * Math.Pow(1000, i / 256d);
+                var response = System.Numerics.Complex.One;
+                if (draft.Enabled)
+                {
+                    response = CrossoverResponse.Transfer(draft.HighPass, true, hz) * CrossoverResponse.Transfer(draft.LowPass, false, hz);
+                    foreach (var band in draft.Bands) response *= EqualizerResponse.Transfer(band, hz);
+                }
+                return new { db = Math.Clamp(20 * Math.Log10(response.Magnitude), -24, 24), phase = response.Phase * 180 / Math.PI };
+            }).ToArray();
+        });
+        app.MapPost("/api/eq-fir", (BrowserEqDraft draft) =>
+        {
+            draft.Validate();
+            var taps = EqualizerResponse.GenerateFir(draft.Bands, draft.HighPass, draft.LowPass, draft.Enabled);
+            return Results.Text(string.Join("\n", taps.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture))), "text/plain");
+        });
         app.MapGet("/api/preset", (string id) => Results.File(service.ExportNativePreset(id), "application/octet-stream", "CVR-preset.sd"));
         app.MapPost("/api/change", async (BrowserChange change, HttpContext context) =>
         {
@@ -132,6 +155,14 @@ public sealed class BrowserControlServer(AmplifierService service, TimeProvider?
         {
             await app.StartAsync().ConfigureAwait(false);
             Address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single().TrimEnd('/');
+            if (address.Equals(IPAddress.Any))
+            {
+                var preferred = Interfaces().FirstOrDefault()?.Address ?? "127.0.0.1";
+                var bound = Address;
+                Address = new UriBuilder(bound) { Host = preferred }.Uri.GetLeftPart(UriPartial.Authority);
+                ConnectionUrls = Interfaces().Select(i => i.Address).Append("127.0.0.1").Distinct()
+                    .Select(ip => new UriBuilder(bound) { Host = ip }.Uri.GetLeftPart(UriPartial.Authority) + "/#" + AccessKey).ToArray();
+            }
             host = app;
             leaseTimer = (timeProvider ?? TimeProvider.System).CreateTimer(_ =>
             {
@@ -200,7 +231,7 @@ public sealed class BrowserControlServer(AmplifierService service, TimeProvider?
         if (leaseTimer is { } timer) await timer.DisposeAsync().ConfigureAwait(false);
         leaseTimer = null;
         clientLease.Reset();
-        host = null; Address = null; AccessKey = "";
+        host = null; ConnectionUrls = []; Address = null; AccessKey = "";
         StatusChanged?.Invoke();
     }
 }
@@ -213,3 +244,14 @@ public sealed record BrowserChange(string DeviceId, string Operation, int Channe
     double? Value = null, bool? Enabled = null, double? DelayMs = null, bool? Inverted = null,
     int Input = 1, int Output = 1, InputProcessingChange? Processing = null,
     OutputDynamicsChange? Dynamics = null, string? Name = null, string? Data = null, int Slot = 1, bool Confirmed = false);
+
+public sealed record BrowserEqDraft(EqualizerBand[] Bands, CrossoverFilter? HighPass, CrossoverFilter? LowPass, bool Enabled)
+{
+    public void Validate()
+    {
+        if (Bands is null || Bands.Length > 8 || Bands.Any(b => b is null || b.FrequencyHz is < 20 or > 20000 ||
+            b.Q is < 0.1 or > 20 || b.GainDb is < -18 or > 18) ||
+            new[] { HighPass, LowPass }.Any(f => f is not null && f.FrequencyHz is < 20 or > 20000))
+            throw new ArgumentException("Invalid EQ parameters.");
+    }
+}

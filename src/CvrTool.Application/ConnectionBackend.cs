@@ -16,8 +16,10 @@ public interface IConnectionBackend
     DisconnectionResult Disconnect(string deviceId);
 }
 
-public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend, INativePresetMetadataSource, IDisposable
+public sealed class ConnectionBackend : IDemoManagement, IAmplifierBackend, IConnectionBackend, IAdvancedAmplifierBackend, INativePresetMetadataSource, IDisposable
 {
+    public DeviceSnapshot AddDemo(string model) => local.AddDemo(model);
+    public void RemoveDemo(string id) => local.RemoveDemo(id);
     private readonly DemoBackend local = new();
     private readonly Dictionary<string, IAmplifierBackend> peers = new();
     private readonly object gate = new();

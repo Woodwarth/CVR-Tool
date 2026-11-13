@@ -34,6 +34,52 @@ public sealed partial class MainWindow
         }
         editor.Show(this);
     }
+    // Switch the active editor or transfer only its draft settings to the paired channel.
+    private void AddChannelNavigation(StackPanel actions, Window editor, string device, int current,
+        bool output, Action<int> open, Func<bool> dirty, Func<int,Task> copy, TextBlock message)
+    {
+        var snapshot = service.GetDevice(device);
+        bool Available(int ch) => !output || ch % 2 == 1 || !service.GetOutputDynamics(device,ch).Bridged;
+        var channels = snapshot.Outputs.Select(o => o.Number).Where(Available).ToArray();
+        string Label(int ch) => output ? ((char)('A'+ch-1)).ToString() : ch.ToString();
+        var select = new ComboBox { ItemsSource = channels.Select(n => "Channel " + Label(n)).ToArray(),
+            SelectedIndex = Array.IndexOf(channels,current), Tag = "editor-channel" };
+        actions.Children.Insert(0,select);
+        bool switching = false;
+        select.SelectionChanged += async (_,_) =>
+        {
+            if (switching || select.SelectedIndex < 0) return;
+            int next = channels[select.SelectedIndex];
+            if (next == current) return;
+            switching = true;
+            try
+            {
+                if (dirty() && !await ConfirmPresetAction("Switch channel", "Discard unapplied edits and switch channels?"))
+                { select.SelectedIndex = Array.IndexOf(channels,current); return; }
+                if (deviceId != device) throw new InvalidOperationException("Device selection changed.");
+                editor.Close(); open(next);
+            }
+            catch (Exception ex) { message.Text = ex.Message; }
+            finally { switching = false; }
+        };
+        int target = current + 1;
+        if (current % 2 == 0 || !channels.Contains(target)) return;
+        var transfer = new Button { Content = $"Copy {Label(current)} → {Label(target)}", Tag = "editor-copy" };
+        actions.Children.Insert(1,transfer);
+        transfer.Click += async (_,_) =>
+        {
+            transfer.IsEnabled = false;
+            try
+            {
+                if (!await ConfirmPresetAction("Copy settings", $"Replace channel {Label(target)} settings with this editor's values?")) return;
+                if (!Available(target)) throw new InvalidOperationException("The destination follows a bridged channel.");
+                await copy(target);
+                message.Text = $"Copied to channel {Label(target)}";
+            }
+            catch (Exception ex) { message.Text = ex.Message; }
+            finally { transfer.IsEnabled = true; }
+        };
+    }
     private Button DelayControl(int channel)
     {
         var input = service.GetInputProcessing(deviceId, channel);

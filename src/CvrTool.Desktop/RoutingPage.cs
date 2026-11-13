@@ -27,11 +27,6 @@ public sealed partial class MainWindow
             return Card(InputsPanel());
         }
 
-        var content = new StackPanel
-        {
-            Spacing = 12
-        };
-        content.Children.Add(Heading($"Inputs · {deviceName.Text}"));
         var matrix = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("130", routing.InputCount))),
@@ -88,7 +83,7 @@ public sealed partial class MainWindow
         {
             ColumnDefinitions = new ColumnDefinitions("224,Auto,108"),
             ColumnSpacing = 14,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Tag = "routing-environment"
         };
         var sourceProcessing = new Grid
@@ -103,8 +98,6 @@ public sealed partial class MainWindow
             RowSpacing = 8,
             Margin = new Thickness(0, 19)
         };
-        sourceProcessing.Children.Add(Centered("Input processing", 13, Muted));
-        outputLevels.Children.Add(Centered("Output gain", 13, Muted));
         for (var row = 1; row <= routing.InputCount; row++)
         {
             var blocks = new Grid
@@ -131,17 +124,10 @@ public sealed partial class MainWindow
             outputLevels.Children.Add(block);
         }
 
-        var connections = new RoutingConnections(routing.OutputCount, 114, 118, 224, 108)
-        {
-            IsHitTestVisible = false
-        };
-        Grid.SetColumnSpan(connections, 3);
-        environment.Children.Add(connections);
         environment.Children.Add(sourceProcessing);
         AddColumn(environment, Card(matrix), 1);
         AddColumn(environment, outputLevels, 2);
-        content.Children.Add(new ScrollViewer { Content = environment, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled });
-        return content;
+        return environment;
     }
 
     private static Control RoutingStage(string name, string value)

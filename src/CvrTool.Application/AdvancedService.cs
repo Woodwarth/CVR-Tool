@@ -139,7 +139,7 @@ public static class PresetOperations
                 throw new ArgumentException("Preset FIR channels are inconsistent.");
             foreach (var fir in preset.Firs)
             {
-                if (!fir.CoefficientsKnown && device.IsDemo && fir.Coefficients.Count == 0 && fir.SampleRate == 48000 &&
+                if (!fir.CoefficientsKnown && fir.Coefficients.Count == 0 && fir.SampleRate == 48000 &&
                     preset.NativeData is { } source && NativePresetCodec.Inspect(source).FirLength == 0) continue;
                 AmplifierService.ValidateFir(fir);
             }

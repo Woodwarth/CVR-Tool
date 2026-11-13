@@ -16,7 +16,7 @@ public sealed partial class MainWindow
 {
     private readonly Border mcpIndicator = new()
     {
-        Tag = "mcp-connection", Padding = new Avalonia.Thickness(10,6),
+        Tag = "mcp-connection", Width = 52, Height = 34, Padding = new Avalonia.Thickness(10,6),
         BorderThickness = new Avalonia.Thickness(1), CornerRadius = new Avalonia.CornerRadius(4),
         VerticalAlignment = VerticalAlignment.Center
     };
@@ -33,9 +33,10 @@ public sealed partial class MainWindow
     private void UpdateMcpStatus(int count)
     {
         var connected = count > 0;
-        mcpIndicator.Child = Text(connected ? $"MCP · Connected ({count})" : "MCP · Disconnected", 12, connected ? Accent : Muted);
+        mcpIndicator.Child = Text("MCP", 12, connected ? Accent : Muted);
+        ((TextBlock)mcpIndicator.Child).HorizontalAlignment = HorizontalAlignment.Center;
+        ((TextBlock)mcpIndicator.Child).VerticalAlignment = VerticalAlignment.Center;
         mcpIndicator.BorderBrush = connected ? Accent : Line;
         mcpIndicator.Background = Brush.Parse(connected ? "#12362F" : "#182129");
-        ToolTip.SetTip(mcpIndicator, connected ? $"{count} initialized MCP client(s) connected" : "No initialized MCP client connected");
     }
 }

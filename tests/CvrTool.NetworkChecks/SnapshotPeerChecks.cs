@@ -24,7 +24,7 @@ static class SnapshotPeerChecks
         var device = service.Connect(target);
         var id = device.Id;
         check(device is { IsDemo: false, Name: "Live fixture", Readings.ReadOnly: true } && device.Capabilities.Model == "DSP-1004", "Observed bulk profile connects a real-shaped device without replacing demos");
-        check(service.ListDevices().Count(d => d.IsDemo) == 3 && service.ListDevices().Any(d => d.Id == id), "Live and all demo devices coexist");
+        check(service.ListDevices().Count(d => d.IsDemo) == 1 && service.ListDevices().Any(d => d.Id == id), "Live and all demo devices coexist");
         check(device.Readings!.MacAddress == "02:00:00:00:00:01" && device.Readings.FirmwareHeader.Contains("106119"), "Validated identity announcements populate metadata");
         check(service.GetInputProcessing(id, 1).GainDb == 0 && service.GetRouting(id).Cells.Count == 16, "Inputs and full matrix come from the native snapshot");
         var telemetry = service.GetTelemetry(id);
@@ -32,18 +32,20 @@ static class SnapshotPeerChecks
         check(Math.Abs(telemetry[0].InputMeterDb!.Value + 20) < .001 && telemetry[0].InputClip == false && telemetry[1].InputMeterDb == -40 && telemetry[1].InputClip == true, "Independent input signal and active-low clip follow each channel");
         check(telemetry[0].OutputMeterDb == Math.Clamp(20 * Math.Log10(40 / Math.Max(1, service.GetOutputDynamics(id,1).Rms.MaximumVolts)), -40, 0), "Output meter references the channel RMS maximum");
         check(device.Readings.Power == 25 && device.Readings.StatusCodes![0] == 5, "Power value and raw status provenance remain available");
-        check(!service.GetFir(id, 1).CoefficientsKnown && service.GetFir(id, 1).Coefficients.Count == 0, "Missing FIR coefficients are explicitly unknown");
+        check(service.GetFir(id, 1) is { CoefficientsKnown: true, Coefficients.Count: 512 } taps && taps.Coefficients[0] == 0.5, "Observed FIR reply populates the live output");
         check(service.GetNativePresetMetadata(id)?.Allocation?[0].LoadOhms == 8, "Allocation reads retain configured output load");
         check(service.GetDevicePresets(id).Slots is { Count: 24 } slots && slots[23].Name == "Stage", "Live preset names follow the received slot count");
         check(service.ExportNativePreset(id).SequenceEqual(peer.Sync), "Known native settings can be backed up exactly without synthesized FIR");
-        try { service.ApplyOutputProcessing(service.PlanOutputProcessing(new(id, 1, EqEnabled: false)).Id); throw new Exception("Unverified output EQ accepted"); }
-        catch (NotSupportedException) { check(true, "Unverified output EQ stays protected before any write"); }
         var pipe = "cvr-snapshot-" + Guid.NewGuid().ToString("N");
         using var host = new SessionHost(backend, pipe);
         var remote = new AmplifierService(new SessionBackend(pipe));
         check(remote.GetDevice(id).Readings!.ReadOnly && remote.GetInputProcessing(id, 1).Bands.Count == 8, "Shared IPC exposes the same live snapshot and read-only mode");
         check(remote.InspectProtocol(id,59,1,0).Contains("24 entries") && remote.InspectProtocol(id,16,1,0).Contains("protected"), "IPC inspection reads the preset table and never issues reset");
         check(SpinWait.SpinUntil(() => peer.Confirmations > 0, 1000) && peer.Writes == 0 && peer.UnexpectedQueries == 0, "Only bulk reads, transport ACKs and empty status-3 confirmation are sent");
+        var oldEq = service.GetOutputProcessing(id, 1);
+        var editedEq = service.ApplyOutputProcessing(service.PlanOutputProcessing(new(id, 1, EqEnabled: !oldEq.EqEnabled)).Id);
+        check(editedEq.EqEnabled != oldEq.EqEnabled, "Output EQ block edits are independently read back");
+        service.ApplyOutputProcessing(service.PlanOutputProcessing(new(id, 1, EqEnabled: oldEq.EqEnabled)).Id);
         check(service.GetDevice(id).Readings is { CanSetDisplayLock: true, CanSetStandby: true }, "Live mode advertises the two verified operational controls");
         check(service.SetControlState(id, displayLocked: true) == new DeviceControlState(true, false, Wink: false), "Live display lock is confirmed through fresh full settings");
         check(service.SetControlState(id, standby: true) == new DeviceControlState(true, true, Wink: false), "Live standby status-zero command is confirmed through full settings");
@@ -86,8 +88,12 @@ static class SnapshotPeerChecks
         try { service.Apply(service.Plan(new(id, 1, Muted: true)).Id); throw new Exception("Rejected mute accepted"); }
         catch (InvalidOperationException) { check(true, "Mute ACK/delivery without matching native state fails"); }
         finally { peer.IgnoreMuteWrites = false; }
-        try { service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id, 1, Bridged: true)).Id); throw new Exception("Unverified bridge accepted"); }
-        catch (NotSupportedException) { check(true, "Unverified bridge switching remains protected"); }
+        check(service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,Bridged:true)).Id).Bridged, "Bridge confirmed from native pair flag");
+        service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,Bridged:false)).Id);
+        var priorLimiter = service.GetOutputDynamics(id,1);
+        var lower = priorLimiter.Peak with { ThresholdVolts = priorLimiter.Peak.ThresholdVolts > 1 ? priorLimiter.Peak.ThresholdVolts - 1 : 1 };
+        check(service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,Peak:lower)).Id).Peak == lower, "Live limiter edit requires full settings readback");
+        service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,Peak:priorLimiter.Peak)).Id);
         var mainBefore = service.ExportNativePreset(id);
         check(service.GetDevice(id).Readings is { CanSetInputGain: true, CanSetInputMute: true, CanRename: true }, "Main advertises only its implemented gain/mute/name write capabilities");
         service.ApplyInputProcessing(service.PlanInputProcessing(new(id, 1, GainDb: .5)).Id);
@@ -113,6 +119,12 @@ static class SnapshotPeerChecks
         try { service.RenameDevice(id, "Ignored rename"); throw new Exception("Unconfirmed name accepted"); }
         catch (InvalidOperationException) { check(service.GetDevice(id).Name == "Live fixture", "Failed identity name write retains actual device state"); }
         finally { peer.IgnoreRenameWrites = false; }
+        peer.AdjustLoadOnMode = true;
+        service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,2,LoadMode:1)).Id);
+        var lowZ = service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,2,LoadMode:0)).Id);
+        check(lowZ.LoadMode == 0 && service.GetNativePresetMetadata(id)!.Channels[1].ConfiguredLoadOhms == 8,
+            "Output B confirms Low-Z and adopts ancillary data from the same full readback");
+        peer.AdjustLoadOnMode = false;
         var verifiedBefore = service.ExportNativePreset(id);
         var beforeChannel = service.GetDevice(id).Outputs[0];
         service.Apply(service.Plan(new(id,1,GainDb:-.5,DelayMs:1.25,Inverted:true)).Id);
@@ -134,13 +146,12 @@ static class SnapshotPeerChecks
         check(service.GetOutputDynamics(id,1) is {NoiseGateEnabled:true,NoiseGateDb:-65,LoadMode:1},"Captured gate flag, signed threshold and status-zero 70V mode use native readback");
         var originalDynamics = OutputDynamicsWire.DecodeNative(verifiedBefore,1);
         service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,NoiseGateEnabled:originalDynamics.NoiseGateEnabled,NoiseGateDb:originalDynamics.NoiseGateDb,LoadMode:originalDynamics.LoadMode)).Id);
-        check(service.SetFirEnabled(id,1,true) is {Enabled:true,CoefficientsKnown:false,Coefficients.Count:0},"FIR bypass works without reading, replacing or inventing coefficient data");
+        check(service.SetFirEnabled(id,1,true) is {Enabled:true,CoefficientsKnown:true,Coefficients.Count:512},"FIR bypass works without reading, replacing or inventing coefficient data");
         service.SetFirEnabled(id,1,verifiedBefore[36+368]==0);
         check(service.ExportNativePreset(id).SequenceEqual(verifiedBefore),"All verified DSP edits restore the complete original native settings");
         try {service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,LoadMode:2)).Id);throw new Exception("100V enabled");}
         catch(NotSupportedException){check(true,"Uncaptured 100V mode remains disabled");}
-        try {service.FactoryReset(id);throw new Exception("Reset enabled");}
-        catch(NotSupportedException){check(true,"Factory reset remains explicitly disabled on physical profiles");}
+        check(service.FactoryReset(id).Confirmed, "Simulated factory reset acknowledges command and refreshes settings");
         var crossoverBefore = service.GetInputProcessing(id,1);
         var crossoverNative = service.ExportNativePreset(id);
         service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,HighPass:new(80,4,true),LowPass:new(18000,4,true))).Id);
@@ -162,7 +173,15 @@ static class SnapshotPeerChecks
         catch(InvalidOperationException){check(service.ExportNativePreset(id).SequenceEqual(crossoverNative),"Crossover delivery without independent native confirmation fails");}
         finally {peer.IgnoreFilterWrites = false;}
         check(peer.DelayedStandbyReads > 0, "Standby readback waits for asynchronous native state without repeating writes");
-        using (var secondPeer = new Peer("demo-1502"))
+        var originalPreset = service.ExportNativePreset(id);
+        var changedPreset = originalPreset.ToArray();
+        Encoding.ASCII.GetBytes("File check").CopyTo(changedPreset,2160);
+        service.LoadPresetFile(id,"fixture.sd",changedPreset);
+        check(peer.Sync.SequenceEqual(changedPreset), "Physical backend applies a fragmented native preset and confirms it");
+        service.LoadPresetFile(id,"restore.sd",originalPreset);
+        check(service.StoreDevicePreset(id,24,"Stored").Confirmed && service.RecallDevicePreset(id,24).Confirmed &&
+            service.ClearDevicePresets(id).Confirmed, "Physical slots use the reported range and verify store, recall and clear");
+        using (var secondPeer = new Peer("demo-2002"))
         {
             var second = service.Connect(target with { RemotePort = secondPeer.Port });
             check(second.Outputs.Count == 2 && service.GetInputProcessing(second.Id, 2).Bands.Count == 8, "Two-channel live snapshot has the same processing functions");
@@ -206,7 +225,10 @@ static class SnapshotPeerChecks
         private readonly Task listener;
         public byte[] Sync { get; }
         public int Port => ((IPEndPoint)socket.Client.LocalEndPoint!).Port;
+        private readonly List<byte> fragments = [];
+        private readonly byte[] slotNames = new byte[768];
         public int Writes, Confirmations, UnexpectedQueries;
+        public volatile bool AdjustLoadOnMode;
         public volatile bool IgnoreControlWrites, IgnoreMuteWrites, IgnoreWinkWrites, IgnoreInputWrites, IgnoreRenameWrites, IgnoreFilterWrites;
         private bool wink;
         private string deviceName = "Live fixture";
@@ -216,7 +238,9 @@ static class SnapshotPeerChecks
         public int DelayedStandbyReads;
         public Peer(string model = "demo-1004", bool legacy = false)
         {
+            "Stage"u8.CopyTo(slotNames.AsSpan(23 * 32));
             var service = new AmplifierService(new DemoBackend());
+            if(model == "demo-2002") service.AddDemo("DSP-2002");
             var file = service.ExportNativePreset(model);
             Sync = file[..(legacy ? 2232 : NativePresetCodec.Inspect(file).SyncLength)];
             if (legacy)
@@ -240,7 +264,33 @@ static class SnapshotPeerChecks
                     var received = await socket.ReceiveAsync(stop.Token);
                     var header = CvrWire.Header(received.Buffer);
                     if (header.Ack) continue;
-                    var message = CvrWire.DecodeInner(received.Buffer[10..]);
+                    byte[] inner;
+                    if (header.Count > 1)
+                    {
+                        await socket.SendAsync(Convert.FromHexString("03D9000000C201010100"), received.RemoteEndPoint);
+                        if (header.Index == 1) fragments.Clear();
+                        fragments.AddRange(received.Buffer[10..]);
+                        if (header.Index != header.Count) continue;
+                        inner = fragments.ToArray();
+                    }
+                    else inner = received.Buffer[10..];
+                    var message = CvrWire.DecodeInner(inner);
+                    if (message is { Function: 27, Status: 1 } && message.Body.Length == Sync.Length)
+                    { message.Body.CopyTo(Sync,0); continue; }
+                    if (message is { Function: 59, Body.Length: 34, Status: 0 })
+                    {
+                        int offset = message.Body[1] * 32;
+                        if (message.Body[0]==1) message.Body.AsSpan(2,32).CopyTo(slotNames.AsSpan(offset));
+                        if (message.Body[0]==2) slotNames.AsSpan(offset,32).CopyTo(Sync.AsSpan(2160));
+                        if (message.Body[0]==3) Array.Clear(slotNames);
+                        continue;
+                    }
+                    if(message is {Function:16,Status:0} && message.Body.SequenceEqual(new byte[]{1}))
+                    { await Send(new(16,3,0,0,0,[]),received.RemoteEndPoint); continue; }
+                    if(message is {Function:42,Status:1,Side:1,Body.Length:4})
+                    { message.Body.CopyTo(Sync,36+message.Channel*515+76); continue; }
+                    if(message is {Function:50,Side:1,Body.Length:1})
+                    { Sync[34+message.Channel]=message.Body[0]; continue; }
                     if (message is { Function: 83, Channel: 0, Segment: 0, Side: 0 })
                     {
                         if (message is { Status: 0, Body.Length: 1 })
@@ -260,6 +310,11 @@ static class SnapshotPeerChecks
                         }
                         continue;
                     }
+                    if (message is { Status: 0, Function: 52, Side: 1, Body.Length: 141 })
+                    {
+                        message.Body.CopyTo(Sync, 36 + message.Channel * 515 + 226);
+                        continue;
+                    }
                     if (message is { Status: 1, Function: 9 or 14, Body.Length: 4 })
                     {
                         Interlocked.Increment(ref Writes);
@@ -271,6 +326,7 @@ static class SnapshotPeerChecks
                         (message is { Status: 0, Function: 49, Side: 1, Body.Length: 1 }))
                     {
                         Interlocked.Increment(ref Writes);
+                        if (AdjustLoadOnMode && message.Function == 49) BitConverter.GetBytes(message.Body[0] == 0 ? 8f : 16f).CopyTo(Sync,36+message.Channel*515+374);
                         var offset = message.Function switch { 18=>58,44=>368,49=>367,69=>373,_=>-1 };
                         Sync[offset < 0 ? 2232 + message.Channel : 36 + message.Channel * 515 + offset] = message.Body[0];
                         continue;
@@ -298,6 +354,13 @@ static class SnapshotPeerChecks
                     if (message.Status == 1) { Interlocked.Increment(ref Writes); continue; }
                     if (message is { Function: 27, Status: 3, Body.Length: 0 })
                     { Interlocked.Increment(ref Confirmations); continue; }
+                    if (message is { Function: 43, Status: 2, Side: 1, Body.Length: 0 })
+                    {
+                        var taps = new byte[2080];
+                        BitConverter.GetBytes(0.5f).CopyTo(taps, 32);
+                        await Send(new(43, 1, message.Channel, 10, 1, taps), received.RemoteEndPoint);
+                        continue;
+                    }
                     if (message is { Function: 81, Status: 2, Body.Length: 0 })
                     {
                         var allocation = new byte[40];
@@ -307,8 +370,8 @@ static class SnapshotPeerChecks
                     }
                     if (message is { Function: 59, Status: 2, Body.Length: 34 } && message.Body.All(b => b == 0))
                     {
-                        var table = new byte[768];
-                        "Stage"u8.CopyTo(table.AsSpan(23 * 32));
+                        var table = slotNames;
+
                         await Send(new(59, 1, 32, 10, 0, table), received.RemoteEndPoint);
                         continue;
                     }

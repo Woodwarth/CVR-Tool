@@ -31,9 +31,10 @@ public sealed partial class MainWindow
         AddColumn(header, enabled, 1);
         content.Children.Add(header);
         var graph = new EqualizerGraph { HighPass = input.HighPass, LowPass = input.LowPass, Bands = draft, EqEnabled = input.EqEnabled, Tag = output ? "output-eq-graph" : "input-eq-graph", Height = 340 };
-        var phase = new CheckBox { Content = "Phase (°)", Tag = "eq-phase" };
-        phase.IsCheckedChanged += (_, _) => { graph.ShowPhase = phase.IsChecked == true; graph.InvalidateVisual(); };
-        AddColumn(header, phase, 2);
+        var legend = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 12 };
+        legend.Children.Add(Text("Gain (dB)", 13, Accent));
+        legend.Children.Add(Text("Phase (°)", 13, Avalonia.Media.Brush.Parse("#F0BD71")));
+        AddColumn(header, legend, 2);
         Grid.SetRow(graph, 1);
         content.Children.Add(graph);
         var cards = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("*", 10))), ColumnSpacing = 8 };
@@ -82,6 +83,7 @@ public sealed partial class MainWindow
         var highPass = input.HighPass;
         var lowPass = input.LowPass;
         var crossoverFields = new Dictionary<bool, NumericUpDown>();
+        var resetCrossovers = new List<Action>();
         Control CrossoverCard(bool high)
         {
             var filter = (high ? highPass : lowPass);
@@ -129,6 +131,14 @@ public sealed partial class MainWindow
             type.SelectionChanged += (_, _) => Changed();
             frequency.ValueChanged += (_, _) => Changed();
             active.IsCheckedChanged += (_, _) => Changed();
+            resetCrossovers.Add(() =>
+            {
+                if (filter is null || !active.IsEffectivelyEnabled) return;
+                type.SelectedItem = CrossoverFilters.Options.Single(o => o.Code == 0);
+                frequency.Value = high ? 20 : 20000;
+                active.IsChecked = false;
+                Changed();
+            });
             var card = Card(column);
             card.Padding = new Thickness(8);
             return card;
@@ -154,6 +164,26 @@ public sealed partial class MainWindow
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         var apply = new Button { Content = "Apply", Tag = "apply-input-eq" };
         var cancel = new Button { Content = "Cancel" };
+        var generate = new Button { Content = "Generate FIR…", Tag = "generate-eq-fir" };
+        var reset = new Button { Content = "Reset EQ", Tag = "eq-reset" };
+        reset.Click += (_, _) =>
+        {
+            var defaults = PresetOperations.DefaultProcessing(channel);
+            foreach (var band in defaults.Bands)
+            {
+                var controls = fields[band.Number];
+                if (!controls.Gain.IsEffectivelyEnabled) continue;
+                controls.Frequency.Value = (decimal)band.FrequencyHz;
+                controls.Gain.Value = 0;
+                controls.Q.Value = (decimal)band.Q;
+                controls.Enabled.IsChecked = draft[band.Number-1].FilterType == 0;
+            }
+            foreach (var restore in resetCrossovers) restore();
+            enabled.IsChecked = true;
+            message.Text = "Editable filters reset · Apply to save";
+        };
+        actions.Children.Add(reset);
+        actions.Children.Add(generate);
         actions.Children.Add(apply);
         actions.Children.Add(cancel);
         footer.Children.Add(actions);
@@ -169,6 +199,39 @@ public sealed partial class MainWindow
             editor.Width = Math.Min(editor.Width, screen.WorkingArea.Width / screen.Scaling - 40);
             editor.Height = Math.Min(editor.Height, screen.WorkingArea.Height / screen.Scaling - 40);
         }
+        AddChannelNavigation(actions, editor, editedId, channel, output, n => OpenInputEqEditor(n, output),
+            () => input.EqEnabled != (enabled.IsChecked == true) || !input.Bands.SequenceEqual(draft) ||
+                highPass != input.HighPass || lowPass != input.LowPass,
+            async target =>
+            {
+                var change = new InputProcessingChange(editedId,target,EqEnabled:enabled.IsChecked==true,
+                    Bands:draft.ToArray(),HighPass:highPass,LowPass:lowPass);
+                await Task.Run(() =>
+                {
+                    if (output) service.ApplyOutputProcessing(service.PlanOutputProcessing(change).Id);
+                    else service.ApplyInputProcessing(service.PlanInputProcessing(change).Id);
+                });
+            },message);
+        generate.Click += async (_, _) =>
+        {
+            try
+            {
+                var taps = EqualizerResponse.GenerateFir(draft, highPass, lowPass, enabled.IsChecked == true);
+                var file = await editor.StorageProvider.SaveFilePickerAsync(new Avalonia.Platform.Storage.FilePickerSaveOptions
+                {
+                    Title = "Save generated FIR", SuggestedFileName = $"{side}-{channel}-EQ.txt",
+                    DefaultExtension = "txt"
+                });
+                if (file is null) return;
+                await using var stream = await file.OpenWriteAsync();
+                stream.SetLength(0);
+                await using var writer = new System.IO.StreamWriter(stream);
+                foreach (var tap in taps)
+                    await writer.WriteLineAsync(tap.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                message.Text = "FIR saved · 512 taps · 48 kHz";
+            }
+            catch (Exception ex) { message.Text = ex.Message; }
+        };
         apply.Click += async (_, _) =>
         {
             if (fields.Values.Any(f => f.Frequency.Value is null || f.Gain.Value is null || f.Q.Value is null))

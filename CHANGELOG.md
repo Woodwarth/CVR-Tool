@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
+
+- Add live output EQ editing, channel switching and paired EQ/limiter copies.
+- Import, export and remove output FIR filters. Generate a 512-tap FIR from an EQ draft.
+- Add EQ reset, simultaneous gain and phase curves, half-decibel matrix edits and RMS/peak power controls.
+- Refresh Main telemetry without replacing focused controls. Scale the workspace to wide displays.
+- Manage demo devices from the sidebar and load native presets with device readback.
+- Add browser pairing on all IPv4 interfaces and display connection state in the header.
 
 - Align browser control with Desktop: device sidebar, compact identity header,
   vertical Main faders/meters and compact Inputs signal flow.

@@ -77,12 +77,15 @@ public sealed class SessionHost : IDisposable
     {
         var args = request.Arguments;
         string Id() => args.GetProperty("Id").GetString() ?? throw new ArgumentException("Device ID missing.");
+        string RemoveDemo(string id) { ((IDemoManagement)backend).RemoveDemo(id); return id; }
         int Channel() => args.GetProperty("Channel").GetInt32();
         long Revision() => args.GetProperty("Revision").GetInt64();
         T Change<T>() => args.GetProperty("Change").Deserialize<T>() ?? throw new ArgumentException("Change missing.");
         var advanced=backend as IAdvancedAmplifierBackend;
         object result = request.Method switch
         {
+            "add-demo" => ((IDemoManagement)backend).AddDemo(args.GetProperty("Model").GetString()!),
+            "remove-demo" => RemoveDemo(Id()),
             "list" => backend.ListDevices(),
             "output-dynamics" => DynamicsSnapshot(Id(),Channel()),
             "apply-output-dynamics" => advanced!.ApplyOutputDynamics(Change<OutputDynamicsChange>(),Revision()),
@@ -117,7 +120,7 @@ public sealed class SessionHost : IDisposable
             "set-controls" => backend.SetControlState(Id(), args.GetProperty("Locked").Deserialize<bool?>(), args.GetProperty("Standby").Deserialize<bool?>(), Revision()),
             _ => throw new ArgumentException("Unknown session operation.")
         };
-        if (request.Method.StartsWith("apply-", StringComparison.Ordinal) || request.Method is "wink" or "rename" or "set-controls" or "connect" or "disconnect" or "store-preset" or "recall-preset" or "factory-reset" or "clear-presets")
+        if (request.Method.StartsWith("apply-", StringComparison.Ordinal) || request.Method is "add-demo" or "remove-demo" or "wink" or "rename" or "set-controls" or "connect" or "disconnect" or "store-preset" or "recall-preset" or "factory-reset" or "clear-presets")
             Changed?.Invoke();
         return result;
     }

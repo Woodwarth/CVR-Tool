@@ -10,6 +10,8 @@ sealed class LiveDesktopFixture : IAmplifierBackend, IAdvancedAmplifierBackend
 {
     public const string LiveId = "cvr:127.0.0.2:45455";
     private readonly DemoBackend demo = new();
+    public LiveDesktopFixture() { demo.AddDemo("DSP-2002"); }
+    public double TestVoltage { get; set; } = 40;
     public string? Error { get; set; }
     public string LiveName { get; set; } = "Live fixture";
     private static string Map(string id) => id == LiveId ? "demo-1004" : id;
@@ -21,7 +23,7 @@ sealed class LiveDesktopFixture : IAmplifierBackend, IAdvancedAmplifierBackend
     };
     public IReadOnlyList<DeviceSnapshot> ListDevices() => demo.ListDevices().Append(GetDevice(LiveId)).ToArray();
     public (ChannelState State,long Revision) GetChannel(string id,int channel) => demo.GetChannel(Map(id),channel);
-    public IReadOnlyList<OutputTelemetry> GetTelemetry(string id) => demo.GetTelemetry(Map(id)).Select(t => t.Channel == 1 ? t with { Voltage=40,Current=5,TemperatureC=42,Status=new(Clip:true) } : t).ToArray();
+    public IReadOnlyList<OutputTelemetry> GetTelemetry(string id) => demo.GetTelemetry(Map(id)).Select(t => t.Channel == 1 ? t with { Voltage=TestVoltage,Current=5,TemperatureC=42,Status=new(Clip:true) } : t).ToArray();
     public RoutingSnapshot GetRouting(string id) => demo.GetRouting(Map(id)) with {DeviceId=id};
     public (InputProcessingState State,long Revision) GetInputProcessing(string id,int channel) => demo.GetInputProcessing(Map(id),channel);
     public DeviceControlState GetControlState(string id) => demo.GetControlState(Map(id));
