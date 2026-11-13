@@ -1,4 +1,5 @@
 // Desktop / Output FIR editor
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: import/export/remove FIR drafts and display the reference's three response plots.
 // Units: 512 taps maximum, 48 kHz, milliseconds, dB and wrapped phase degrees.
 // State: apply uses the shared output FIR backend; one editor per channel.

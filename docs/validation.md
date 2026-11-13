@@ -155,3 +155,19 @@ at tablet/phone sizes passed normal edits, offline operation, stalled/refused
 server connections and expired keys during editing, followed by recovery without
 replay or page errors. Physical Safari/iPad validation is still pending.
 This work adds no physical protocol evidence: 31/38 IDs (82%), partial evidence.
+
+## Local browser-control changes after 0.7.5 (unpublished)
+
+Passed: 338 core, 271 loopback-network and 187 desktop checks (796 total), plus
+integrated MCP smoke checks. The isolated Release build completed with zero
+warnings/errors. HTTP checks cover second-client rejection, owner-only release,
+explicit disconnect, timed takeover and cleared lifecycle indicators. Desktop
+checks cover persistent Off/On/Connected status, its dialog, and UI-thread shutdown.
+
+Chrome tablet/phone checks verify immediate dB preview and actual input-event
+writes before release, coalescing rapid movements, exclusive browser ownership,
+control handover, discarded queued gain on disconnect, and the existing
+connection-loss/draft-recovery paths. Layouts have no horizontal page clipping.
+The browser's controls now follow the Desktop layout and vector symbols.
+Physical iPad/Safari and physical-amplifier gain-streaming validation remain
+pending. No additional protocol evidence is claimed: 31/38 IDs (82%), partial.

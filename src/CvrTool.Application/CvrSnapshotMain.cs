@@ -1,4 +1,5 @@
 // Application / Main input controls and device name
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: apply captured input gain/mute/delay/Peak-EQ commands and identity names.
 // Units: gain float32 dB, active-low mute; 31 ASCII name bytes plus NUL.
 // State: fresh settings protect revisions; each write requires independent readback.

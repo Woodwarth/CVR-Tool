@@ -1,4 +1,5 @@
 // Application / Input DSP
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: validate delay/EQ edits through the same plan lifecycle as channel edits.
 // Units: delay is stored in ms; metres assume 343 m/s for display.
 // State: plans are single-use and bound to the whole device revision.

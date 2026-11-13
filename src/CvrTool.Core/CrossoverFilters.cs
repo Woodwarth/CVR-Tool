@@ -1,4 +1,5 @@
 // Core / Crossover filters
+// Module: Defines device models, channel state and the contracts shared by all backends.
 // Purpose: describe input high-/low-pass settings and the eleven CVR selections.
 // Units: cutoff Hz and nominal dB/octave slope.
 // State: immutable values; bypass preserves the selected frequency and type.

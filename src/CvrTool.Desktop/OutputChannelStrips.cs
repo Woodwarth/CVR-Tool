@@ -1,4 +1,5 @@
 // Desktop / Outputs — centered meters, per-channel status and electrical readings.
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: present focused controls and forward edits to Application.
 // Input: user events and authoritative device snapshots.
 // State: local drafts never replace the shared backend.
@@ -48,10 +49,10 @@ public sealed partial class MainWindow
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Height = MeterHeight
             };
-            AddColumn(monitoring, new ChannelMeter(data.LevelDbFs) { Width = 24, Height = MeterHeight, Tag = "output-meter-" + draft.State.Name }, 1);
+            AddColumn(monitoring, new ChannelMeter(liveReadOnly ? data.OutputMeterDb : data.LevelDbFs, liveReadOnly ? -40 : -60) { Width = 24, Height = MeterHeight, Tag = "output-meter-" + draft.State.Name }, 1);
             var flags = new StackPanel
             {
-                Spacing = 10,
+                Spacing = 5,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(6, 0, 0, 0),
                 Tag = "output-flags-" + draft.State.Name
@@ -65,7 +66,8 @@ public sealed partial class MainWindow
                 ("Clip", state.Clip),
                 ("Stby", state.Standby),
                 ("Hi-Z", state.HighImpedance),
-                ("Bridge", state.Bridged)
+                ("Bridge", state.Bridged),
+                ("Limit", state.Limiting)
             };
             for (var flag = 0; flag < states.Length; flag++)
             {

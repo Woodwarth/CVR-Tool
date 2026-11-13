@@ -1,4 +1,5 @@
 // Core / Input DSP
+// Module: Defines device models, channel state and the contracts shared by all backends.
 // Purpose: describe independent input gain, delay and eight peak EQ bands.
 // Units: milliseconds, hertz, decibels and dimensionless Q.
 // State: immutable snapshots shared by UI, MCP and backends.

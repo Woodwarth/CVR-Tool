@@ -1,4 +1,5 @@
 // Application / Extended identity decoder
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: decode the observed function-71 operating-time counter independently.
 // Units: unsigned little-endian minutes at offset 74 in a 93-byte payload.
 // State: the embedded firmware/model header must match the connected device.

@@ -1,4 +1,5 @@
 // Core / Routing — matrix cells, independent gain/mute and change plans.
+// Module: Defines device models, channel state and the contracts shared by all backends.
 // Purpose: define immutable application data and backend boundaries.
 // Input: explicit channel numbers and parameter values.
 // State: snapshots describe local or observed device settings.

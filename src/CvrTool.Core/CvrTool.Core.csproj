@@ -1,1 +1,3 @@
+<!-- Module: Defines device models, channel state and the contracts shared by all backends.
+     Build configuration for CvrTool.Core. -->
 <Project Sdk="Microsoft.NET.Sdk"/>

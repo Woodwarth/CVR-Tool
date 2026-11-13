@@ -216,6 +216,15 @@ internal static class CvrPeerChecks
         check(storedFir.Enabled && storedFir.Coefficients.Count==512 && storedFir.Coefficients[123]==.5 && storedFir.Name=="Synthetic FIR" && peer.Values[(43,0,0,1)].Length==2080,"512-tap FIR upload fragments and independent readback round-trip");
         check(service.GetFir(id,2) is {Enabled:false,Name:""},"FIR changes isolate other outputs");
         check(remoteService.GetDevicePresets(id).Slots.Count==16,"Fragmented 512-byte preset names are reassembled through IPC");
+        foreach (var count in new[] { 24, 40 })
+        {
+            var table = new byte[count * 32];
+            "Last"u8.CopyTo(table.AsSpan((count - 1) * 32));
+            peer.Values[(59,0,0,0)] = table;
+            var slots = remoteService.GetDevicePresets(id).Slots;
+            check(slots.Count == count && slots[^1].Name == "Last", $"Read all {count} names through IPC");
+        }
+        peer.Values[(59,0,0,0)] = new byte[512];
         check(remoteService.StoreDevicePreset(id,16,"Last slot").Confirmed && service.GetDevicePresets(id).Slots[15].Name=="Last slot","Preset command semantic ACK and slot-16 name readback are required");
         check(remoteService.RecallDevicePreset(id,16).Confirmed,"Preset recall requires semantic acknowledgement");
         check(remoteService.ClearDevicePresets(id).Confirmed && service.GetDevicePresets(id).Slots.All(s=>!s.Occupied),"Clear verifies all sixteen names empty");

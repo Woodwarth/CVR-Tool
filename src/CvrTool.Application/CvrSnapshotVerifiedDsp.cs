@@ -1,4 +1,5 @@
 // Application / Captured output controls
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: release only the observed gate, load-mode and FIR-bypass variants.
 // Units: active-low enable flags, signed gate dB and Low-Z/70V mode codes.
 // State: each setting is confirmed through fresh native settings, preserving other bytes.

@@ -1,4 +1,5 @@
 // MCP / Host lifecycle
+// Module: Exposes amplifier queries and control operations as MCP tools over stdio.
 // Purpose: run stdio tools against the shared application session.
 // Input: no mode flag is required; --session selects a local owner.
 // State: --host-session runs a headless shared owner for automation.
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using CvrTool.Application;
 using CvrTool.Core;
+using ModelContextProtocol.Protocol;
 
 namespace CvrTool.Mcp;
 
@@ -47,7 +49,13 @@ public static class McpHost
         }
         builder.Services.AddSingleton<IAmplifierBackend>(isolated ? new DemoBackend() : new SessionBackend(pipe));
         builder.Services.AddSingleton<AmplifierService>();
-        builder.Services.AddMcpServer().WithStdioServerTransport().WithToolsFromAssembly(typeof(AmplifierTools).Assembly);
-        await builder.Build().RunAsync();
+        await using var presence = new McpClientPresence(pipe);
+        builder.Services.AddMcpServer(options =>
+        {
+            if (!isolated) options.Handlers.NotificationHandlers =
+            [new(NotificationMethods.InitializedNotification, (_, _) => { presence.Start(); return ValueTask.CompletedTask; })];
+        }).WithStdioServerTransport().WithToolsFromAssembly(typeof(AmplifierTools).Assembly);
+        using var host = builder.Build();
+        await host.RunAsync();
     }
 }

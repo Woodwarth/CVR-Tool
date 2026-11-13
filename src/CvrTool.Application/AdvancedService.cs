@@ -1,4 +1,5 @@
 // Application / Output processing and preset use cases
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: share validated output EQ, FIR and sixteen-slot operations with UI/MCP.
 // Units: regular EQ units, 48 kHz FIR and one-based preset slots.
 // State: plans are immutable, single-use and tied to device revisions.

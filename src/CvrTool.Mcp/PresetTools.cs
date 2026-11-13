@@ -1,4 +1,5 @@
 // MCP / Preset tools — thin stdio adapters; all behavior lives in Application.
+// Module: Exposes amplifier queries and control operations as MCP tools over stdio.
 // Purpose: expose the shared application service over stdio MCP.
 // Input: typed tool arguments and explicit device identities.
 // State: the application session owns devices and revisions.

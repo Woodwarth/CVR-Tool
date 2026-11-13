@@ -1,4 +1,5 @@
 // Application / Managed update installation
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: stage verified packages beside the existing app and remember the active version.
 // Input: bounded ZIP/tar.gz archives; links and escaping paths are rejected.
 // State: installation completes before the version pointer is changed.

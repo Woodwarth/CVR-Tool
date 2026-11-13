@@ -1,4 +1,5 @@
 // Application / Session protocol
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: frame bounded JSON messages on a local user-only named pipe.
 // Input: backend calls from UI or MCP; no CVR network packets.
 // State: one owner process serializes mutations and revisions.

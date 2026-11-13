@@ -51,6 +51,28 @@ void Save(string name, int width = 1680, int height = 960)
 }
 PresetDocument Preset() { Click("☰   Presets"); return JsonSerializer.Deserialize<PresetDocument>(window.ExportSelectedPreset())!; }
 Layout(); Save("main-1004");
+// Browser status remains visible outside the pairing dialog.
+var browserStatusServer=(CvrTool.Web.BrowserControlServer)typeof(MainWindow).GetField("browserServer",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(window)!;
+Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · Off","Header shows stopped browser server");
+browserStatusServer.StartAsync(System.Net.IPAddress.Loopback,0).GetAwaiter().GetResult(); Layout();
+Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · On","Starting browser server updates the persistent header indicator");
+using(var browserStatusClient=new System.Net.Http.HttpClient())
+{
+    browserStatusClient.DefaultRequestHeaders.Authorization=new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",browserStatusServer.AccessKey);
+    browserStatusClient.DefaultRequestHeaders.Add("X-CVR-Client",new string('d',32));
+    browserStatusClient.GetAsync(browserStatusServer.Address+"/api/health").GetAwaiter().GetResult().EnsureSuccessStatusCode(); Layout();
+    Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · Connected","Connected browser is visible in the app header");
+    Press(Tagged<Button>("browser-control"));
+    var browserStatusWindow=window.OwnedWindows.Single();
+    Check(browserStatusWindow.GetLogicalDescendants().OfType<TextBlock>().Any(t=>t.Text?.Contains("1/1 browser connected")==true),"Pairing dialog shows the single occupied browser slot");
+    browserStatusWindow.Close(); Layout(); Save("main-web-active");
+    Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · Connected","Closing the pairing dialog keeps the active indicator visible");
+    browserStatusClient.PostAsync(browserStatusServer.Address+"/api/disconnect",null).GetAwaiter().GetResult(); Layout();
+    Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · On","Browser disconnect leaves the server active and waiting");
+}
+browserStatusServer.DisposeAsync().AsTask().GetAwaiter().GetResult(); Layout();
+Check(Tagged<Button>("browser-control").Content?.ToString()=="Browser control · Off","Stopping the server clears the active indicator");
+
 var fourChannelSize = Tagged<Border>("input-channel-A").Bounds.Size;
 Check(window.Icon is not null, "Window icon loads from embedded application assets");
 Check(All<TextBlock>().Count(t => t.Tag?.ToString()?.StartsWith("info-") == true) == 5, "Compact UI identity header keeps source documentation out of the interface");
@@ -65,7 +87,7 @@ Check(Preset().Inputs![0].GainDb == 0, "Main arrow-down changes gain by 0.5 dB")
 Check(All<Slider>().Count() == 4, "Four channel faders on Main");
 Check(All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("channel-meter-") == true) == 4 && All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("channel-clip-") == true) == 4, "Every channel fader has a meter and clip status");
 Check(All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("telemetry-") == true) == 16, "Four measurements per output");
-Check(All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("output-status-") == true) == 32, "Eight independent status flags per output");
+Check(All<Control>().Count(c => c.Tag?.ToString()?.StartsWith("output-status-") == true) == 36, "Nine independent status flags per output");
 var mute = Tagged<ToggleButton>("mute-output-A");
 Check(mute.Background is ISolidColorBrush brush && brush.Color == Color.Parse("#BE3044") && mute.GetLogicalDescendants().OfType<Control>().Any(c => c.GetType().Name == "SpeakerGlyph"), "Mute is red and includes a speaker symbol");
 Check(!All<Button>().Any(b => b.Content?.ToString() == "Apply levels") && Text("Inputs") && !Text("No live input data"), "Main has two sections and no Apply levels button");
@@ -320,7 +342,7 @@ window = new MainWindow(new AmplifierService(new TelemetryFixture())); window.Sh
 var clipped = Tagged<Control>("channel-clip-A").GetLogicalDescendants().OfType<TextBlock>().ToArray();
 var notClipped = Tagged<Control>("channel-clip-B").GetLogicalDescendants().OfType<TextBlock>().ToArray();
 Check(clipped.All(t => t.Foreground is ISolidColorBrush b && b.Color == Color.Parse("#FF566A")) && notClipped.All(t => t.Foreground is ISolidColorBrush b && b.Color != Color.Parse("#FF566A")), "Clip indicator and label turn red only on clipping");
-Check(Tagged<Control>("channel-clip-A").GetLogicalDescendants().OfType<StatusLed>().Single().Value == true && Tagged<Control>("channel-clip-B").GetLogicalDescendants().OfType<StatusLed>().Single().Value == false && Tagged<Control>("channel-clip-C").GetLogicalDescendants().OfType<StatusLed>().Single().Value is null && All<StatusLed>().Count() == 36, "Clipping and all output status bits use LEDs with distinct on/off/unknown states");
+Check(Tagged<Control>("channel-clip-A").GetLogicalDescendants().OfType<StatusLed>().Single().Value == true && Tagged<Control>("channel-clip-B").GetLogicalDescendants().OfType<StatusLed>().Single().Value == false && Tagged<Control>("channel-clip-C").GetLogicalDescendants().OfType<StatusLed>().Single().Value is null && All<StatusLed>().Count() == 40, "Clipping and all output status bits use LEDs with distinct on/off/unknown states");
 Check(Tagged<Control>("telemetry-A-0") is TextBlock a && a.Text == "42.0" && Tagged<Control>("telemetry-B-0") is TextBlock b && b.Text == "21.0", "Each output displays its own telemetry");
 Save("main-clipping-test-fixture"); window.Close();
 var liveFixture = new LiveDesktopFixture();

@@ -1,4 +1,5 @@
 // Application / Automatic CVR discovery
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: list supported devices from CVR identity broadcasts on the wired amp LAN.
 // Units: one bounded search per wired IPv4 interface every five seconds.
 // State: discovery shares local-port ownership with read-only snapshot polling.

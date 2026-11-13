@@ -1,4 +1,5 @@
 // Core / Output dynamics
+// Module: Defines device models, channel state and the contracts shared by all backends.
 // Purpose: describe per-output load mode, legacy bridge, per-output noise gate and limiters.
 // Units: volts at the output, integer ms, RMS release as an attack multiplier.
 // State: maximum voltages are read-only device limits; null gate threshold is unknown.

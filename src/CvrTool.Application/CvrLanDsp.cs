@@ -1,4 +1,5 @@
 // Application / CVR input DSP and telemetry
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: map bounded wire values into immutable application snapshots.
 // Units: ms, Hz, dB, Q, volts, amperes, ohms and degrees Celsius.
 // State: preserve unedited filter types, crossover records and reset bytes.

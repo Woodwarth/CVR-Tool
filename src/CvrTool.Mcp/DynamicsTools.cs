@@ -1,4 +1,5 @@
 // MCP / Output dynamics
+// Module: Exposes amplifier queries and control operations as MCP tools over stdio.
 // Purpose: inspect and plan mode, gate and RMS/peak limiter changes.
 // Units: output volts, ms, integer dB and RMS release multiplier.
 // State: one shared session; plans are revision-bound and single-use.

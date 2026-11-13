@@ -1,4 +1,5 @@
 // Core / Telemetry — nullable readings and status; null always means unknown.
+// Module: Defines device models, channel state and the contracts shared by all backends.
 // Purpose: define immutable application data and backend boundaries.
 // Input: explicit channel numbers and parameter values.
 // State: snapshots describe local or observed device settings.
@@ -14,7 +15,7 @@ public sealed record OutputStatus(
     bool? Clip = null,
     bool? Standby = null,
     bool? HighImpedance = null,
-    bool? Bridged = null);
+    bool? Bridged = null, bool? Limiting = null);
 /// <summary>Measurements for one channel, with explicit absence of live data.</summary>
 public sealed record OutputTelemetry(
     int Channel,
@@ -23,4 +24,4 @@ public sealed record OutputTelemetry(
     double? Current = null,
     double? LoadOhms = null,
     double? TemperatureC = null,
-    OutputStatus? Status = null);
+    OutputStatus? Status = null, double? OutputMeterDb = null, double? InputMeterDb = null, bool? InputClip = null);

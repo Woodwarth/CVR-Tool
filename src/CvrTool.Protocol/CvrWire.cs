@@ -1,4 +1,5 @@
 // Protocol / CVR wire framing
+// Module: Encodes CVR messages, reassembles replies and manages UDP exchanges.
 // Purpose: encode independent CVR requests and validate replies.
 // Units: packed little-endian fields; inner length is big-endian.
 // State: link bits are never used as a transaction identifier.

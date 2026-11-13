@@ -1,4 +1,5 @@
 // Application / Input state backend
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: store delay and EQ in the shared local session.
 // Units: delay ms, frequency Hz, gain dB, Q.
 // State: defensive snapshots and whole-device revisions.

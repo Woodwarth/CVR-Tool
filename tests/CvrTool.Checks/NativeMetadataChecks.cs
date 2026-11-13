@@ -28,8 +28,16 @@ static class NativeMetadataChecks
             ProcessingWire.Put(sync, 36 + 374, 8);
             ProcessingWire.Put(sync, 36, -3); ProcessingWire.Put(sync, 36 + 4, 1.25);
             sync[36 + 417] = 0xA5;
+            sync[2196] = 2;
+            new byte[] { 2, 1, 1, 226 }.CopyTo(sync, 2200);
+            ProcessingWire.Put(sync, 36 + 410 + 92, 125);
+            ProcessingWire.Put(sync, 36 + 410 + 28 + 16, -6);
             service.LoadPresetFile(id, "source.sd", sync);
             var metadata = service.GetNativePresetMetadata(id)!;
+            var channel = metadata.Channels[0];
+            check(channel.AnalogSourceCode == 2 && channel.Priority == new InputSourcePriority(2, 1, 1, -30) &&
+                channel.DynamicEq!.FrequenciesHz[0] == 125 && channel.DynamicEq.Bands[1].Points[0] == -6,
+                "Source priority and per-band dynamic EQ use the native channel offsets");
             check(metadata.PresetName == "Preset source" && metadata.Channels[0] is
                 { InputName: "Input label", SpeakerName: "Speaker label", InputMuted: true, SourceCode: 2, ConfiguredLoadOhms: 8 } &&
                 metadata.Channels[1].InputMuted == false, "Native labels, separate input mute, source code and configured load are decoded");

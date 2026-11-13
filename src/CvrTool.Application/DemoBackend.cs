@@ -1,4 +1,5 @@
 // Application / Demo session — shared state, snapshots and channel writes; no hardware.
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: keep device behavior shared between desktop and MCP.
 // Input: explicit operations validated at the application boundary.
 // State: revisions protect pending edits; backend owners serialize mutations.

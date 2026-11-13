@@ -1,4 +1,5 @@
 // Desktop / Update handoff
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: restart into a staged self-contained version after the old owner exits.
 // Input: managed installation pointer and explicit internal handoff arguments.
 // State: source builds keep their own executable; existing installs are retained.

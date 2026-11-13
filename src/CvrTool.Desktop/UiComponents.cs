@@ -1,4 +1,5 @@
 // Desktop / UI helpers — shared typography, spacing, cards and numeric editors.
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: present focused controls and forward edits to Application.
 // Input: user events and authoritative device snapshots.
 // State: local drafts never replace the shared backend.

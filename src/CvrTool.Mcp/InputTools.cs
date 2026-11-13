@@ -1,4 +1,5 @@
 // MCP / Input processing tools
+// Module: Exposes amplifier queries and control operations as MCP tools over stdio.
 // Purpose: inspect and edit input delay and eight-band EQ.
 // Units: milliseconds, hertz, decibels and Q; distance is a UI conversion.
 // State: preview/apply shares whole-device revisions with all other edits.

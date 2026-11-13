@@ -1,4 +1,5 @@
 // Desktop / GitHub updates
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: explicitly check, download, verify and restart into a native release.
 // Input: fixed repository metadata and the current platform/version.
 // State: cancellation leaves the current app intact; one update dialog is allowed.

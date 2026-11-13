@@ -1,4 +1,5 @@
 // Application / Native CVR preset codec
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: read/write the B-series 118/119 .sd layouts evidenced by local exports.
 // Units: packed 515-byte channel records and 512-tap FIR blocks.
 // State: opaque source bytes preserve settings not exposed by this application.

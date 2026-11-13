@@ -15,7 +15,8 @@ static class BrowserServerChecks
     public static async Task Run(Action<bool, string> check)
     {
         var backend = new DemoBackend(); var desktop = new AmplifierService(backend);
-        await using var browser = new BrowserControlServer(desktop);
+        var clock = new BrowserClock();
+        await using var browser = new BrowserControlServer(desktop, clock);
         await browser.StartAsync(IPAddress.Loopback, 0);
         var firstKey = browser.AccessKey;
         using var client = new HttpClient { BaseAddress = new(browser.Address!) };
@@ -23,8 +24,25 @@ static class BrowserServerChecks
         check((await client.GetAsync("/api/devices")).StatusCode == HttpStatusCode.Unauthorized, "Browser settings require the per-session access key");
         check((await client.GetAsync("/api/health")).StatusCode == HttpStatusCode.Unauthorized, "Connection heartbeat requires the private session key");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", firstKey);
+        client.DefaultRequestHeaders.Add("X-CVR-Client", new string('a',32));
         var health = await client.GetFromJsonAsync<JsonElement>("/api/health");
         check(health.GetProperty("status").GetString()=="ok" && browser.ConnectionUrl==browser.Address+"/#"+firstKey,"Authenticated heartbeat and pairing link describe the running browser session");
+        check(browser.IsRunning && browser.ClientConnected,"Server status distinguishes a running listener and an active browser");
+        using (var second = new HttpClient { BaseAddress = new(browser.Address!) })
+        {
+            second.DefaultRequestHeaders.Authorization=new AuthenticationHeaderValue("Bearer",firstKey);
+            second.DefaultRequestHeaders.Add("X-CVR-Client",new string('b',32));
+            check((int)(await second.GetAsync("/api/health")).StatusCode==423,"Second browser cannot acquire an occupied session");
+            check((int)(await second.PostAsJsonAsync("/api/change",new {deviceId="demo-1004",operation="output",channel=1,value=-8})).StatusCode==423 && desktop.GetDevice("demo-1004").Outputs[0].GainDb==0,"Second browser cannot change settings");
+            await second.PostAsync("/api/disconnect",null);
+            check((await client.GetAsync("/api/health")).IsSuccessStatusCode,"A different browser cannot release the owner");
+            await client.PostAsync("/api/disconnect",null);
+            check(!browser.ClientConnected,"Explicit disconnect clears the active-browser indicator");
+            check((await second.GetAsync("/api/health")).IsSuccessStatusCode,"A new browser may connect after owner disconnect");
+            check((int)(await client.GetAsync("/api/devices")).StatusCode==423,"Previous browser cannot read another owner's session");
+            clock.Advance(TimeSpan.FromSeconds(13));
+            check((await client.GetAsync("/api/health")).IsSuccessStatusCode,"A lost browser lease expires without waiting in the test");
+        }
         var devices = await client.GetFromJsonAsync<JsonElement>("/api/devices");
         check(devices.GetArrayLength() == 3, "Browser lists the same three demo devices as Desktop");
         using (var wrongOrigin = new HttpRequestMessage(HttpMethod.Get, "/api/devices"))
@@ -53,10 +71,16 @@ static class BrowserServerChecks
         check(NativePresetCodec.Decode(file).Outputs.Count==4,"Browser preset download is a valid native .sd file");
         check((await client.GetStringAsync("/app.js")).Contains("sessionStorage") && (await client.GetStringAsync("/style.css")).Contains("@media"),"Browser controls ship local scripts and responsive styles");
         await browser.DisposeAsync();
-        check(browser.Address is null && browser.AccessKey=="","Stopping browser control clears address and credentials");
+        check(browser.Address is null && browser.AccessKey=="" && !browser.IsRunning && !browser.ClientConnected,"Stopping browser control clears address and credentials");
         await browser.StartAsync(IPAddress.Loopback,0);
         check(browser.AccessKey!=firstKey,"Restarting browser control rotates the access key");
         check((await client.GetAsync(browser.Address+"/api/health")).StatusCode==HttpStatusCode.Unauthorized,"A previous connection key cannot report a new server session as connected");
         check(!BrowserControlServer.IsLocalAddress(IPAddress.Any) && !BrowserControlServer.IsLocalAddress(IPAddress.Parse("8.8.8.8")),"Browser listener refuses wildcard and public bind addresses");
+    }
+    private sealed class BrowserClock : TimeProvider
+    {
+        private DateTimeOffset utc=DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => utc;
+        public void Advance(TimeSpan elapsed) => utc+=elapsed;
     }
 }

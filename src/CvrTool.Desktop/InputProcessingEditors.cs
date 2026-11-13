@@ -1,4 +1,5 @@
 // Desktop / Input processing editors
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: edit input delay, EQ enable state and eight EQ bands.
 // Units: delay ms/metres at 343 m/s; EQ Hz, dB and Q.
 // State: changes are applied only through the shared Application service.
@@ -36,21 +37,16 @@ public sealed partial class MainWindow
     private Button DelayControl(int channel)
     {
         var input = service.GetInputProcessing(deviceId, channel);
-        var label = new StackPanel { Spacing = 4 };
-        label.Children.Add(Centered("Delay", 13));
-        label.Children.Add(Centered(AmplifierService.DelayMeters(input.DelayMs).ToString("0.00") + " m", 12));
-        label.Children.Add(Centered(input.DelayMs.ToString("0.00") + " ms", 12, Muted));
-        var button = new Button { Content = label, Background = Avalonia.Media.Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), Tag = "input-delay-" + channel, Height = 72, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(4) };
+        var delay = Centered($"{AmplifierService.DelayMeters(input.DelayMs):0.00} m\n{input.DelayMs:0.00} ms", 12, Accent);
+        var button = new Button { Content = OutputBlockContent("Delay", delay), Background = Avalonia.Media.Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), Tag = "input-delay-" + channel, Width = OutputBlockWidth, Height = OutputBlockHeight, HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(6, 8), CornerRadius = new CornerRadius(3) };
         button.Click += (_, _) => OpenDelayEditor(channel);
         return button;
     }
     private Button InputEqControl(int channel)
     {
         var input = service.GetInputProcessing(deviceId, channel);
-        var label = new StackPanel { Spacing = 6 };
-        label.Children.Add(Centered("EQ", 13));
-        label.Children.Add(Centered(input.EqEnabled ? "On" : "Off", 13, input.EqEnabled ? Accent : Muted));
-        var button = new Button { Content = label, Background = Avalonia.Media.Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), Tag = "input-eq-" + channel, Height = 72, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(4) };
+        var enabled = Centered(input.EqEnabled ? "On" : "Off", 12, input.EqEnabled ? Accent : Muted);
+        var button = new Button { Content = OutputBlockContent("EQ", enabled), Background = Avalonia.Media.Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), Tag = "input-eq-" + channel, Width = OutputBlockWidth, Height = OutputBlockHeight, HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(6, 8), CornerRadius = new CornerRadius(3) };
         button.Click += (_, _) => OpenInputEqEditor(channel);
         return button;
     }

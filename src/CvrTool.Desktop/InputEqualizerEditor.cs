@@ -1,4 +1,5 @@
 // Desktop / Input EQ editor
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: combine a draggable response graph and reference-style band cards.
 // Units: Hz, dB and Q; the graph explicitly previews at 48 kHz.
 // State: one window per input; drafts apply through revision-bound plans.
@@ -24,12 +25,15 @@ public sealed partial class MainWindow
         var input = (output ? service.GetOutputProcessing(editedId,channel) : service.GetInputProcessing(editedId, channel));
         var draft = input.Bands.ToArray();
         var content = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 14 };
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 16 };
         header.Children.Add(Heading(side+" EQ · Channel " + channel));
         var enabled = new CheckBox { Content = input.EqEnabled ? "EQ On" : "EQ Off", IsChecked = input.EqEnabled, Tag = "input-eq-enabled" };
         AddColumn(header, enabled, 1);
         content.Children.Add(header);
         var graph = new EqualizerGraph { HighPass = input.HighPass, LowPass = input.LowPass, Bands = draft, EqEnabled = input.EqEnabled, Tag = output ? "output-eq-graph" : "input-eq-graph", Height = 340 };
+        var phase = new CheckBox { Content = "Phase (°)", Tag = "eq-phase" };
+        phase.IsCheckedChanged += (_, _) => { graph.ShowPhase = phase.IsChecked == true; graph.InvalidateVisual(); };
+        AddColumn(header, phase, 2);
         Grid.SetRow(graph, 1);
         content.Children.Add(graph);
         var cards = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("*", 10))), ColumnSpacing = 8 };

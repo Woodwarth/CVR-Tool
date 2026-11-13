@@ -33,3 +33,24 @@ input EQ and supported crossovers, output polarity/mode/gate/FIR bypass,
 operational controls and native preset export. Unverified live operations
 remain protected. Limiter/bridge editing and FIR coefficient import remain
 in Desktop; reset is unavailable through the web server.
+
+## Local browser-control changes after 0.7.5
+
+Browser control now reserves one logical page session. Every authenticated API
+request carries a random per-page X-CVR-Client identifier; a second page receives
+423 without device access. The owner's heartbeat renews a twelve-second lease.
+Explicit disconnect releases it, pagehide attempts release, and an abandoned
+owner expires. Parallel HTTP requests from the same page remain valid. The
+write queue rechecks ownership before applying, so a released page cannot leave
+queued commands for a new owner. This does not restrict MCP or Desktop sessions.
+
+Input range events update their readouts immediately and coalesce pending values
+per channel. One gain request runs at a time, at a bounded cadence, with the same
+fresh revision/readback checks as all other clients. The last position is flushed
+on release; disconnected, failed, superseded-device and expired-access queues
+are discarded. Reconnection never replays them. Other commands report that the gain operation must finish first instead of
+silently dropping an edit.
+
+Desktop's header shows Off, On, or Connected even when the pairing dialog is
+closed. Status changes distinguish the listener from its occupied 0/1 slot.
+Shutdown runs the host's asynchronous drain away from the UI context.

@@ -1,4 +1,5 @@
 // Application / Session owner
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: expose one backend instance to all local clients.
 // Input: framed backend operations over a current-user-only pipe.
 // State: backend writes own revision checks; notifications follow successful mutations.
@@ -15,13 +16,19 @@ public sealed class SessionHost : IDisposable
     private readonly string pipeName;
     private readonly CancellationTokenSource shutdown = new();
     private readonly Task listener;
+    private readonly McpClientPresenceHost mcpPresence;
     public event Action? Changed;
+    public event Action? McpClientsChanged;
+    public int McpClientCount => mcpPresence.Count;
     public SessionHost(IAmplifierBackend backend, string? pipeName = null)
     {
         this.backend = backend;
         this.pipeName = SessionDefaults.Resolve(pipeName);
         // Reserve ownership synchronously so a second owner fails before accepting UI writes.
         var first = CreatePipe();
+        try { mcpPresence = new McpClientPresenceHost(pipeName); }
+        catch { first.Dispose(); shutdown.Dispose(); throw; }
+        mcpPresence.Changed += () => McpClientsChanged?.Invoke();
         listener = Task.Run(() => ListenAsync(first));
     }
     private NamedPipeServerStream CreatePipe() => new(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
@@ -84,6 +91,7 @@ public sealed class SessionHost : IDisposable
             "fir" => FirSnapshot(Id(),Channel()),
             "apply-fir-enabled" => advanced!.ApplyFirEnabled(Id(),Channel(),args.GetProperty("Enabled").GetBoolean(),Revision()),
             "apply-fir" => advanced!.ApplyFir(Id(),args.GetProperty("State").Deserialize<FirState>()!,Revision()),
+            "inspect-protocol" => ((INativePresetMetadataSource)backend).InspectProtocol(Id(), args.GetProperty("Function").GetInt32(), Channel(), args.GetProperty("Segment").GetInt32()),
             "native-metadata" => new NativeMetadataReply((backend as INativePresetMetadataSource)?.GetNativePresetMetadata(Id())),
             "capture-preset" => advanced!.CapturePreset(Id()),
             "apply-preset" => advanced!.ApplyPreset(Id(),args.GetProperty("Preset").Deserialize<PresetDocument>()!,Revision()),
@@ -128,6 +136,7 @@ public sealed class SessionHost : IDisposable
     private Revisioned<OutputDynamicsState> DynamicsSnapshot(string id,int channel) {var read=((IAdvancedAmplifierBackend)backend).GetOutputDynamics(id,channel);return new(read.State,read.Revision);}
     public void Dispose()
     {
+        mcpPresence.Dispose();
         shutdown.Cancel();
         try
         {

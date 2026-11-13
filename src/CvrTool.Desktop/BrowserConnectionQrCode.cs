@@ -1,4 +1,5 @@
 // Desktop / Local browser pairing QR
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: render the complete private connection URL without an external service.
 // Units: black/white QR modules including the encoder's four-module quiet zone.
 // State: clear the modules when browser control stops or its access key changes.

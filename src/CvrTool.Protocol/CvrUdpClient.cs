@@ -1,4 +1,5 @@
 // Protocol / Explicit CVR connection
+// Module: Encodes CVR messages, reassembles replies and manages UDP exchanges.
 // Purpose: serialize exchanges with one manually selected amplifier.
 // Input: validated IPv4 target; no broadcasts, DNS or automatic retries.
 // State: fragments are acknowledged, bounded and reassembled before validation.
@@ -28,6 +29,12 @@ public sealed class CvrUdpClient : IDisposable
     public byte[] Read(byte function, byte channel = 0, byte segment = 0, byte side = 0, byte[]? requestBody = null) => Exchange(function, channel, segment, side, requestBody ?? [], 2, 0).GetAwaiter().GetResult();
     private byte[]? identityBody;
     public byte[]? ObservedIdentity => Volatile.Read(ref identityBody)?.ToArray();
+
+    public byte[] ReadAllocation() =>
+        Exchange(81, 0, 0, 0, [], 2, 0, controllerTable: true).GetAwaiter().GetResult();
+
+    public byte[] ReadPresetNames() =>
+        Exchange(59, 0, 0, 0, new byte[34], 2, 0, controllerTable: true).GetAwaiter().GetResult();
 
     public byte[] ReadSnapshot(byte function)
     {
@@ -71,7 +78,7 @@ public sealed class CvrUdpClient : IDisposable
         }
         finally { serial.Release(); }
     }
-    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side, byte[] body, byte sendStatus, byte responseStatus, bool observedBulk = false)
+    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side, byte[] body, byte sendStatus, byte responseStatus, bool observedBulk = false, bool controllerTable = false)
     {
         // All backend operations hold their own gate; the transport also serializes standalone callers.
         await serial.WaitAsync().ConfigureAwait(false);
@@ -122,7 +129,15 @@ public sealed class CvrUdpClient : IDisposable
                 var message = assembly.Accept(packet);
                 if (message is null) continue;
                 ObserveIdentity(message);
-                if (observedBulk)
+                if (controllerTable)
+                {
+                    bool echoed = message.Status == 0 && message.Channel == 0 && message.Segment == 0;
+                    bool bulk = message.Status == 1 && message.Channel == 32 && message.Segment == 10;
+                    bool validSize = function == 81 ? message.Body.Length == 40 : message.Body.Length is 512 or 768 or 1280;
+                    if (message.Function != function || message.Side != 0 || !(echoed || bulk) ||
+                        !validSize) continue;
+                }
+                else if (observedBulk)
                 {
                     var validLength = function == 83 ? message.Body.Length == 1 : function == 71 ? message.Body.Length == 93 : function == 0 ? message.Body.Length is 75 or 79 :
                         function == 27 ? message.Body.Length is 2232 or 2687 :

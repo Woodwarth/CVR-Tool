@@ -1,4 +1,5 @@
 // Application / GitHub release updates
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: find stable releases and download the native package with integrity checks.
 // Input: public metadata from the fixed project repository; no account/token needed.
 // State: checks are explicit; downloading never changes the running installation.

@@ -29,9 +29,12 @@ static class SnapshotPeerChecks
         check(service.GetInputProcessing(id, 1).GainDb == 0 && service.GetRouting(id).Cells.Count == 16, "Inputs and full matrix come from the native snapshot");
         var telemetry = service.GetTelemetry(id);
         check(telemetry[0] is { TemperatureC: 42, Voltage: 40, Current: 5, LoadOhms: 8, LevelDbFs: null } && telemetry[0].Status!.Clip == true, "Observed telemetry displays known measurements without inventing dBFS");
+        check(Math.Abs(telemetry[0].InputMeterDb!.Value + 20) < .001 && telemetry[0].InputClip == false && telemetry[1].InputMeterDb == -40 && telemetry[1].InputClip == true, "Independent input signal and active-low clip follow each channel");
+        check(telemetry[0].OutputMeterDb == Math.Clamp(20 * Math.Log10(40 / Math.Max(1, service.GetOutputDynamics(id,1).Rms.MaximumVolts)), -40, 0), "Output meter references the channel RMS maximum");
         check(device.Readings.Power == 25 && device.Readings.StatusCodes![0] == 5, "Power value and raw status provenance remain available");
         check(!service.GetFir(id, 1).CoefficientsKnown && service.GetFir(id, 1).Coefficients.Count == 0, "Missing FIR coefficients are explicitly unknown");
-        check(service.GetDevicePresets(id).Slots.Count == 0, "Unobserved slot names are not fabricated");
+        check(service.GetNativePresetMetadata(id)?.Allocation?[0].LoadOhms == 8, "Allocation reads retain configured output load");
+        check(service.GetDevicePresets(id).Slots is { Count: 24 } slots && slots[23].Name == "Stage", "Live preset names follow the received slot count");
         check(service.ExportNativePreset(id).SequenceEqual(peer.Sync), "Known native settings can be backed up exactly without synthesized FIR");
         try { service.ApplyOutputProcessing(service.PlanOutputProcessing(new(id, 1, EqEnabled: false)).Id); throw new Exception("Unverified output EQ accepted"); }
         catch (NotSupportedException) { check(true, "Unverified output EQ stays protected before any write"); }
@@ -39,6 +42,7 @@ static class SnapshotPeerChecks
         using var host = new SessionHost(backend, pipe);
         var remote = new AmplifierService(new SessionBackend(pipe));
         check(remote.GetDevice(id).Readings!.ReadOnly && remote.GetInputProcessing(id, 1).Bands.Count == 8, "Shared IPC exposes the same live snapshot and read-only mode");
+        check(remote.InspectProtocol(id,59,1,0).Contains("24 entries") && remote.InspectProtocol(id,16,1,0).Contains("protected"), "IPC inspection reads the preset table and never issues reset");
         check(SpinWait.SpinUntil(() => peer.Confirmations > 0, 1000) && peer.Writes == 0 && peer.UnexpectedQueries == 0, "Only bulk reads, transport ACKs and empty status-3 confirmation are sent");
         check(service.GetDevice(id).Readings is { CanSetDisplayLock: true, CanSetStandby: true }, "Live mode advertises the two verified operational controls");
         check(service.SetControlState(id, displayLocked: true) == new DeviceControlState(true, false, Wink: false), "Live display lock is confirmed through fresh full settings");
@@ -294,6 +298,20 @@ static class SnapshotPeerChecks
                     if (message.Status == 1) { Interlocked.Increment(ref Writes); continue; }
                     if (message is { Function: 27, Status: 3, Body.Length: 0 })
                     { Interlocked.Increment(ref Confirmations); continue; }
+                    if (message is { Function: 81, Status: 2, Body.Length: 0 })
+                    {
+                        var allocation = new byte[40];
+                        BitConverter.GetBytes(8f).CopyTo(allocation, 8);
+                        await Send(new(81, 1, 32, 10, 0, allocation), received.RemoteEndPoint);
+                        continue;
+                    }
+                    if (message is { Function: 59, Status: 2, Body.Length: 34 } && message.Body.All(b => b == 0))
+                    {
+                        var table = new byte[768];
+                        "Stage"u8.CopyTo(table.AsSpan(23 * 32));
+                        await Send(new(59, 1, 32, 10, 0, table), received.RemoteEndPoint);
+                        continue;
+                    }
                     if (message.Status != 2 || message.Function is not (0 or 6 or 27 or 71))
                     { Interlocked.Increment(ref UnexpectedQueries); continue; }
                     await socket.SendAsync(Convert.FromHexString("03D9000000C201010100"), received.RemoteEndPoint, stop.Token);
@@ -325,6 +343,8 @@ static class SnapshotPeerChecks
                         var data = new byte[92];
                         for (var i = 0; i < 4; i++)
                         {
+                            BitConverter.GetBytes(i == 0 ? 0.1f : 0f).CopyTo(data, 56 + i * 4);
+                            data[88 + i] = (byte)(i == 1 ? 0 : 1);
                             BitConverter.GetBytes(42f + i).CopyTo(data, i * 4);
                             BitConverter.GetBytes(40f).CopyTo(data, 20 + i * 4);
                             BitConverter.GetBytes(5f).CopyTo(data, 36 + i * 4);

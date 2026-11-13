@@ -1,4 +1,5 @@
 // Application / Local dynamics model
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: store per-output load mode, gate/limiters and legacy paired bridge.
 // Units: output volts, ms, dB and RMS release multiplier.
 // State: mutations and bulk restore share the backend revision and gate.

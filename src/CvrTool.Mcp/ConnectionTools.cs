@@ -1,4 +1,5 @@
 // MCP / Connections
+// Module: Exposes amplifier queries and control operations as MCP tools over stdio.
 // Purpose: connect the shared application owner to an explicitly selected CVR peer.
 // Input: literal unicast IPv4 and local interface; no discovery.
 // State: sockets belong to the desktop or headless session, not the MCP client.

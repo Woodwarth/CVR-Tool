@@ -1,4 +1,5 @@
 // Application / Packed output dynamics
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: translate observed limiter blocks and native channel records.
 // Units: LE shorts/floats, volts, ms; active-low bypass/bridge, active-high RMS auto.
 // State: encode preserves read-only maximum voltage and unrelated bytes.

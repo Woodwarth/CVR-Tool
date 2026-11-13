@@ -1,4 +1,5 @@
 // Protocol / Bounded reply assembly
+// Module: Encodes CVR messages, reassembles replies and manages UDP exchanges.
 // Purpose: retain fragmented replies while unrelated announcements arrive.
 // Units: at most four messages of at most 64 fragments, each at most 450 bytes.
 // State: duplicate fragments must match; complete corrupt messages are discarded.

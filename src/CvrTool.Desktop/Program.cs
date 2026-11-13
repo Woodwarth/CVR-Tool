@@ -1,4 +1,5 @@
 // Desktop / Process entry
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: open the UI or serve its integrated MCP stdio endpoint.
 // Input: --mcp forwards to the shared MCP host; --session selects the owner pipe.
 // State: normal UI and AI clients operate on one backend instance.

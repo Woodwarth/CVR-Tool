@@ -526,3 +526,22 @@ remained unchanged. Physical device names now require 1–31 ASCII characters;
 local demo names retain their 32-character limit. Other firmware/model limits
 and persistence after a power cycle remain unverified. ID coverage stays 31/38
 (82%), with partial evidence per function.
+## Offline controller comparison and capture checks
+
+These are receive layouts in the multi-model controller. For each capture, record the model, side, channel, function and reassembled payload length. Match values against the controller UI and the full-settings read before assigning a layout to a DSP model.
+
+| ID | Controller interpretation | Hardware comparison |
+| --- | --- | --- |
+| 43 | 512 binary32 FIR taps, optionally preceded by a 32-byte name (2048/2080 bytes). The controller derives displayed FIR phase from the complex frequency response. | Open one output FIR and compare name and taps with its exported file. |
+| 50 | A bridge flag addressed by output pair. | Compare both members in a settings read before/after switching one pair. |
+| 51 | Channel copy data; the receiver selects between two channel structures by length. | Capture a channel copy and compare channel and length before assigning fields. |
+| 52 | Output EQ accepts ten or seven packed 14-byte filter records followed by a bypass byte (141/99 bytes). Input uses ten. | Open one input EQ and one output EQ, record side and length and compare HP/LP positions with the full settings. |
+| 53 | Dynamic EQ has a 21-byte layout (three int16 times, knee byte, three float points, gain and bypass bytes) and a 105-byte layout (three arrays of four int16 times, four knees, sixteen float points, three float frequencies, bypass byte). | Match payload size, channel, displayed times, frequencies and bypass to a single editor read. |
+| 54/55 | Peak/RMS limiter block; separate from the individual parameter commands. | Compare complete returned blocks with settings bytes and the existing individual-parameter captures. |
+| 57 | Speaker data; the receiver recognizes several model-specific lengths. | Match a captured payload with the matching controller profile before decoding. |
+| 59 | Mode 0 requests names. Received name tables have 16, 24 or 40 fixed 32-byte entries. UI slots are one-based; store/recall encode zero-based indices. The same receive ID also carries a 34-byte scenario record or 97-byte three-name record. | Open the slot selector, record visible slot range and compare first/last names with the table. UI visibility may be model-specific. |
+| 79 | Analog input type, one byte, addressed by input channel. | Compare the returned value with the displayed source type. |
+| 80 | Input priority, four bytes: primary, secondary, backup-enabled (1), signed threshold. | Compare input channel, both source names and threshold against settings. |
+| 81 | Allocation, 40 bytes: four mode bytes, four sensitivity bytes, four binary32 load values and four binary32 voltages, indexed by output. | Compare configured values per output, separately from telemetry. |
+
+Reset remains protected. Additional IDs in this offline comparison are multi-model candidates pending evidence on target hardware.

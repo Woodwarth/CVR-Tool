@@ -1,4 +1,5 @@
 // Desktop / Browser control lifecycle
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: start the embedded iPad/LAN interface and show its connection link.
 // Units: selected local IPv4 address and TCP port 8787.
 // State: explicitly enabled per desktop session; closing the app stops the server.
@@ -20,6 +21,21 @@ public sealed partial class MainWindow
 {
     private BrowserControlServer? browserServer;
     private Window? browserWindow;
+    private readonly Button browserStatusButton = new()
+    {
+        Content = "Browser control · Off", Tag = "browser-control", VerticalAlignment = VerticalAlignment.Center
+    };
+
+    private void UpdateBrowserStatus()
+    {
+        var running = browserServer?.IsRunning == true;
+        var connected = browserServer?.ClientConnected == true;
+        browserStatusButton.Content = "Browser control · " + (connected ? "Connected" : running ? "On" : "Off");
+        browserStatusButton.Foreground = running ? Accent : Muted;
+        browserStatusButton.BorderBrush = running ? Accent : Line;
+        browserStatusButton.Background = Avalonia.Media.Brush.Parse(running ? "#12362F" : "#182129");
+        ToolTip.SetTip(browserStatusButton, running ? $"Server active · {(connected ? "1/1 browser connected" : "0/1 browsers connected")}" : "Browser server stopped");
+    }
 
     private void OpenBrowserControl()
     {
@@ -57,7 +73,7 @@ public sealed partial class MainWindow
             link.Text = server.ConnectionUrl ?? "";
             qr.SetConnectionUrl(server.ConnectionUrl);
             pairing.IsVisible = running;
-            message.Text = running ? "Running · The connection link grants control. Keep it private." : "Stopped · Start to allow local browser access.";
+            message.Text = running ? (server.ClientConnected ? "Running · 1/1 browser connected" : "Running · Waiting for browser (0/1)") : "Stopped · Start to allow local browser access.";
         }
         start.Click += async (_, _) =>
         {
@@ -74,7 +90,9 @@ public sealed partial class MainWindow
         content.Children.Add(Text("Allow private-network access if Windows asks. Internet access is not required. This does not change amplifier discovery.", 12, Muted));
         browserWindow = EditorWindow("Browser control · iPad", new ScrollViewer { Content = content, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }, 760, 650);
         browserWindow.MinWidth = 680;
-        browserWindow.Closed += (_, _) => browserWindow = null;
+        void StatusChanged() => Dispatcher.UIThread.Post(() => { if (browserWindow is not null) Refresh(); });
+        server.StatusChanged += StatusChanged;
+        browserWindow.Closed += (_, _) => { server.StatusChanged -= StatusChanged; browserWindow = null; };
         Refresh(); browserWindow.Show(this);
     }
 
@@ -83,6 +101,8 @@ public sealed partial class MainWindow
         // Backend writes from the browser invalidate and refresh the same desktop state.
         browserServer = new BrowserControlServer(service);
         browserServer.Changed += () => Dispatcher.UIThread.Post(ReloadSession);
+        browserServer.StatusChanged += () => Dispatcher.UIThread.Post(UpdateBrowserStatus);
+        UpdateBrowserStatus();
         Closed += (_, _) => browserServer.DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
 }

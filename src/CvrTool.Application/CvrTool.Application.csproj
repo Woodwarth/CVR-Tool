@@ -1,3 +1,5 @@
+<!-- Module: Coordinates device sessions, validates DSP changes and reads native presets.
+     Build configuration for CvrTool.Application. -->
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../CvrTool.Core/CvrTool.Core.csproj"/>

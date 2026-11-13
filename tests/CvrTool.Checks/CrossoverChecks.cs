@@ -43,6 +43,8 @@ internal static class CrossoverChecks
             }
             catch (ArgumentOutOfRangeException) { check(true, "Invalid crossover cutoff/type rejected"); }
         }
+        check(Math.Abs(CrossoverResponse.Transfer(new(1000, 0, true), true, 1000).Phase - Math.PI / 2) < 1e-9, "BW12 high-pass leads by 90 degrees at cutoff");
+        check(Math.Abs(CrossoverResponse.Transfer(new(1000, 0, true), false, 1000).Phase + Math.PI / 2) < 1e-9, "BW12 low-pass lags by 90 degrees at cutoff");
         check(Math.Abs(CrossoverResponse.GainDb(new(1000, 4, true), false, 1000) + 3.010299956639812) < 1e-9, "Butterworth cutoff is -3.0103 dB");
         check(Math.Abs(CrossoverResponse.GainDb(new(1000, 6, true), true, 1000) + 6.020599913279624) < 1e-9, "Linkwitz-Riley cutoff is -6.0206 dB");
         check(Math.Abs(CrossoverResponse.GainDb(new(1000, 1, true), false, 1000) + 4.771212547196624) < 1e-9, "Second-order phase-normalized Bessel cutoff matches its analytic polynomial");

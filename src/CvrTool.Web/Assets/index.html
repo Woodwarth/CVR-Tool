@@ -1,4 +1,6 @@
 <!doctype html>
+<!-- Module: Serves the local browser interface and routes authenticated requests to the shared session.
+     Defines the browser page and loads its styles and controls. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -10,39 +12,56 @@
   <body>
     <header>
       <strong>CVR Tool</strong><span>Browser control</span
-      ><button id="connect">Access key</button>
+      ><button id="connect">Access key</button
+      ><button id="disconnect">Disconnect</button>
     </header>
-    <aside id="app-connection" data-state="connecting" role="status" aria-live="polite" aria-atomic="true">
+    <aside
+      id="app-connection"
+      data-state="connecting"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <strong id="connection-title">Connecting to desktop app…</strong>
       <span id="connection-detail">Waiting for a fresh connection.</span>
     </aside>
-    <main>
-      <fieldset id="controls" disabled>
-      <label class="device"
-        >Device
-        <select id="devices" aria-label="Device"></select
-      ></label>
-      <section id="identity"></section>
-      <nav>
-        <button data-tab="Main" class="active">Main</button
-        ><button data-tab="Inputs">Inputs</button
-        ><button data-tab="Outputs">Outputs</button
-        ><button data-tab="Presets">Presets</button>
-      </nav>
-      <p id="status" role="status">
-        Connect using the link shown in the desktop app.
-      </p>
-      <section id="page"></section>
-      </fieldset>
-    </main>
+    <fieldset id="controls" disabled>
+      <div class="app-layout">
+        <aside class="device-sidebar">
+          <h2>Devices</h2>
+          <select id="devices" aria-label="Device"></select>
+          <div id="device-list"></div>
+          <small>Shared desktop session</small>
+        </aside>
+        <main>
+          <section id="identity"></section>
+          <nav>
+            <button data-tab="Main" class="active">⌂ Main</button>
+            <button data-tab="Inputs">◉ Inputs</button>
+            <button data-tab="Outputs">◖ Outputs</button>
+            <button data-tab="Presets">☰ Presets</button>
+          </nav>
+          <p id="status" role="status">
+            Connect using the link shown in the desktop app.
+          </p>
+          <section id="page"></section>
+        </main>
+      </div>
+    </fieldset>
     <dialog id="editor">
       <form method="dialog">
         <h2 id="editor-title"></h2>
-        <p id="editor-connection" class="connection-warning hidden" role="alert"></p>
+        <p
+          id="editor-connection"
+          class="connection-warning hidden"
+          role="alert"
+        ></p>
         <fieldset id="editor-controls"><div id="editor-body"></div></fieldset>
         <p id="editor-error" role="alert"></p>
         <div class="actions">
-          <fieldset id="editor-commit"><button id="apply" type="button">Apply</button></fieldset>
+          <fieldset id="editor-commit">
+            <button id="apply" type="button">Apply</button>
+          </fieldset>
           <button value="cancel">Cancel</button>
         </div>
       </form>

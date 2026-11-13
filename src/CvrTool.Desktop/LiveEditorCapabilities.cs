@@ -1,4 +1,5 @@
 // Desktop / Verified live editor controls
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: permit only captured command variants while retaining protected viewers.
 // Units: native dB/ms/Hz/Q fields and active-low bypass controls.
 // State: capability plus a fresh connection is required; unsupported controls stay disabled.

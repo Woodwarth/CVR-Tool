@@ -1,4 +1,5 @@
 // Application / Session client
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: implement the backend contract against the running application session.
 // Input: strongly typed operations; replies preserve validation failures.
 // State: no private device copy and no independent revision counters.
@@ -71,6 +72,8 @@ public sealed class SessionBackend(string? pipeName = null) : IAmplifierBackend,
     public FirState ApplyFir(string id,FirState state,long revision)=>Call<FirState>("apply-fir",new{Id=id,State=state,Revision=revision});
     public (OutputDynamicsState State,long Revision) GetOutputDynamics(string id,int channel) {var read=Call<Revisioned<OutputDynamicsState>>("output-dynamics",new{Id=id,Channel=channel});return(read.State,read.Revision);}
     public OutputDynamicsState ApplyOutputDynamics(OutputDynamicsChange change,long revision)=>Call<OutputDynamicsState>("apply-output-dynamics",new{Change=change,Revision=revision});
+    public string InspectProtocol(string id, int function, int channel, int segment)
+        => Call<string>("inspect-protocol", new { Id = id, Function = function, Channel = channel, Segment = segment });
     public NativePresetMetadata? GetNativePresetMetadata(string id) => Call<NativeMetadataReply>("native-metadata", new { Id = id }).Metadata;
     public PresetDocument CapturePreset(string id)=>Call<PresetDocument>("capture-preset",new{Id=id});
     public DeviceSnapshot ApplyPreset(string id,PresetDocument preset,long revision)=>Call<DeviceSnapshot>("apply-preset",new{Id=id,Preset=preset,Revision=revision});

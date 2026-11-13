@@ -1,4 +1,5 @@
 // Application / Output dynamics use cases
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: validate edits against device voltage limits and shared revisions.
 // Units: output volts, ms, integer dB and RMS release/attack multiplier.
 // State: plans are bounded, single-use and expire after two minutes.

@@ -1,4 +1,5 @@
 // Protocol / UDP — serialized exchanges restricted to the local loopback interface.
+// Module: Encodes CVR messages, reassembles replies and manages UDP exchanges.
 // Purpose: handle explicit network targets and bounded packet data.
 // Input: validated addresses or byte sequences.
 // State: transport ownership stays with the application session.

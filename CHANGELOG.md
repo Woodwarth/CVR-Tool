@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Align browser control with Desktop: device sidebar, compact identity header,
+  vertical Main faders/meters and compact Inputs signal flow.
+- Show and send input gain while dragging, coalescing rapid positions and
+  serializing readback; discard pending positions on disconnect.
+- Permit one browser page at a time with explicit disconnect and automatic
+  abandoned-session expiry. Preserve parallel HTTP requests within that page.
+- Show persistent Off / On / Connected browser-server status in Desktop.
+- Drain browser-server shutdown without capturing the UI thread.
+
 ## 0.7.5
 
 - Add a locally generated QR code containing the complete private iPad browser link.

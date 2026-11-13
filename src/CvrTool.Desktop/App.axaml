@@ -1,3 +1,5 @@
+<!-- Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
+     Registers the application theme and shared desktop styles. -->
 <Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="CvrTool.Desktop.App" RequestedThemeVariant="Dark">
   <Application.Styles>
     <FluentTheme/>

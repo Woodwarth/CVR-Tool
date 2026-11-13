@@ -1,4 +1,5 @@
 // Desktop / Output signal flow
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: present per-channel FIR, EQ, trim, delay, polarity and mute like the reference.
 // Units: dB and ms; processing editors use the shared application service.
 // State: each row belongs to one output; confirmed edits reload current state.
@@ -32,7 +33,7 @@ public sealed partial class MainWindow
     }
     private Control OutputsPage()
     {
-        var panel = new StackPanel { Spacing = 24 };
+        var panel = new StackPanel { Spacing = 16, Tag = "outputs-page" };
         var metadata = service.GetNativePresetMetadata(deviceId);
         panel.Children.Add(Heading("Outputs · " + deviceName.Text));
         foreach (var output in service.GetDevice(deviceId).Outputs)
@@ -83,7 +84,9 @@ public sealed partial class MainWindow
                 }
                 CloseBridgeFollowerEditors(output.Number);
             }
-            panel.Children.Add(Card(row));
+            var channelCard = Card(row);
+            channelCard.Padding = new Thickness(12);
+            panel.Children.Add(channelCard);
         }
         return panel;
     }

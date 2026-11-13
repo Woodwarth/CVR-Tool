@@ -1,4 +1,5 @@
 // Application / Verified output and routing edits
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: apply captured trim/delay/polarity and routing commands with native readback.
 // Units: function 10 output side 1; function 12 output/channel, input/segment side 0.
 // State: fresh full settings protect revisions and independently verify each write.

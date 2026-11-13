@@ -1,4 +1,5 @@
 // Desktop / Automatic live device view
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: refresh connected devices and show connection dots beside their names.
 // Units: UTC observation timestamps; no uncalibrated level conversion.
 // State: offline devices retain last readings; demos remain editable local sessions.
@@ -116,6 +117,7 @@ public sealed partial class MainWindow
     {
         foreach (var control in root.GetLogicalDescendants().OfType<Control>().Prepend(root))
         {
+            if (editor && Equals(control.Tag, "eq-phase")) continue;
             if (control is RoutingDial dial)
             { dial.CanEditGain = canVerifiedDsp; dial.IsEnabled = dial.IsEnabled && (canMute || canVerifiedDsp); }
             else if (control is ToggleButton toggle && (toggle.Tag?.ToString()?.StartsWith("mute-") ?? false))
@@ -134,7 +136,7 @@ public sealed partial class MainWindow
                     tag.StartsWith("input-eq-") || tag.StartsWith("output-eq-") ||
                     tag.StartsWith("input-delay-") || tag.StartsWith("output-delay-") ||
                     tag.StartsWith("output-mode-") || tag.StartsWith("output-noise-") ||
-                    tag.StartsWith("output-limiters-") || tag.StartsWith("output-fir-") || tag == "snapshot-save-pc" || (canMute && tag.StartsWith("mute-")) || (canVerifiedDsp && (tag.StartsWith("output-trim-") || tag.StartsWith("output-polarity-")));
+                    tag.StartsWith("output-limiters-") || tag.StartsWith("output-fir-") || tag is "snapshot-save-pc" or "inspect-protocol" || (canMute && tag.StartsWith("mute-")) || (canVerifiedDsp && (tag.StartsWith("output-trim-") || tag.StartsWith("output-polarity-")));
                 if (!allowed) button.IsEnabled = false;
             }
         }

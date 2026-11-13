@@ -1,4 +1,5 @@
 // MCP / Output processing
+// Module: Exposes amplifier queries and control operations as MCP tools over stdio.
 // Purpose: expose output EQ and FIR through the same session as the desktop.
 // Units: ms, Hz, dB, Q and 48 kHz FIR coefficients (maximum 512).
 // State: EQ uses revision-bound plans; FIR writes accept an optional revision.

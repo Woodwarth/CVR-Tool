@@ -1,4 +1,5 @@
 // Desktop / Live observation details
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: display every decoded setting and clearly identify unavailable readings.
 // Units: DSP-native gain, ms/metres, Hz, Q, volts, amperes and degrees Celsius.
 // State: this view uses the same shared cached snapshot as UI and MCP clients.
@@ -33,6 +34,33 @@ public sealed partial class MainWindow
             }
             root.Children.Add(Card(box));
         }
+        var inspectedDevice = deviceId;
+        var inspect = new Button { Content = "Inspect protocol reply", Tag = "inspect-protocol" };
+        inspect.Click += async (_, _) =>
+        {
+            var options = new (int Id, string Label)[] { (43,"FIR"), (50,"Stereo / bridge"), (52,"Output EQ"),
+                (54,"Peak limiter"), (55,"RMS limiter"), (59,"Preset names"), (62,"Source alignment"),
+                (82,"RTA"), (88,"Input delay switch"), (93,"Input group gain") };
+            var choice = new ComboBox { ItemsSource = options.Select(o => $"{o.Id} · {o.Label}").ToArray(), SelectedIndex = 0 };
+            var channel = new ComboBox { ItemsSource = snapshot.Outputs.Select(o => o.Number).ToArray(), SelectedIndex = 0 };
+            var source = new ComboBox { ItemsSource = new[] { "Analog", "Digital", "AES" }, SelectedIndex = 0, IsEnabled = false };
+            choice.SelectionChanged += (_, _) => source.IsEnabled = choice.SelectedIndex >= 0 && options[choice.SelectedIndex].Id == 62;
+            var result = new TextBlock { TextWrapping = TextWrapping.Wrap };
+            var read = new Button { Content = "Read from device" };
+            read.Click += async (_, _) =>
+            {
+                int id = options[choice.SelectedIndex].Id, ch = channel.SelectedIndex + 1, seg = source.IsEnabled ? source.SelectedIndex : 0;
+                read.IsEnabled = false;
+                try { result.Text = await Task.Run(() => service.InspectProtocol(inspectedDevice, id, ch, seg)); }
+                catch (Exception ex) { result.Text = ex.Message; }
+                finally { read.IsEnabled = true; }
+            };
+            var panel = new StackPanel { Spacing = 12, Margin = new Avalonia.Thickness(18) };
+            panel.Children.Add(Field("Function", choice)); panel.Children.Add(Field("Channel", channel));
+            panel.Children.Add(Field("Source", source)); panel.Children.Add(read); panel.Children.Add(result);
+            await EditorWindow("Protocol inspection", panel, 620, 460).ShowDialog(this);
+        };
+        root.Children.Add(inspect);
         var controls = service.GetControlState(deviceId);
         Values("Live device · Limited editing", ("Name", snapshot.Name), ("Firmware", data.FirmwareHeader),
             ("MAC address", data.MacAddress ?? "—"), ("Operating time", DeviceMetadataCodec.FormatOperatingTime(data.OperatingMinutes)), ("Preset", data.CurrentPreset ?? "—"),
@@ -40,7 +68,7 @@ public sealed partial class MainWindow
             ("Status received", data.TelemetryObservedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "—"),
             ("Connection", data.Error ?? "Connected"), ("Display lock", OnOff(controls.DisplayLocked)),
             ("Wink", Flag(controls.Wink)), ("Standby", controls.StandbyKnown ? OnOff(controls.Standby) : "Unknown"), ("Power · reported", Known(data.Power)),
-            ("Input/output dBFS", "Unknown · calibration not established"));
+            ("Main meters", "Input signal and output voltage relative to channel RMS maximum · −40 to 0 dB"));
         void Processing(string title, InputProcessingState state)
         {
             string Crossover(CrossoverFilter? filter) => filter is null ? "—" :
@@ -97,7 +125,15 @@ public sealed partial class MainWindow
         var root = new StackPanel { Spacing = 18 };
         root.Children.Add(Heading("Presets · Read-only"));
         root.Children.Add(Text("Current preset: " + (service.GetDevice(deviceId).Readings?.CurrentPreset ?? "—"), 16));
-        root.Children.Add(Text("Device slot names and FIR coefficients have not been received. Exports contain the known settings.", 13, Muted));
+        var slots = service.GetDevicePresets(deviceId).Slots;
+        if (slots.Count == 0)
+            root.Children.Add(Text("Device preset names unavailable", 13, Muted));
+        else
+        {
+            root.Children.Add(Heading($"Device presets · {slots.Count} slots"));
+            foreach (var row in slots.Chunk(4))
+                root.Children.Add(Text(string.Join("     ", row.Select(slot => $"{slot.Number:00} · {slot.Name}")), 14));
+        }
         var save = new Button { Content = "Save to PC", Tag = "snapshot-save-pc" };
         save.Click += async (_, _) =>
         {

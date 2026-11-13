@@ -1,3 +1,5 @@
+<!-- Module: Exposes amplifier queries and control operations as MCP tools over stdio.
+     Build configuration for CvrTool.Mcp. -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>

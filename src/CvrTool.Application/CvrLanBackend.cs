@@ -1,4 +1,5 @@
 // Application / CVR LAN backend
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: expose observed amplifier settings through the common backend contract.
 // Input: explicit target only; wire function mappings are documented separately.
 // State: serialize operations, invalidate plans on observed changes and every write attempt.

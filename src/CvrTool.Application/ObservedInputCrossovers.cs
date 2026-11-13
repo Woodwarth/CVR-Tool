@@ -1,4 +1,5 @@
 // Application / Evidenced input crossovers
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: share the limited live HP/LP type policy between backend and UI.
 // Units: controller type IDs; BW-12 is 0 and BW-24 is 4.
 // State: based on controlled Input 1 HP/LP captures, not model-wide certification.

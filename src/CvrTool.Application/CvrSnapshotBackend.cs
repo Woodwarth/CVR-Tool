@@ -1,4 +1,5 @@
 // Application / Observed live reads
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: expose full native settings and periodic status beside local devices.
 // Units: native DSP units; telemetry timestamps are independent of settings age.
 // State: one exclusive UDP owner, serialized polling and cached immutable reads.
@@ -32,6 +33,8 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
     private bool forceSettingsRefresh;
     private bool standbyState;
     private bool standbyKnown;
+    private OutputAllocation[]? allocation;
+    private DevicePresetSlot[] presetSlots = [];
     private uint? operatingMinutes;
     private DateTimeOffset metadataCheckedAt;
 
@@ -88,6 +91,24 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
             lock (gate) operatingMinutes = minutes;
         }
         catch (Exception ex) when (ex is IOException or TimeoutException or NotSupportedException) { }
+        try
+        {
+            var names = ProcessingWire.PresetSlots(client.ReadPresetNames());
+            lock (gate) presetSlots = names;
+        }
+        catch (Exception ex) when (ex is TimeoutException or IOException or NotSupportedException or System.Net.Sockets.SocketException)
+        { lock (gate) presetSlots = []; }
+        try
+        {
+            var raw = client.ReadAllocation();
+            static double? Number(byte[] bytes, int offset) =>
+                BitConverter.ToSingle(bytes, offset) is var v && float.IsFinite(v) ? v : null;
+            lock (gate)
+                allocation = Enumerable.Range(0, settings.Outputs.Count).Select(i =>
+                    new OutputAllocation(raw[i], raw[4 + i], Number(raw, 8 + 4 * i), Number(raw, 24 + 4 * i))).ToArray();
+        }
+        catch (Exception ex) when (ex is TimeoutException or IOException or NotSupportedException or System.Net.Sockets.SocketException)
+        { lock (gate) allocation = null; }
         finally { metadataCheckedAt = DateTimeOffset.UtcNow; }
     }
     private void ReadTelemetry(CvrUdpClient client)
@@ -100,11 +121,28 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
         var codes = Enumerable.Range(0, count).Select(i => (int)bytes[offset + i]).ToArray();
         lock (gate)
         {
+            for (int i = 0; i < count; i++)
+            {
+                var dynamics = settings.Dynamics![i];
+                double reference = Math.Max(1, dynamics.Rms.MaximumVolts);
+                var reading = readings[i];
+                readings[i] = reading with
+                {
+                    OutputMeterDb = MeterDb(reading.Voltage, reference),
+                    Status = reading.Status! with { HighImpedance = dynamics.LoadMode > 0, Bridged = dynamics.Bridged }
+                };
+            }
             telemetry = readings; power = reportedPower; statusCodes = codes;
             standbyKnown = codes.All(code => code <= 11);
             if (standbyKnown) standbyState = codes.All(code => code == 1);
             telemetryAt = DateTimeOffset.UtcNow;
         }
+    }
+
+    private static double? MeterDb(double? amplitude, double reference)
+    {
+        if (amplitude is not double value || !double.IsFinite(value) || !double.IsFinite(reference)) return null;
+        return value <= 0 ? -40 : Math.Clamp(20 * Math.Log10(value / reference), -40, 0);
     }
 
     public static OutputTelemetry[] DecodeTelemetry(byte[] bytes, int count)
@@ -119,10 +157,12 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
             var code = bytes[(compact ? 20 : 52) + i];
             var flags = code <= 11 ? new OutputStatus(Fault: code is 2 or 6 or 7,
                 Load: code == 4, Open: compact ? null : code == 3, OverTemperature: code == 9,
-                Clip: code == 5, Standby: code == 1) : new OutputStatus();
+                Clip: code == 5, Standby: code == 1, Limiting: code == 10) : new OutputStatus();
             return new OutputTelemetry(i + 1, Voltage: voltage, Current: current,
                 LoadOhms: current > 0 ? voltage / current : null,
-                TemperatureC: compact ? null : ProcessingWire.Float(bytes, i * 4), Status: flags);
+                TemperatureC: compact ? null : ProcessingWire.Float(bytes, i * 4), Status: flags,
+                InputMeterDb: bytes.Length is 72 or 88 or 92 or 96 ? MeterDb(BitConverter.ToSingle(bytes, 56 + i * 4), 1) : null,
+                InputClip: bytes.Length is 92 or 96 ? bytes[88 + i] == 0 : null);
         }).ToArray();
     }
     private void UpdateSnapshot()
@@ -190,9 +230,9 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
     public DeviceControlState GetControlState(string deviceId)
     { lock (gate) { CheckId(deviceId); return new(native[33] != 0, standbyState, StandbyKnown: standbyKnown, Wink: winkState); } }
     public DevicePresetState GetDevicePresets(string deviceId)
-    { lock (gate) { CheckId(deviceId); return new([], device.Readings?.CurrentPreset); } }
+    { lock (gate) { CheckId(deviceId); return new(presetSlots.ToArray(), device.Readings?.CurrentPreset); } }
     public NativePresetMetadata GetNativePresetMetadata(string deviceId)
-    { lock (gate) { CheckId(deviceId); return NativePresetMetadata.Decode(native); } }
+    { lock (gate) { CheckId(deviceId); return NativePresetMetadata.Decode(native) with { Allocation = allocation?.ToArray() }; } }
     public PresetDocument CapturePreset(string deviceId)
     { lock (gate) { CheckId(deviceId); return JsonSerializer.Deserialize<PresetDocument>(JsonSerializer.Serialize(settings with { Name = device.Name }))!; } }
 

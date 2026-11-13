@@ -1,4 +1,5 @@
 // Desktop / Graphical input EQ
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: plot the summed response and edit numbered band handles.
 // Units: logarithmic 20 Hz–20 kHz axis, ±24 dB view, 48 kHz preview.
 // State: dragging and keyboard edits update the editor draft only.
@@ -36,6 +37,7 @@ public sealed class EqualizerGraph : Control
             InvalidateVisual();
         }
     }
+    public bool ShowPhase { get; set; }
     private int selected = 1;
     private bool dragging;
     public event Action<EqualizerBand>? BandChanged;
@@ -85,7 +87,7 @@ public sealed class EqualizerGraph : Control
         {
             var y = plot.Y + (24 - db) / 48.0 * plot.Height;
             context.DrawLine(new Pen(Brush.Parse(db == 0 ? "#65828C" : "#34454F"), 1), new(plot.Left, y), new(plot.Right, y));
-            var text = Label(db.ToString(), 11, Brushes.LightGray);
+            var text = Label(ShowPhase ? $"{db * 7.5:0}°" : db.ToString(), 11, Brushes.LightGray);
             context.DrawText(text, new(Plot.X - text.Width - 9, y - 7));
         }
         var available = bands.All(b => !b.Enabled || b.FilterType == 0) && new[] { highPass, lowPass }.All(f => f is null || !f.Enabled || CrossoverFilters.Options.Any(o => o.Code == f.FilterType));
@@ -94,12 +96,24 @@ public sealed class EqualizerGraph : Control
             var geometry = new StreamGeometry();
             using (var path = geometry.Open())
             {
+                double previous = 0;
                 for (var pixel = 0; pixel <= 500; pixel++)
                 {
                     var frequency = 20 * Math.Pow(1000, pixel / 500.0);
-                    var db = enabled ? bands.Sum(b => EqualizerResponse.GainDb(b, frequency)) + CrossoverResponse.GainDb(highPass, true, frequency) + CrossoverResponse.GainDb(lowPass, false, frequency) : 0;
+                    var response = System.Numerics.Complex.One;
+                    if (enabled)
+                    {
+                        response = CrossoverResponse.Transfer(highPass, true, frequency) * CrossoverResponse.Transfer(lowPass, false, frequency);
+                        foreach (var band in bands)
+                            response *= EqualizerResponse.Transfer(band, frequency);
+                    }
+                    var db = ShowPhase ? response.Phase * 24 / Math.PI : 20 * Math.Log10(response.Magnitude);
+                    if (ShowPhase && pixel > 0 && Math.Abs(previous - db) > 24)
+                        path.EndFigure(false);
+                    var start = pixel == 0 || ShowPhase && Math.Abs(previous - db) > 24;
+                    previous = db;
                     var point = new Point(plot.X + pixel / 500.0 * plot.Width, plot.Y + (24 - Math.Clamp(db, -24, 24)) / 48 * plot.Height);
-                    if (pixel == 0)
+                    if (start)
                         path.BeginFigure(point, false);
                     else
                         path.LineTo(point);
@@ -110,6 +124,7 @@ public sealed class EqualizerGraph : Control
         }
         else
             context.DrawText(Label("Curve unavailable for device filter type", 12, Brushes.LightGray), new(plot.Left + 12, plot.Top + 10));
+        if (ShowPhase) return;
         foreach (var band in bands)
         {
             var point = BandPosition(band);
@@ -160,7 +175,7 @@ public sealed class EqualizerGraph : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || bands.Count == 0)
+        if (ShowPhase || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || bands.Count == 0)
             return;
         var point = e.GetPosition(this);
         double Distance(EqualizerBand b)
@@ -219,6 +234,7 @@ public sealed class EqualizerGraph : Control
     }
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (ShowPhase) return;
         if (selected is 0 or 9)
         {
             var filter = selected == 0 ? highPass : lowPass;

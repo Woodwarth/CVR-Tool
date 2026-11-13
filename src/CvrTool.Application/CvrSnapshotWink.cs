@@ -1,4 +1,5 @@
 // Application / Amplifier identification
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: blink the physical display without changing audio processing.
 // Units: function 83/status 0 uses one byte, 0 off or 1 on.
 // State: bulk-shaped function-83 queries independently confirm each change.

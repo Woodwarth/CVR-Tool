@@ -1,4 +1,5 @@
 // Desktop / Inputs — immediate gain editing with aligned level and clip indicators.
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: present focused controls and forward edits to Application.
 // Input: user events and authoritative device snapshots.
 // State: local drafts never replace the shared backend.
@@ -32,8 +33,7 @@ public sealed partial class MainWindow
             var input = service.GetInputProcessing(deviceId, draft.State.Number);
             var inputGain = input.GainDb;
             var editedId = deviceId; var channel = draft.State.Number;
-            var data = liveReadOnly ? new CvrTool.Core.OutputTelemetry(draft.State.Number) :
-                telemetry.Single(t => t.Channel == draft.State.Number);
+            var data = telemetry.Single(t => t.Channel == draft.State.Number);
             var strip = new Grid
             {
                 RowDefinitions = new RowDefinitions(StripRows),
@@ -68,7 +68,7 @@ public sealed partial class MainWindow
             overlay.Children.Add(face);
             overlay.Children.Add(slider);
             fader.Children.Add(overlay);
-            AddColumn(fader, new ChannelMeter(data.LevelDbFs) { Width = 24, Height = MeterHeight, Tag = "channel-meter-" + draft.State.Name }, 1);
+            AddColumn(fader, new ChannelMeter(liveReadOnly ? data.InputMeterDb : data.LevelDbFs, liveReadOnly ? -40 : -60) { Width = 24, Height = MeterHeight, Tag = "channel-meter-" + draft.State.Name }, 1);
             var gain = Centered(inputGain is { } knownGain ? knownGain.ToString("0.0")+" dB" : "—",15);
             gain.Tag = "gain-" + draft.State.Name;
             slider.GotFocus += (_, _) =>
@@ -136,7 +136,7 @@ public sealed partial class MainWindow
             };
             Grid.SetRow(fader, 1);
             strip.Children.Add(fader);
-            var clip = StatusLight("Clip", data.Status?.Clip);
+            var clip = StatusLight("Clip", liveReadOnly ? data.InputClip : data.Status?.Clip);
             clip.Tag = "channel-clip-" + draft.State.Name;
             Grid.SetRow(clip, 2);
             strip.Children.Add(clip);

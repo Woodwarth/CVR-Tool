@@ -1,4 +1,5 @@
 // Desktop / Fixed design surface
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: preserve arrangement while scaling the whole interface uniformly.
 // Input: window size; a minimum size limits unreadably small controls.
 // State: the design canvas stays 1680 by 980 logical pixels.
@@ -74,9 +75,10 @@ public sealed partial class MainWindow
         var updates = new Button { Content = "Updates · " + AppUpdateLifecycle.Version, Tag = "software-updates", VerticalAlignment = VerticalAlignment.Center };
         updates.Click += (_, _) => OpenUpdates();
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
-        var browser = new Button { Content = "Browser control", Tag = "browser-control", VerticalAlignment = VerticalAlignment.Center };
-        browser.Click += (_, _) => OpenBrowserControl();
-        actions.Children.Add(browser);
+        browserStatusButton.Click += (_, _) => OpenBrowserControl();
+        UpdateMcpStatus(0);
+        actions.Children.Add(mcpIndicator);
+        actions.Children.Add(browserStatusButton);
         actions.Children.Add(updates);
         AddColumn(header, actions, 1);
         return new Border { Child = header, Padding = new Thickness(16, 10), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1) };

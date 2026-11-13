@@ -1,4 +1,5 @@
 // Application / Connection ownership
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: keep local models and explicit CVR peers in one shared session.
 // Input: manual IPv4 connection settings, never a discovery range.
 // State: one transport owner per target; disconnect disposes its socket.
@@ -142,6 +143,8 @@ public sealed class ConnectionBackend : IAmplifierBackend, IConnectionBackend, I
     public FirState ApplyFir(string id,FirState state,long revision) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).ApplyFir(id,state,revision); }
     public (OutputDynamicsState State,long Revision) GetOutputDynamics(string id,int channel) {lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).GetOutputDynamics(id,channel);}
     public OutputDynamicsState ApplyOutputDynamics(OutputDynamicsChange change,long revision) {lock(gate)return ((IAdvancedAmplifierBackend)Backend(change.DeviceId)).ApplyOutputDynamics(change,revision);}
+    public string InspectProtocol(string id, int function, int channel, int segment)
+        { lock (gate) return ((INativePresetMetadataSource)Backend(id)).InspectProtocol(id, function, channel, segment); }
     public NativePresetMetadata? GetNativePresetMetadata(string id)
     { lock (gate) return (Backend(id) as INativePresetMetadataSource)?.GetNativePresetMetadata(id); }
     public PresetDocument CapturePreset(string id) { lock(gate)return ((IAdvancedAmplifierBackend)Backend(id)).CapturePreset(id); }

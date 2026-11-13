@@ -1,4 +1,5 @@
 // Application / Processing payloads
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: map packed EQ and FIR blocks independently of UI and transport.
 // Units: little-endian floats, ms, Hz, dB, Q; 512 FIR taps at 48 kHz.
 // State: encoding patches a supplied template to preserve untouched bytes.
@@ -70,6 +71,18 @@ public static class ProcessingWire
         for (var n = 0; n < state.Coefficients.Count; n++)
             Put(raw, (includeName ? 32 : 0) + n * 4, state.Coefficients[n]);
         return raw;
+    }
+    public static DevicePresetSlot[] PresetSlots(byte[] table)
+    {
+        if (table.Length is not (512 or 768 or 1280))
+            throw new NotSupportedException("Unknown preset table length.");
+        var slots = new DevicePresetSlot[table.Length / 32];
+        for (int index = 0; index < slots.Length; index++)
+        {
+            string name = Text(table[(index * 32)..((index + 1) * 32)]);
+            slots[index] = new(index + 1, name.Length == 0 ? "Empty" : name, name.Length > 0);
+        }
+        return slots;
     }
     public static string Text(byte[] raw) => Encoding.Latin1.GetString(raw.TakeWhile(b => b != 0).ToArray()).Trim();
     public static void PutText(byte[] raw, int offset, string value, int length)

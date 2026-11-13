@@ -1,4 +1,5 @@
 // Application / Physical output processing and preset operations
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: implement observed EQ/FIR, native backup and sixteen-slot commands.
 // Units: packed wire blocks; one-based application slots become zero-based wire slots.
 // State: serialize operations, invalidate revisions and require device readback.
@@ -135,10 +136,7 @@ public sealed partial class CvrLanBackend : IAdvancedAmplifierBackend
         lock (gate)
         {
             CheckId(deviceId);
-            var body = client.Read(59, requestBody: new byte[34]);
-            if (body.Length != 512)
-                throw new NotSupportedException("Expected sixteen 32-byte preset names.");
-            return new(Enumerable.Range(0, 16).Select(n => { var name = Text(body[(n * 32)..((n + 1) * 32)]); return new DevicePresetSlot(n + 1, string.IsNullOrWhiteSpace(name) ? "Empty" : name, !string.IsNullOrWhiteSpace(name)); }).ToArray());
+            return new(ProcessingWire.PresetSlots(client.ReadPresetNames()));
         }
     }
     public DeviceOperationResult StoreDevicePreset(string deviceId, int slot, string name, long expectedRevision)
@@ -192,7 +190,7 @@ public sealed partial class CvrLanBackend : IAdvancedAmplifierBackend
             client.Command(59, body);
             if (GetDevicePresets(deviceId).Slots.Any(s => s.Occupied))
                 throw new InvalidOperationException("Device preset clear was not confirmed.");
-            return new("Clear", true, "All sixteen device slots read back empty.");
+            return new("Clear", true, "All reported device slots read back empty.");
         }
     }
     public DeviceOperationResult FactoryReset(string deviceId, long expectedRevision)

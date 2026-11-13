@@ -1,4 +1,5 @@
 // Application / Verified operational controls
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: allow display lock and standby while leaving DSP settings read-only.
 // Units: display function 17/status 1; standby function 15/status 0; bytes 0/1.
 // State: each attempted write invalidates plans and requires a fresh full sync.

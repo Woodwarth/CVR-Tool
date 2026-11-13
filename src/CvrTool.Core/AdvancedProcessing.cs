@@ -1,4 +1,5 @@
 // Core / Output processing and preset storage
+// Module: Defines device models, channel state and the contracts shared by all backends.
 // Purpose: share output EQ, FIR, native files and sixteen preset slots across clients.
 // Units: milliseconds, Hz, dB, Q and 48 kHz FIR coefficients.
 // State: backend writes enforce device revisions; snapshots are defensive copies.

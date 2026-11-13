@@ -1,4 +1,5 @@
 // Desktop / Device summary
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: show compact identity and connection information in two rows.
 // Input: authoritative application snapshots and per-device operational state.
 // State: model/name controls retain their existing edit behavior.

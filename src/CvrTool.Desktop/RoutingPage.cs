@@ -1,4 +1,5 @@
 // Desktop / Inputs and routing — per-channel processing, route dials and output trim.
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: present focused controls and forward edits to Application.
 // Input: user events and authoritative device snapshots.
 // State: local drafts never replace the shared backend.
@@ -85,7 +86,7 @@ public sealed partial class MainWindow
         // Keep the signal-flow grid fixed; the shell scales uniformly on smaller windows.
         var environment = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("156,Auto,156"),
+            ColumnDefinitions = new ColumnDefinitions("224,Auto,108"),
             ColumnSpacing = 14,
             HorizontalAlignment = HorizontalAlignment.Left,
             Tag = "routing-environment"
@@ -120,20 +121,17 @@ public sealed partial class MainWindow
 
         foreach (var output in service.GetDevice(deviceId).Outputs)
         {
-            var gain = new GainReadout { Value = output.GainDb, Tag = "routing-output-gain-" + output.Name };
+            var gain = new GainReadout { Width = 94, FontSize = 12, FontWeight = FontWeight.Normal, Foreground = Accent, Value = output.GainDb, Tag = "routing-output-gain-" + output.Name };
             gain.EditingStarted += () => { if (liveReadOnly) liveEditInteractions++; };
             gain.EditingEnded += () => { liveEditInteractions = Math.Max(0, liveEditInteractions - 1); };
             gain.ValueChanged += value => { channels.Single(c => c.State.Number == output.Number).Gain = value; Commit(new(deviceId, output.Number, GainDb: value)); };
-            var label = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-            label.Children.Add(Centered("Volume " + output.Name, 13));
-            label.Children.Add(gain);
-            var block = new Border { Child = label, Height = 72, Padding = new Thickness(6), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), VerticalAlignment = VerticalAlignment.Center };
+            var block = new Border { Child = OutputBlockContent("Volume " + output.Name, gain), Width = OutputBlockWidth, Height = OutputBlockHeight, Padding = new Thickness(6, 8), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), VerticalAlignment = VerticalAlignment.Center };
             block.Tag = "route-volume-" + output.Name;
             Grid.SetRow(block, output.Number);
             outputLevels.Children.Add(block);
         }
 
-        var connections = new RoutingConnections(routing.OutputCount, 114, 118)
+        var connections = new RoutingConnections(routing.OutputCount, 114, 118, 224, 108)
         {
             IsHitTestVisible = false
         };

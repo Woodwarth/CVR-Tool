@@ -1,3 +1,5 @@
+<!-- Module: Serves the local browser interface and routes authenticated requests to the shared session.
+     Build configuration for CvrTool.Web. -->
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

@@ -1,4 +1,5 @@
 // Web / Local browser control
+// Module: Serves the local browser interface and routes authenticated requests to the shared session.
 // Purpose: serve embedded touch controls through the existing Application service.
 // Units: the same dB/ms/Hz/Q values as Desktop and MCP.
 // State: explicit start/stop, per-start access key and serialized browser writes.
@@ -19,14 +20,19 @@ using Microsoft.Extensions.Logging;
 
 namespace CvrTool.Web;
 
-public sealed class BrowserControlServer(AmplifierService service) : IAsyncDisposable
+public sealed class BrowserControlServer(AmplifierService service, TimeProvider? timeProvider = null) : IAsyncDisposable
 {
     private WebApplication? host;
     private readonly SemaphoreSlim writes = new(1, 1);
+    private readonly BrowserClientLease clientLease = new(timeProvider ?? TimeProvider.System);
+    private ITimer? leaseTimer;
     public string AccessKey { get; private set; } = "";
     public string? Address { get; private set; }
     public string? ConnectionUrl => Address is null ? null : Address + "/#" + AccessKey;
     public event Action? Changed;
+    public event Action? StatusChanged;
+    public bool IsRunning => Address is not null;
+    public bool ClientConnected => IsRunning && clientLease.Connected;
 
     public static bool IsLocalAddress(IPAddress address)
     {
@@ -76,6 +82,22 @@ public sealed class BrowserControlServer(AmplifierService service) : IAsyncDispo
                 var supplied = context.Request.Headers.Authorization.ToString();
                 if (!CryptographicOperations.FixedTimeEquals(System.Text.Encoding.UTF8.GetBytes(supplied), System.Text.Encoding.UTF8.GetBytes("Bearer " + AccessKey)))
                 { context.Response.StatusCode = 401; return; }
+                var client = context.Request.Headers["X-CVR-Client"].ToString();
+                if (client.Length != 32 || client.Any(c => !Uri.IsHexDigit(c)))
+                { context.Response.StatusCode = 400; await context.Response.WriteAsJsonAsync(new { error = "A browser session identifier is required." }); return; }
+                if (context.Request.Path == "/api/disconnect" && HttpMethods.IsPost(context.Request.Method))
+                {
+                    if (clientLease.Release(client)) StatusChanged?.Invoke();
+                    context.Response.StatusCode = 204;
+                    return;
+                }
+                if (!clientLease.TryUse(client, out var leaseChanged))
+                {
+                    context.Response.StatusCode = 423;
+                    await context.Response.WriteAsJsonAsync(new { error = "Another browser is connected. Close it before connecting here." });
+                    return;
+                }
+                if (leaseChanged) StatusChanged?.Invoke();
             }
             try { await next(context); }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException or IOException or FormatException)
@@ -94,6 +116,9 @@ public sealed class BrowserControlServer(AmplifierService service) : IAsyncDispo
             await writes.WaitAsync(context.RequestAborted);
             try
             {
+                // Recheck after waiting: a closed browser must not leave queued writes behind.
+                if (!clientLease.IsOwner(context.Request.Headers["X-CVR-Client"].ToString()))
+                    return Results.Json(new { error = "This browser session is no longer active." }, statusCode: 423);
                 var device = service.GetDevice(change.DeviceId);
                 if (!device.IsDemo && (device.Readings is not { Error: null, TelemetryObservedAt: { } at } || DateTimeOffset.UtcNow - at > TimeSpan.FromSeconds(3)))
                     throw new InvalidOperationException("Device is offline; refresh before editing.");
@@ -105,11 +130,16 @@ public sealed class BrowserControlServer(AmplifierService service) : IAsyncDispo
         });
         try
         {
-            await app.StartAsync();
+            await app.StartAsync().ConfigureAwait(false);
             Address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single().TrimEnd('/');
             host = app;
+            leaseTimer = (timeProvider ?? TimeProvider.System).CreateTimer(_ =>
+            {
+                if (clientLease.Expire()) StatusChanged?.Invoke();
+            }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+            StatusChanged?.Invoke();
         }
-        catch { await app.DisposeAsync(); AccessKey = ""; throw; }
+        catch { await app.DisposeAsync().ConfigureAwait(false); AccessKey = ""; throw; }
     }
 
     private object State(string id)
@@ -157,8 +187,21 @@ public sealed class BrowserControlServer(AmplifierService service) : IAsyncDispo
 
     public async ValueTask DisposeAsync()
     {
-        if (host is { } app) { await app.StopAsync(); await app.DisposeAsync(); }
+        if (host is { } app)
+        {
+            // Desktop's Closed event drains shutdown synchronously. Host internals must
+            // not capture that UI context while waiting for outstanding HTTP requests.
+            await Task.Run(async () =>
+            {
+                await app.StopAsync().ConfigureAwait(false);
+                await app.DisposeAsync().ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        }
+        if (leaseTimer is { } timer) await timer.DisposeAsync().ConfigureAwait(false);
+        leaseTimer = null;
+        clientLease.Reset();
         host = null; Address = null; AccessKey = "";
+        StatusChanged?.Invoke();
     }
 }
 

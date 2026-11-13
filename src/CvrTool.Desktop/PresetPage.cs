@@ -1,4 +1,5 @@
 // Desktop / Preset management
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: load/save native .sd PC files and operate sixteen device preset slots.
 // Units: one-based slots; file formats retain complete supported processing state.
 // State: bulk loads/reset/clear require an explicit confirmation in the product.
@@ -26,10 +27,11 @@ public sealed partial class MainWindow
         var device = new StackPanel { Spacing = 18 };
         device.Children.Add(Heading("On Device"));
         var selection = new Grid { ColumnDefinitions = new ColumnDefinitions("2*,2*,*"), ColumnSpacing = 20 };
+        selectedPresetSlot = Math.Clamp(selectedPresetSlot, 1, Math.Max(1, presets.Slots.Count));
         var slot = new ComboBox { ItemsSource = presets.Slots, SelectedIndex = selectedPresetSlot - 1, HorizontalAlignment = HorizontalAlignment.Stretch, Tag = "device-preset-slot", ItemTemplate = new FuncDataTemplate<DevicePresetSlot>((s, _) => new TextBlock { Text = $"{s?.Number:00} · {s?.Name}" }) };
-        var name = new TextBox { Text = presets.Slots[selectedPresetSlot - 1].Occupied ? presets.Slots[selectedPresetSlot - 1].Name : "Preset " + selectedPresetSlot, MaxLength = 32, Tag = "device-preset-name" };
+        var name = new TextBox { Text = presets.Slots.Count == 0 ? "" : presets.Slots[selectedPresetSlot - 1].Occupied ? presets.Slots[selectedPresetSlot - 1].Name : "Preset " + selectedPresetSlot, MaxLength = 32, Tag = "device-preset-name" };
         slot.SelectionChanged += (_, _) => { if (slot.SelectedItem is DevicePresetSlot selected) { selectedPresetSlot = selected.Number; name.Text = selected.Occupied ? selected.Name : "Preset " + selected.Number; } };
-        AddColumn(selection, Field("Preset slot · 1–16", slot), 0);
+        AddColumn(selection, Field(presets.Slots.Count == 0 ? "Preset slots unavailable" : $"Preset slot · 1–{presets.Slots.Count}", slot), 0);
         AddColumn(selection, Field("Preset name", name), 1);
         AddColumn(selection, Field("Current preset", Text(presets.CurrentName ?? "—", 14, Accent)), 2);
         device.Children.Add(selection);
@@ -53,7 +55,7 @@ public sealed partial class MainWindow
         actions.Children.Add(Action("Load from Device", "preset-load-device", () => RunDevice("Load from Device", () => service.RecallDevicePreset(editedId, selectedPresetSlot), "Replace current processing with the selected device preset?")));
         actions.Children.Add(Action("Save to Device", "preset-save-device", () => { var number = selectedPresetSlot; var presetName = name.Text ?? ""; return RunDevice("Save to Device", () => service.StoreDevicePreset(editedId, number, presetName), "Store current processing in this slot? An existing preset in the slot will be replaced."); }));
         actions.Children.Add(Action("Factory Reset", "preset-factory-reset", () => RunDevice("Factory Reset", () => service.FactoryReset(editedId), "Restore this device's factory settings? Current processing and device presets may be cleared."), true));
-        actions.Children.Add(Action("Clear All Preset", "preset-clear-all", () => RunDevice("Clear All Preset", () => service.ClearDevicePresets(editedId), "Permanently clear all sixteen stored device presets? Current processing stays active."), true));
+        actions.Children.Add(Action("Clear All Preset", "preset-clear-all", () => RunDevice("Clear All Preset", () => service.ClearDevicePresets(editedId), "Permanently clear all stored device presets? Current processing stays active."), true));
         device.Children.Add(actions);
         content.Children.Add(Card(device));
         var pc = new StackPanel { Spacing = 18 };

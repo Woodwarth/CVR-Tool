@@ -1,4 +1,5 @@
 // Application / Shared CVR LAN ownership
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: serialize discovery and device I/O on each local CVR UDP endpoint.
 // Units: local IPv4 address and UDP source port.
 // State: short-lived exclusive sockets are released before another reader starts.

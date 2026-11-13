@@ -1,4 +1,5 @@
 // Desktop / Application lifecycle — English culture, theme loading and main window.
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: present focused controls and forward edits to Application.
 // Input: user events and authoritative device snapshots.
 // State: local drafts never replace the shared backend.
@@ -34,6 +35,7 @@ public partial class App : Avalonia.Application
             }
             catch (IOException) { Console.Error.WriteLine("CVR Tool session is already running."); desktop.Shutdown(); return; }
             var window = new MainWindow(new AmplifierService(backend));
+            window.ObserveMcpClients(session);
             desktop.MainWindow = window;
             backend.DevicesChanged += () => Dispatcher.UIThread.Post(window.ReloadSession);
             window.Opened += (_, _) => backend.StartDiscovery();

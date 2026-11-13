@@ -1,4 +1,5 @@
 // Application / Local output processing and preset storage
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: model output EQ, FIR and sixteen independent device slots consistently.
 // Units: regular processing units and one-based slot numbers.
 // State: all mutations share the device revision and backend gate.

@@ -1,4 +1,5 @@
 // Desktop / Output dynamics editors
+// Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
 // Purpose: edit per-output Low-Z/70V/100V, per-channel gate and peak/RMS limiting.
 // Units: output volts, integer ms, dB and release/attack multiplier.
 // State: one window per device/channel/kind; plans reject concurrent changes.

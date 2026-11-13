@@ -1,4 +1,5 @@
 // Application / Physical output dynamics
+// Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: read/write per-output load mode, legacy bridge, noise gate and limiter parameter functions.
 // Units: output volts, integer ms, signed dB; all controls use output side 1.
 // State: whole-device revisions, immutable limits and independent write readback.
