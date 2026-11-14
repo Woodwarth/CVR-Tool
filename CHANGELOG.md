@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1
+
+- Desktop and browser controls now offer light, dark and system themes. Windows title bars follow the system appearance.
+- Demo amplifiers simulate input and output levels, voltage, current, load and temperature. Routing, mute, trim, bridge mode and limiter settings affect the readings.
+- The browser adds EQ reset and channel copy, limiter navigation, FIR file controls and device diagnostics.
+- Updated the desktop limiter layout, switch controls and status LEDs. Press Escape to close an editor.
+
 ## 0.8.0
 
 - Add live output EQ editing, channel switching and paired EQ/limiter copies.
