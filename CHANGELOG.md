@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.2
+
+- The updater supports private GitHub releases and remembers the repository and read token using Windows Credential Manager or macOS Keychain.
+- Demo devices keep their models and names across restarts, including multiple instances of the same model.
+
 ## 0.8.1
 
 - Desktop and browser controls now offer light, dark and system themes. Windows title bars follow the system appearance.
