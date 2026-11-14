@@ -38,7 +38,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(browserStatusButton, "Browser control · " + (connected ? "Connected" : running ? "On" : "Off"));
         browserStatusButton.Foreground = running ? Accent : Muted;
         browserStatusButton.BorderBrush = running ? Accent : Line;
-        browserStatusButton.Background = Avalonia.Media.Brush.Parse(running ? "#12362F" : "#182129");
+        browserStatusButton.Background = running ? Appearance.Selected : Appearance.Surface;
     }
 
     private void OpenBrowserControl()

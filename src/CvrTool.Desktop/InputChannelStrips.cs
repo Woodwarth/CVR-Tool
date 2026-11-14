@@ -42,7 +42,7 @@ public sealed partial class MainWindow
             strip.Children.Add(Centered(draft.State.Name, 17));
             var fader = new Grid
             {
-                ColumnDefinitions = new ColumnDefinitions("66,24"),
+                ColumnDefinitions = new ColumnDefinitions("24,24,66"),
                 Height = MeterHeight,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
@@ -67,8 +67,9 @@ public sealed partial class MainWindow
             var overlay = new Grid();
             overlay.Children.Add(face);
             overlay.Children.Add(slider);
-            fader.Children.Add(overlay);
-            AddColumn(fader, new ChannelMeter(liveReadOnly ? data.InputMeterDb : data.LevelDbFs, liveReadOnly ? -40 : -60) { Width = 24, Height = MeterHeight, Tag = "channel-meter-" + draft.State.Name }, 1);
+            AddColumn(fader, MeterScale(liveReadOnly ? -40 : -60), 0);
+            AddColumn(fader, overlay, 2);
+            AddColumn(fader, new ChannelMeter(data.InputMeterDb, liveReadOnly ? -40 : -60) { Width = 24, Height = MeterHeight, Tag = "channel-meter-" + draft.State.Name }, 1);
             var gain = Centered(inputGain is { } knownGain ? knownGain.ToString("0.0")+" dB" : "—",15);
             gain.Tag = "gain-" + draft.State.Name;
             slider.GotFocus += (_, _) =>
@@ -136,7 +137,7 @@ public sealed partial class MainWindow
             };
             Grid.SetRow(fader, 1);
             strip.Children.Add(fader);
-            var clip = StatusLight("Clip", liveReadOnly ? data.InputClip : data.Status?.Clip);
+            var clip = StatusLight("Clip", data.InputClip);
             clip.Tag = "channel-clip-" + draft.State.Name;
             Grid.SetRow(clip, 2);
             strip.Children.Add(clip);

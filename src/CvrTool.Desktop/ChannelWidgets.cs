@@ -24,12 +24,28 @@ public sealed partial class MainWindow
         Margin = new Thickness(6),
         Tag = tag,
         Padding = new Thickness(8),
-        CornerRadius = new CornerRadius(6),
+        CornerRadius = new CornerRadius(12),
         BorderBrush = Line,
         BorderThickness = new Thickness(1),
-        Background = Brush.Parse("#182129")
+        Background = Appearance.Strip
     };
+    private static Grid MeterScale(int floor)
+    {
+        var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*,*,*,*"),
+            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 1, 2, 2) };
+        for (var i = 0; i <= 6; i++)
+        {
+            var label = Text(Math.Round(floor * i / 6.0).ToString("0"), 10, Muted);
+            label.HorizontalAlignment = HorizontalAlignment.Right;
+            label.VerticalAlignment = i == 6 ? VerticalAlignment.Bottom : VerticalAlignment.Top;
+            Grid.SetRow(label, Math.Min(i, 5));
+            scale.Children.Add(label);
+        }
+        return scale;
+    }
+
     private static Control InputsPanel() => Text("Input data and topology are not confirmed for this demo.", 14, Muted);
+    private static readonly SolidColorBrush ClipColor = new(Color.Parse("#FF566A"));
     private static Control StatusLight(string? label, bool? value)
     {
         var row = new StackPanel
@@ -39,7 +55,13 @@ public sealed partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
-        var onColor = Color.Parse("#FF566A");
+        var onColor = label switch
+        {
+            "Limit" or "Load" or "Open" => Color.Parse("#E9A538"),
+            "Stby" => Color.Parse("#729EEC"),
+            "Bridge" or "Hi-Z" => Color.Parse("#16BEAA"),
+            _ => ClipColor.Color
+        };
         row.Children.Add(new StatusLed(value, onColor));
         if (label is not null)
             row.Children.Add(Text(label, 11, value == true ? new SolidColorBrush(onColor) : Muted));
@@ -73,7 +95,7 @@ public sealed partial class MainWindow
             };
             content.Children.Add(glyphSize == 18 ? new SpeakerGlyph(isMuted) { Width = 18, Height = 18 } : new Viewbox { Width = glyphSize, Height = glyphSize, Child = new SpeakerGlyph(isMuted) { Width = 20, Height = 18 } });
             button.Content = heading is null ? content : OutputBlockContent(heading, content);
-            button.Background = Brush.Parse(isMuted ? "#BE3044" : "#182129");
+            button.Background = isMuted ? Brush.Parse("#BE3044") : Appearance.Surface;
             button.BorderBrush = isMuted ? Brush.Parse("#ED5D6F") : Line;
             AutomationProperties.SetName(button, name + (isMuted ? " muted" : " unmuted"));
             ToolTip.SetTip(button, name + (isMuted ? ": muted — click to unmute" : ": unmuted — click to mute"));

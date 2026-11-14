@@ -3,7 +3,7 @@
 // Purpose: render English local browser controls from the shared Application state.
 // Units: dB/ms/metres/Hz/Q; Peak response preview explicitly uses 48 kHz.
 // State: drafts remain local; an independent heartbeat pauses writes on connection loss.
-// Scope: no direct amplifier transport, external scripts or factory-reset command.
+// Scope: no direct amplifier transport, external scripts.
 "use strict";
 // A page owns one logical session; HTTP connections remain free to run in parallel.
 const browserClientId = Array.from(
@@ -400,7 +400,7 @@ function gain(side, ch, value, vertical = false) {
     enabled,
     "value",
   );
-  return `<div class="gain-control ${vertical ? "vertical-gain" : ""}" data-gain-side="${side}" data-gain-channel="${ch}"><div class="fader-row"><input aria-label="${side} ${ch} gain" type="range" min="-80" max="18" step="0.5" value="${value ?? 0}" data-gain="${side}" data-channel="${ch}"${dis(enabled)}>${vertical ? meter(live() ? reading?.inputMeterDb : reading?.levelDbFs) : ""}</div>${vertical ? clip(live() ? reading?.inputClip : reading?.status?.clip) : ""}${readout}</div>`;
+  return `<div class="gain-control ${vertical ? "vertical-gain" : ""}" data-gain-side="${side}" data-gain-channel="${ch}"><div class="fader-row"><input aria-label="${side} ${ch} gain" type="range" min="-80" max="18" step="0.5" value="${value ?? 0}" data-gain="${side}" data-channel="${ch}"${dis(enabled)}>${vertical ? meter(reading?.inputMeterDb) : ""}</div>${vertical ? clip(reading?.inputClip) : ""}${readout}</div>`;
 }
 function mute(side, ch, muted) {
   return button(
@@ -431,7 +431,7 @@ function flags(ch) {
   ]
     .map(
       ([k, label]) =>
-        `<span><i class="led ${s?.[k] === true ? "bad" : s?.[k] === false ? "" : "unknown"}"></i>${label}</span>`,
+        `<span><i class="led ${s?.[k] === true ? "active-" + k : s?.[k] === false ? "" : "unknown"}"></i>${label}</span>`,
     )
     .join("")}</div>`;
 }
@@ -498,14 +498,14 @@ function outputRow(o) {
   </div></article>`;
 }
 function outputs() {
-  return `<h2>Outputs · ${esc(state.device.capabilities.model)}</h2><div class="output-strips">${state.device.outputs.map(outputRow).join("")}</div>`;
+  return `<div class="output-strips">${state.device.outputs.map(outputRow).join("")}</div>`;
 }
 const presetDrafts = new Map(), presetSlots = new Map();
 function presetKey(slot) { return JSON.stringify([selected, slot]); }
 function presets() {
   const slots = state.presets.slots;
   const slot = slots.find(s => s.number === presetSlots.get(selected)) ?? slots[0];
-  return `<div class="presets"><section class="section-panel"><h3>On Device</h3><div class="preset-fields"><label>Preset slot<select id="preset-slot">${slots.map(s => `<option value="${s.number}" ${s === slot ? "selected" : ""}>${s.number} · ${esc(s.name)}</option>`).join("")}</select></label><label>Preset name<input id="preset-name" maxlength="32"></label><label>Current preset<span>${esc(state.presets.currentName || "—")}</span></label></div><div class="preset-actions">${button("Load from Device","recall-preset",{},!!slot && allow())}${button("Save to Device","store-preset",{},!!slot && allow())}${button("Clear All Presets","clear-presets",{},slots.length > 0 && allow())}</div></section><section class="section-panel"><h3>On PC</h3>${button("Load from PC","load",{},allow())}${button("Save to PC","save")}<input id="preset-file" class="hidden" type="file" accept=".sd"></section></div>`;
+  return `<div class="presets"><section class="section-panel"><h3>On Device</h3><div class="preset-fields"><label>Preset slot<select id="preset-slot">${slots.map(s => `<option value="${s.number}" ${s === slot ? "selected" : ""}>${s.number} · ${esc(s.name)}</option>`).join("")}</select></label><label>Preset name<input id="preset-name" maxlength="32"></label><label>Current preset<span>${esc(state.presets.currentName || "—")}</span></label></div><div class="preset-actions">${button("Load from Device","recall-preset",{},!!slot && allow())}${button("Save to Device","store-preset",{},!!slot && allow())}${button("Factory Reset","factory-reset",{},allow())}${live()?button("Inspect protocol reply","inspect",{},!offline()):""}${button("Clear All Presets","clear-presets",{},slots.length > 0 && allow())}</div></section><section class="section-panel"><h3>On PC</h3>${button("Load from PC","load",{},allow())}${button("Save to PC","save")}<input id="preset-file" class="hidden" type="file" accept=".sd"></section></div>`;
 }
 function dialog(title, html, apply) {
   $("#editor-body").oninput = null;
@@ -535,10 +535,10 @@ function eq(side, ch) {
   const p = (side === "input" ? state.inputs : state.outputProcessing).find(
       (i) => i.channel === ch,
     ),
-    editable = allow();
+    editable = allow() && channelAvailable(side,ch);
   dialog(
     `${side === "input" ? "Input" : "Output"} ${ch} EQ`,
-    `<canvas id="curve" class="plot" width="1100" height="320"></canvas><label><input id="eq-enabled" type="checkbox" ${p.eqEnabled ? "checked" : ""}${dis(editable)}> EQ On</label><div class="bands">${[
+    `<canvas id="curve" class="plot" width="1100" height="320"></canvas><label><input id="eq-enabled" type="checkbox" role="switch" ${p.eqEnabled ? "checked" : ""}${dis(editable)}> EQ On</label><div class="bands">${[
       "highPass",
       "lowPass",
     ]
@@ -556,16 +556,16 @@ function eq(side, ch) {
                     o.code === f?.filterType,
                 )
               : state.crossoverOptions;
-        return `<section class="card"><h3>${n ? "LP" : "HP"}</h3><select id="${key}-type"${dis(known)}>${opts.map((o) => `<option value="${o.code}" ${f?.filterType === o.code ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select>${number(key + "-hz", "Hz", f?.frequencyHz ?? 20, 20, 20000, 1, known)}<label><input id="${key}-on" type="checkbox" ${f?.enabled ? "checked" : ""}${dis(known)}> On</label></section>`;
+        return `<section class="card"><h3>${n ? "LP" : "HP"}</h3><select id="${key}-type"${dis(known)}>${opts.map((o) => `<option value="${o.code}" ${f?.filterType === o.code ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select>${number(key + "-hz", "Hz", f?.frequencyHz ?? 20, 20, 20000, 1, known)}<label><input id="${key}-on" type="checkbox" role="switch" ${f?.enabled ? "checked" : ""}${dis(known)}> On</label></section>`;
       })
       .join("")}${p.bands
       .map((b) => {
         const edit = editable && (!live() || b.filterType === 0);
-        return `<section class="card"><h3>EQ ${b.number}</h3>${number("hz-" + b.number, "Hz", b.frequencyHz, 20, 20000, 1, edit)}${number("db-" + b.number, "dB", b.gainDb, -18, 18, 0.5, edit)}${number("q-" + b.number, "Q", b.q, 0.1, 20, 0.01, edit)}<label><input id="on-${b.number}" type="checkbox" ${b.enabled ? "checked" : ""}${dis(edit)}> On</label></section>`;
+        return `<section class="card"><h3>EQ ${b.number}</h3>${number("hz-" + b.number, "Hz", b.frequencyHz, 20, 20000, 1, edit)}${number("db-" + b.number, "dB", b.gainDb, -18, 18, 0.5, edit)}${number("q-" + b.number, "Q", b.q, 0.1, 20, 0.01, edit)}<label><input id="on-${b.number}" type="checkbox" role="switch" ${b.enabled ? "checked" : ""}${dis(edit)}> On</label></section>`;
       })
       .join(
         "",
-      )}</div><p class="subtle">Gain (dB) · Phase (°) · 48 kHz</p><button type="button" id="generate-fir">Generate FIR…</button><span id="plot-status"></span>`,
+      )}</div><p class="subtle">Gain (dB) · Phase (°) · 48 kHz</p><button type="button" id="reset-eq"${dis(editable)}>Reset EQ</button><button type="button" id="generate-fir">Generate FIR</button><span id="plot-status"></span>`,
     editable
       ? async () => {
           const processing = {
@@ -668,6 +668,28 @@ function eq(side, ch) {
   };
   canvas.onlostpointercapture=()=>{dragged=null;};
   $("#editor-body").oninput=redraw;
+  $("#reset-eq").onclick=()=>{
+    const defaults=state.eqDefaults;
+    for (const b of defaults.bands) {
+      if ($("#hz-"+b.number).disabled) continue;
+      $("#hz-"+b.number).value=b.frequencyHz;
+      $("#db-"+b.number).value=b.gainDb;
+      $("#q-"+b.number).value=b.q;
+      $("#on-"+b.number).checked=p.bands.find(x=>x.number===b.number).filterType===0;
+    }
+    for (const key of ["highPass","lowPass"]) {
+      if ($("#"+key+"-type").disabled) continue;
+      $("#"+key+"-type").value=0;
+      $("#"+key+"-hz").value=defaults[key].frequencyHz;
+      $("#"+key+"-on").checked=false;
+    }
+    $("#eq-enabled").checked=true;
+    redraw();
+  };
+  editorChannels(side,ch,n=>eq(side,n),async n=>{
+    const {enabled,...filters}=draft();
+    await change(side==="input"?"input":"output-eq",{channel:n,processing:{eqEnabled:enabled,...filters}});
+  });
   $("#generate-fir").onclick=async () => {
     try {
       const blob=await (await api("/api/eq-fir",draft())).blob(), url=URL.createObjectURL(blob), link=document.createElement("a");
@@ -676,37 +698,127 @@ function eq(side, ch) {
   };
   redraw();
 }
+function channelAvailable(side,channel) {
+  return side==="input" || channel%2===1 || !state.dynamics.find(item=>item.channel===channel)?.bridged;
+}
+
+function editorChannels(side,current,open,copy) {
+  const channels=(side==="input"?state.inputs:state.outputProcessing)
+    .map(item=>item.channel).filter(n=>channelAvailable(side,n));
+  const options=channels.map(n=>`<option value="${n}" ${n===current?"selected":""}>${side==="input"?n:String.fromCharCode(64+n)}</option>`).join("");
+  const destinations=channels.filter(n=>n!==current).map(n=>`<option value="${n}">${side==="input"?n:String.fromCharCode(64+n)}</option>`).join("");
+  $("#editor-body").insertAdjacentHTML("afterbegin",`<div class="channel-tools"><label>Channel<select id="editor-channel">${options}</select></label>
+    <label>Destination<select id="copy-channel">${destinations}</select></label><button type="button" id="copy-settings"${dis(allow() && !!destinations)}>Copy settings</button></div>`);
+  // Compare visible draft controls so switching also works while a value is incomplete.
+  const fields=[...$("#editor-body").querySelectorAll("input, select")].filter(el=>!el.closest(".channel-tools"));
+  const signature=()=>JSON.stringify(fields.map(el=>el.type==="checkbox"?el.checked:el.value));
+  const initial=signature();
+  $("#editor-channel").onchange=e=>{
+    const next=Number(e.target.value);
+    if (signature()!==initial && !confirm("Discard edits and switch channel?")) {e.target.value=current;return;}
+    open(next);
+  };
+  $("#copy-settings").onclick=async ()=>{
+    const target=Number($("#copy-channel").value);
+    if (!confirm("Copy these settings to "+side+" "+target+"?")) return;
+    try {await copy(target);}
+    catch(e){$("#editor-error").textContent=e.message;}
+  };
+}
+
+function firEditor(channel) {
+  let filter=state.fir.find(item=>item.channel===channel), replaced=false;
+  const editable=allow() && channelAvailable("output",channel);
+  dialog("Output FIR · Channel "+channel,
+    `<p id="fir-info"></p><label><input id="fir-enabled" type="checkbox" role="switch" ${filter.enabled?"checked":""}${dis(editable)}> FIR On</label>
+    <div class="channel-tools"><label>Import .txt<input type="file" accept=".txt" id="fir-file"${dis(editable)}></label>
+    <button type="button" id="fir-export">Export</button><button type="button" id="fir-remove"${dis(editable)}>Remove</button></div>`,
+    editable?()=>replaced?change("fir-replace",{channel,filter:{...filter,enabled:$("#fir-enabled").checked}}):
+      change("fir",{channel,enabled:$("#fir-enabled").checked}):null);
+  function display() {
+    $("#fir-info").textContent=(filter.name || "Unnamed filter")+" · "+(filter.coefficientsKnown?filter.coefficients.length+" taps":"Coefficients unavailable");
+    $("#fir-export").disabled=!filter.coefficientsKnown || !filter.coefficients.length;
+  }
+  display();
+  $("#fir-file").onchange=async e=>{
+    const input=e.target,file=input.files[0];
+    if (!file) return;
+    try {
+      if(file.size>1048576) throw Error("FIR file exceeds 1 MiB.");
+      const response=await api("/api/fir-import",{name:file.name.replace(/\.txt$/i,"").slice(0,32),text:await file.text()});
+      const imported=await response.json();
+      if(!input.isConnected || !$("#editor").open) return;
+      filter=imported;replaced=true;display();
+    } catch(error){$("#editor-error").textContent=error.message;}
+  };
+  $("#fir-export").onclick=()=>{
+    const url=URL.createObjectURL(new Blob([filter.coefficients.join("\n")+"\n"],{type:"text/plain"}));
+    const link=document.createElement("a");link.href=url;link.download=(filter.name||"FIR")+".txt";link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  };
+  $("#fir-remove").onclick=()=>{
+    filter={...filter,name:"",coefficients:[1],coefficientsKnown:true};
+    replaced=true;$("#fir-enabled").checked=false;display();
+  };
+}
+
+function inspectReply() {
+  const functions=[[43,"FIR"],[50,"Stereo / bridge"],[51,"Channel copy"],[52,"Output EQ"],[53,"Dynamic EQ"],[54,"Peak limiter"],[55,"RMS limiter"],[57,"Speaker profile"],[59,"Preset names"],[62,"Source alignment"],[82,"RTA"],[88,"Input delay switch"],[91,"Limiter settings and load"],[93,"Input group gain"]];
+  dialog("Protocol inspection",`<label>Function<select id="inspect-function">${functions.map(([n,label])=>`<option value="${n}">${n} · ${label}</option>`).join("")}</select></label>
+    <label>Channel<select id="inspect-channel">${state.device.outputs.map(o=>`<option>${o.number}</option>`).join("")}</select></label>
+    <label>Source<select id="inspect-source" disabled><option>Analog</option><option>Digital</option><option>AES</option></select></label>
+    <button type="button" id="inspect-read">Read from device</button><p id="inspect-result"></p>`,null);
+  $("#inspect-function").onchange=e=>$("#inspect-source").disabled=e.target.value!=="62";
+  $("#inspect-read").onclick=async e=>{
+    const read=e.target,out=$("#inspect-result"),source=$("#inspect-source");
+    const params=new URLSearchParams({id:selected,function:$("#inspect-function").value,channel:$("#inspect-channel").value,segment:source.disabled?0:source.selectedIndex});
+    read.disabled=true;
+    try {out.textContent=await (await api("/api/inspection?"+params)).json();}
+    catch(error){out.textContent=error.message;}
+    finally {read.disabled=false;}
+  };
+}
 async function action(a, d) {
+  if (a === "factory-reset") {
+    if (confirm("Restore factory settings on " + state.device.name + "? Current processing and stored presets may be cleared.")) {
+      await change("factory-reset",{confirmed:true});
+    }
+    return;
+  }
+  if (a === "inspect") return inspectReply();
   if (a === "navigate") return document.querySelector(`[data-tab="${d.tab}"]`).click();
   if (a === "gate-editor") {
     const gate = state.dynamics.find(x => x.channel === d.channel);
     dialog("Noise gate · Output "+d.channel,
-      `<label><input id="gate-enabled" type="checkbox" ${gate.noiseGateEnabled?"checked":""}>On</label>` +
+      `<label><input id="gate-enabled" type="checkbox" role="switch" ${gate.noiseGateEnabled?"checked":""}>On</label>` +
       number("gate-db","Threshold · dB",gate.noiseGateDb ?? 0,-100,0,1,gate.noiseGateDb != null),
       () => change("dynamics",{channel:d.channel,dynamics:{noiseGateEnabled:$("#gate-enabled").checked,
         ...(gate.noiseGateDb != null ? {noiseGateDb:value("gate-db")} : {})}}));
     return;
   }
   if (a === "fir-editor") {
-    const f=state.fir.find(x=>x.channel===d.channel);
-    dialog("Output FIR · Channel "+d.channel,
-      `<p>${esc(f.name)} · ${f.coefficientsKnown?f.coefficients.length+" taps":"Coefficients unavailable"}</p>
-      <label><input id="fir-enabled" type="checkbox" ${f.enabled?"checked":""}>FIR On</label>`,
-      allow() ? () => change("fir",{channel:d.channel,enabled:$("#fir-enabled").checked}) : null);
+    firEditor(d.channel);
     return;
   }
   if (a === "limiters") {
     const {rms:r,peak:p} = state.dynamics.find(x=>x.channel===d.channel);
-    const toggle=(id,label,on)=>`<label><input type="checkbox" id="${id}" ${on?"checked":""}>${label}</label>`;
+    const toggle=(id,label,on)=>`<label><input type="checkbox" role="switch" id="${id}" ${on?"checked":""}>${label}</label>`;
+    const settings=(target)=>{
+      const dest=state.dynamics.find(x=>x.channel===target);
+      return {
+        rms:{...dest.rms,enabled:$("#r-on").checked,thresholdVolts:value("r-v"),automatic:$("#r-auto").checked,attackMs:value("r-at"),releaseMultiplier:value("r-rel")},
+        peak:{...dest.peak,enabled:$("#p-on").checked,thresholdVolts:value("p-v"),holdMs:value("p-h"),releaseMs:value("p-rel")}
+      };
+    };
+    const commit=target=>change("dynamics",{channel:target,dynamics:settings(target)});
     dialog("Limiters · Output "+d.channel,`<div class="limiter-columns"><section>${toggle("r-on","RMS On",r.enabled)}
       ${number("r-v","Threshold · Vrms",r.thresholdVolts,0,r.maximumVolts,.01)}
       ${toggle("r-auto","Automatic timing",r.automatic)}
       ${number("r-at","Attack · ms",r.attackMs,1,2000,1)}${number("r-rel","Release × attack",r.releaseMultiplier,2,32,1)}</section>
       <section>${toggle("p-on","Peak On",p.enabled)}${number("p-v","Threshold · Vpeak",p.thresholdVolts,0,p.maximumVolts,.01)}
       ${number("p-h","Hold · ms",p.holdMs,0,2000,1)}${number("p-rel","Release · ms",p.releaseMs,20,1000,1)}</section></div>`,
-      allow()?()=>change("dynamics",{channel:d.channel,dynamics:{
-        rms:{...r,enabled:$("#r-on").checked,thresholdVolts:value("r-v"),automatic:$("#r-auto").checked,attackMs:value("r-at"),releaseMultiplier:value("r-rel")},
-        peak:{...p,enabled:$("#p-on").checked,thresholdVolts:value("p-v"),holdMs:value("p-h"),releaseMs:value("p-rel")}}}):null);
+      allow() && channelAvailable("output",d.channel)?()=>commit(d.channel):null);
+    editorChannels("output",d.channel,n=>action("limiters",{channel:n}),commit);
     const timing=()=>{ $("#r-at").disabled=$("#r-rel").disabled=$("#r-auto").checked; };
     $("#r-auto").onchange=timing; timing(); return;
   }
@@ -723,17 +835,15 @@ async function action(a, d) {
         : { channel: d.channel, enabled: d.enabled },
     );
   if (a === "gain") {
-    const s = prompt("Gain in dB · −80 to +18", d.value);
-    if (s == null) return;
-    const v = Number(s.replace(",", "."));
-    if (s.trim() === "" || !Number.isFinite(v))
-      throw Error("Enter a gain in dB.");
-    return change(
-      d.side === "input" ? "input" : "output",
-      d.side === "input"
-        ? { channel: d.channel, processing: { gainDb: v } }
-        : { channel: d.channel, value: v },
-    );
+    const input = d.side === "input";
+    dialog(input ? "Input gain" : "Output trim",
+      number("gain-db", "Gain · dB", d.value, -80, 18, 0.5),
+      () => change(input ? "input" : "output", input
+        ? { channel: d.channel, processing: { gainDb: value("gain-db") } }
+        : { channel: d.channel, value: value("gain-db") }));
+    $("#gain-db").focus();
+    $("#gain-db").select();
+    return;
   }
   if (a === "eq") return eq(d.side, d.channel);
   if (a === "delay") {
@@ -758,7 +868,7 @@ async function action(a, d) {
   if (a === "route") {
     dialog(
       `Input ${d.input} → Output ${d.output}`,
-      `<input id="route-gain" type="range" min="-80" max="18" step="0.5" value="${d.value}"><output id="route-value">${d.value} dB</output><label><input id="route-muted" type="checkbox" ${d.enabled ? "checked" : ""}> Mute</label>`,
+      `<input id="route-gain" type="range" min="-80" max="18" step="0.5" value="${d.value}"><output id="route-value">${d.value} dB</output><label><input id="route-muted" type="checkbox" role="switch" ${d.enabled ? "checked" : ""}> Mute</label>`,
       () =>
         change("route", {
           input: d.input,
@@ -772,16 +882,17 @@ async function action(a, d) {
     return;
   }
   if (a === "gate") {
-    const v = prompt("Gate threshold · −100 to 0 dB", d.value);
-    if (v == null) return;
-    return change("dynamics", {
-      channel: d.channel,
-      dynamics: { noiseGateDb: Number(v.replace(",", ".")) },
-    });
+    dialog("Noise gate", number("gate-threshold", "Threshold · dB", d.value, -100, 0, 1),
+      () => change("dynamics", {channel: d.channel, dynamics: {noiseGateDb: value("gate-threshold")}}));
+    return;
   }
   if (a === "rename") {
-    const name = prompt("Device name", state.device.name);
-    if (name != null) return change("rename", { name });
+    dialog("Device name", '<label>Name<input id="device-name-input" type="text"></label>',
+      () => change("rename", { name: $("#device-name-input").value }));
+    const field = $("#device-name-input");
+    field.value = state.device.name;
+    field.focus();
+    field.select();
     return;
   }
   if (a === "standby" && d.enabled && !confirm("Put the amplifier in standby?"))
@@ -1102,3 +1213,17 @@ heartbeat();
 setInterval(heartbeat, heartbeatIntervalMs);
 setInterval(() => connectionReady(), 500);
 setInterval(() => refresh().catch((e) => status(e.message, true)), 2000);
+
+const appearance = $("#appearance");
+const systemLight = matchMedia("(prefers-color-scheme: light)");
+function applyAppearance() {
+  const light = appearance.value === "Light" || (appearance.value === "System" && systemLight.matches);
+  document.documentElement.dataset.theme = light ? "light" : "dark";
+}
+try { appearance.value = localStorage.getItem("cvr-appearance") || "System"; } catch {}
+appearance.onchange = () => {
+  applyAppearance();
+  try { localStorage.setItem("cvr-appearance", appearance.value); } catch {}
+};
+systemLight.addEventListener("change", applyAppearance);
+applyAppearance();

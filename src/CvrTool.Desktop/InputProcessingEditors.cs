@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
+using Avalonia.Input;
 using CvrTool.Application;
 using CvrTool.Core;
 
@@ -84,7 +85,7 @@ public sealed partial class MainWindow
     {
         var input = service.GetInputProcessing(deviceId, channel);
         var delay = Centered($"{AmplifierService.DelayMeters(input.DelayMs):0.00} m\n{input.DelayMs:0.00} ms", 12, Accent);
-        var button = new Button { Content = OutputBlockContent("Delay", delay), Background = Avalonia.Media.Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), Tag = "input-delay-" + channel, Width = OutputBlockWidth, Height = OutputBlockHeight, HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(6, 8), CornerRadius = new CornerRadius(3) };
+        var button = new Button { Content = OutputBlockContent("Delay", delay), Background = Appearance.Surface, BorderBrush = Line, BorderThickness = new Thickness(1), Tag = "input-delay-" + channel, Width = OutputBlockWidth, Height = OutputBlockHeight, HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(6, 8), CornerRadius = new CornerRadius(8) };
         button.Click += (_, _) => OpenDelayEditor(channel);
         return button;
     }
@@ -92,23 +93,34 @@ public sealed partial class MainWindow
     {
         var input = service.GetInputProcessing(deviceId, channel);
         var enabled = Centered(input.EqEnabled ? "On" : "Off", 12, input.EqEnabled ? Accent : Muted);
-        var button = new Button { Content = OutputBlockContent("EQ", enabled), Background = Avalonia.Media.Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), Tag = "input-eq-" + channel, Width = OutputBlockWidth, Height = OutputBlockHeight, HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(6, 8), CornerRadius = new CornerRadius(3) };
+        var button = new Button { Content = OutputBlockContent("EQ", enabled), Background = Appearance.Surface, BorderBrush = Line, BorderThickness = new Thickness(1), Tag = "input-eq-" + channel, Width = OutputBlockWidth, Height = OutputBlockHeight, HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(6, 8), CornerRadius = new CornerRadius(8) };
         button.Click += (_, _) => OpenInputEqEditor(channel);
         return button;
     }
-    private Window EditorWindow(string title, Control content, double width, double height) => new()
+    private Window EditorWindow(string title, Control content, double width, double height)
     {
-        Title = title,
-        Content = content,
-        Width = width,
-        Height = height,
-        MinWidth = Math.Min(width, 420),
-        MinHeight = Math.Min(height, 280),
-        Background = Background,
-        Foreground = Foreground,
-        Icon = Branding.WindowIcon(),
-        WindowStartupLocation = WindowStartupLocation.CenterOwner
-    };
+        var editor = new Window
+        {
+            Title = title,
+            Content = content,
+            Width = width,
+            Height = height,
+            MinWidth = Math.Min(width, 420),
+            MinHeight = Math.Min(height, 280),
+            Background = Background,
+            Foreground = Foreground,
+            Icon = Branding.WindowIcon(),
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+        WindowsTitleBar.Attach(editor);
+        editor.KeyDown += (_, key) =>
+        {
+            if (key.Key != Key.Escape) return;
+            key.Handled = true;
+            editor.Close();
+        };
+        return editor;
+    }
     private void OpenDelayEditor(int channel,bool output=false)
     {
         var editedId = deviceId;

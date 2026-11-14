@@ -45,7 +45,7 @@ public sealed partial class MainWindow
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         Button Action(string label, string tag, Func<Task> action, bool danger = false)
         {
-            var button = new Button { Content = label, Tag = tag, Padding = new Thickness(18, 12), Background = Brush.Parse(danger ? "#762A37" : "#007F7D") };
+            var button = new Button { Content = label, Tag = tag, Padding = new Thickness(18, 12), Foreground = Brushes.White, Background = Brush.Parse(danger ? "#762A37" : "#007F7D") };
             button.IsEnabled = !liveReadOnly || tag == "preset-save-pc" ||
                 (ConnectionAvailable(service.GetDevice(editedId)) &&
                  (tag is "preset-load-pc" or "preset-factory-reset" || presets.Slots.Count > 0));
@@ -68,6 +68,8 @@ public sealed partial class MainWindow
         actions.Children.Add(Action("Clear All Preset", "preset-clear-all", () => RunDevice("Clear All Preset", () => service.ClearDevicePresets(editedId), "Permanently clear all stored device presets? Current processing stays active."), true));
         device.Children.Add(actions);
         content.Children.Add(Card(device));
+        if (liveReadOnly && ConnectionAvailable(service.GetDevice(editedId)))
+            content.Children.Add(ProtocolInspectionButton(editedId));
         var pc = new StackPanel { Spacing = 18 };
         pc.Children.Add(Heading("On PC"));
         var files = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };

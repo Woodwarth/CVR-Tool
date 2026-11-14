@@ -1,8 +1,6 @@
 # CVR Tool
 
-A cross-platform desktop app with integrated MCP for CVR DSP amplifiers.
-The interface and functions follow the CVR application, with the same controls
-for two- and four-channel models.
+CVR Tool controls CVR DSP amplifiers from Windows, macOS or a browser on the local network. The desktop app includes an MCP server and a demo amplifier for offline use.
 
 ![CVR Tool Outputs view in a local demo session](docs/images/outputs.png)
 
@@ -15,26 +13,9 @@ for two- and four-channel models.
 | Mac · Apple Silicon | [Download archive](https://github.com/Woodwarth/CVR-Tool/releases/download/v0.8.0/CVR-Tool-0.8.0-osx-arm64.tar.gz) | `CVR Tool.app` |
 
 [Latest release and checksums](https://github.com/Woodwarth/CVR-Tool/releases/latest).
-Extract the entire package. The runtime is included; no SDK or additional
-software is required. Desktop and integrated MCP share one bundled runtime.
-Windows packages are unsigned; Mac is ad-hoc signed,
-not notarized. No Intel Mac build.
+Extract the whole archive before starting the app. Each download includes the .NET runtime. The Windows packages are unsigned. The Mac app is ad-hoc signed and has not been notarized.
 
-From v0.4.0, choose **Updates → Check for updates → Download and restart**
-inside the app. Updates are verified and installed in your user profile;
-existing versions are retained. Export session settings before restarting.
-
-Choose **Browser control > Start** to control the same session from an iPad
-browser on your local network. Scan the private QR code with the iPad camera,
-or open the connection link shown in Desktop; no iPad app or internet is required.
-The browser displays its connection to Desktop separately from amplifier status.
-If the app connection is lost, controls pause until a fresh session is loaded.
-Unfinished edits are never sent automatically when the connection returns.
-
-Desktop, browser and MCP share one local session. CVR devices are found automatically
-on the wired amplifier LAN and listed beside the demos. Live settings and status
-are displayed. Selected controls support independently verified writes; see
-[network capabilities](docs/network.md) and [hardware validation](docs/validation.md).
+Connect the amplifier by Ethernet to discover it automatically. To use an iPad, open **Browser control** on the desktop, start the server and scan the QR code. Use **Updates** in the desktop app to check for a newer release.
 
 [Development guide](docs/code-guide.md) · [MCP setup](docs/mcp.md) ·
 [Network details](docs/network.md) · [Validation](docs/validation.md)

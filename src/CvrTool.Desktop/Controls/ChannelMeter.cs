@@ -12,6 +12,12 @@ namespace CvrTool.Desktop;
 
 internal sealed class ChannelMeter(double? level, double floor = -60) : Control
 {
+    private static readonly IBrush Signal = Brush.Parse("#38FFE0");
+    private static readonly IBrush Hot = Brush.Parse("#FF7486");
+    private static readonly IBrush SignalHalo = Brush.Parse("#4000CEBD");
+    private static readonly IBrush HotHalo = Brush.Parse("#48FF5264");
+    private static readonly IBrush Idle = Brush.Parse("#20383E");
+
     public double? Level { get; private set; } = level;
     public void Update(double? next) { if (Level != next) { Level = next; InvalidateVisual(); } }
     public override void Render(DrawingContext context)
@@ -24,9 +30,12 @@ internal sealed class ChannelMeter(double? level, double floor = -60) : Control
         for (var segment = 0; segment < 24; segment++)
         {
             var lit = Level is not null && segment / 24.0 < fraction;
-            var brush = Brush.Parse(lit ? segment >= 22 ? "#FF5264" : "#00CEBD" : "#20383E");
-            context.DrawRectangle(brush, null, new Rect(x + 3, 3 + (23 - segment) * (height - 4) / 24, width - 6, Math.Max(1, (height - 4) / 24 - 2)));
-
+            var hot = segment >= 22;
+            var pitch = (height - 4) / 24;
+            var cell = new Rect(x + 2, 3 + (23 - segment) * pitch, width - 4, Math.Max(1, pitch - 2));
+            if (lit)
+                context.DrawRectangle(hot ? HotHalo : SignalHalo, null, cell.Inflate(2), 3, 3);
+            context.DrawRectangle(lit ? (hot ? Hot : Signal) : Idle, null, cell, 1, 1);
         }
         if (Level is null)
         {

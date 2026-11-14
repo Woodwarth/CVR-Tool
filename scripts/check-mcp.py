@@ -140,7 +140,7 @@ with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as errors, contextlib.
         a.call("set_device_controls", deviceId="demo-2002", displayLocked=True, standby=True)
         assert b.call("get_device_controls", deviceId="demo-2002") == {"DisplayLocked": True, "Standby": True, "StandbyKnown": True, "Wink": False}
         telemetry = a.call("get_telemetry", deviceId="demo-2002")
-        assert len(telemetry) == 2 and all(t["Voltage"] is None for t in telemetry)
+        assert len(telemetry) == 2 and all(t["Voltage"] >= 0 and t["TemperatureC"] > 0 for t in telemetry)
         exported = b.call("export_preset", deviceId="demo-2002")
         assert exported["SchemaVersion"] == 7 and exported["Name"] == "Front amp" and len(exported["Inputs"]) == 2
         mode_plan=a.call("plan_output_dynamics",deviceId="demo-2002",channel=1,loadMode=2)

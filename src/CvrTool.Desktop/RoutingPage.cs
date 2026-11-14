@@ -118,7 +118,7 @@ public sealed partial class MainWindow
             gain.EditingStarted += () => { if (liveReadOnly) liveEditInteractions++; };
             gain.EditingEnded += () => { liveEditInteractions = Math.Max(0, liveEditInteractions - 1); };
             gain.ValueChanged += value => { channels.Single(c => c.State.Number == output.Number).Gain = value; Commit(new(deviceId, output.Number, GainDb: value)); };
-            var block = new Border { Child = OutputBlockContent("Volume " + output.Name, gain), Width = OutputBlockWidth, Height = OutputBlockHeight, Padding = new Thickness(6, 8), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3), VerticalAlignment = VerticalAlignment.Center };
+            var block = new Border { Child = OutputBlockContent("Volume " + output.Name, gain), Width = OutputBlockWidth, Height = OutputBlockHeight, Padding = new Thickness(6, 8), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), VerticalAlignment = VerticalAlignment.Center };
             block.Tag = "route-volume-" + output.Name;
             Grid.SetRow(block, output.Number);
             outputLevels.Children.Add(block);
@@ -147,7 +147,7 @@ public sealed partial class MainWindow
             CornerRadius = new CornerRadius(5),
             BorderBrush = Line,
             BorderThickness = new Thickness(1),
-            Background = Brush.Parse("#182129"),
+            Background = Appearance.Surface,
             VerticalAlignment = VerticalAlignment.Center
         };
     }

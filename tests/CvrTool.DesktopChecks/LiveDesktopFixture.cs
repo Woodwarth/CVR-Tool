@@ -23,7 +23,7 @@ sealed class LiveDesktopFixture : IAmplifierBackend, IAdvancedAmplifierBackend
     };
     public IReadOnlyList<DeviceSnapshot> ListDevices() => demo.ListDevices().Append(GetDevice(LiveId)).ToArray();
     public (ChannelState State,long Revision) GetChannel(string id,int channel) => demo.GetChannel(Map(id),channel);
-    public IReadOnlyList<OutputTelemetry> GetTelemetry(string id) => demo.GetTelemetry(Map(id)).Select(t => t.Channel == 1 ? t with { Voltage=TestVoltage,Current=5,TemperatureC=42,Status=new(Clip:true) } : t).ToArray();
+    public IReadOnlyList<OutputTelemetry> GetTelemetry(string id) => demo.GetTelemetry(Map(id)).Select(t => t with { InputMeterDb = null, InputClip = null }).Select(t => t.Channel == 1 ? t with { Voltage=TestVoltage,Current=5,TemperatureC=42,Status=new(Clip:true) } : t).ToArray();
     public RoutingSnapshot GetRouting(string id) => demo.GetRouting(Map(id)) with {DeviceId=id};
     public (InputProcessingState State,long Revision) GetInputProcessing(string id,int channel) => demo.GetInputProcessing(Map(id),channel);
     public DeviceControlState GetControlState(string id) => demo.GetControlState(Map(id));

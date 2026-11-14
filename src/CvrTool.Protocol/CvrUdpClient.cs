@@ -35,9 +35,9 @@ public sealed class CvrUdpClient : IDisposable
     // DSP-1004 returns data status and uses segment 10 for these block reads.
     public byte[] ReadInspection(byte function, byte channel, byte segment, byte side)
     {
-        if (function is not (43 or 50 or 52 or 54 or 55 or 62))
+        if (function is not (43 or 50 or 51 or 52 or 53 or 54 or 55 or 57 or 62 or 91))
             return Read(function, channel, segment, side);
-        byte replySegment = function is 43 or 50 or 54 or 55 ? (byte)10 : segment;
+        byte replySegment = function is 43 or 50 or 51 or 54 or 55 or 57 or 91 ? (byte)10 : segment;
         return Exchange(function, channel, segment, side, [], 2, 1, replySegment: replySegment).GetAwaiter().GetResult();
     }
 
@@ -59,6 +59,9 @@ public sealed class CvrUdpClient : IDisposable
             message.Body.Length is 75 or 79)
             Volatile.Write(ref identityBody, message.Body.ToArray());
     }
+
+    // DSP-1004 returns a full settings block immediately after accepting reset.
+    public byte[] ResetSnapshot() => Exchange(16, 0, 0, 0, [1], 0, 1, observedBulk: true, replyFunction: 27).GetAwaiter().GetResult();
 
     public byte[] Command(byte function,byte[] body,byte channel=0,byte side=0) => Exchange(function,channel,0,side,body,0,3).GetAwaiter().GetResult();
     public void Write(byte function, byte[] body, byte channel = 0, byte segment = 0, byte side = 0, byte messageStatus = 1)
@@ -89,7 +92,7 @@ public sealed class CvrUdpClient : IDisposable
         }
         finally { serial.Release(); }
     }
-    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side, byte[] body, byte sendStatus, byte responseStatus, bool observedBulk = false, bool controllerTable = false, byte? replySegment = null)
+    private async Task<byte[]> Exchange(byte function, byte channel, byte segment, byte side, byte[] body, byte sendStatus, byte responseStatus, bool observedBulk = false, bool controllerTable = false, byte? replySegment = null, byte? replyFunction = null)
     {
         // All backend operations hold their own gate; the transport also serializes standalone callers.
         await serial.WaitAsync().ConfigureAwait(false);
@@ -150,13 +153,14 @@ public sealed class CvrUdpClient : IDisposable
                 }
                 else if (observedBulk)
                 {
-                    var validLength = function == 83 ? message.Body.Length == 1 : function == 71 ? message.Body.Length == 93 : function == 0 ? message.Body.Length is 75 or 79 :
-                        function == 27 ? message.Body.Length is 2232 or 2687 :
+                    var expectedFunction = replyFunction ?? function;
+                    var validLength = expectedFunction == 83 ? message.Body.Length == 1 : function == 71 ? message.Body.Length == 93 : function == 0 ? message.Body.Length is 75 or 79 :
+                        expectedFunction == 27 ? message.Body.Length is 2232 or 2687 :
                         message.Body.Length is 32 or 56 or 72 or 76 or 88 or 92 or 96;
                     var responseChannel = function == 0 ? 3 : 32;
-                    if (message.Function != function || message.Status != 1 || message.Channel != responseChannel ||
+                    if (message.Function != expectedFunction || message.Status != 1 || message.Channel != responseChannel ||
                         message.Segment != 10 || message.Side != 0 || !validLength) continue;
-                    if (function == 27)
+                    if (expectedFunction == 27)
                     {
                         // Read completion only: no settings payload and no status-1 write.
                         var confirmation = CvrWire.Encode(new(27, 3, 0, 0, 0, []));

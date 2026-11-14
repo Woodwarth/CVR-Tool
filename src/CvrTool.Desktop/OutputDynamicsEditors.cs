@@ -6,6 +6,7 @@
 // Scope: drafts commit through Application; device maximum voltages stay read-only.
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using CvrTool.Core;
 
@@ -83,7 +84,7 @@ public sealed partial class MainWindow
         var original = service.GetOutputDynamics(editedId, channel);
         var panel = new StackPanel { Margin = new Thickness(24), Spacing = 16 };
         panel.Children.Add(Heading($"Noise Gate · Output {(char)('A' + channel - 1)}"));
-        var enabled = new CheckBox { Content = "On", IsChecked = original.NoiseGateEnabled, Tag = "noise-gate-enabled" };
+        var enabled = new ToggleButton { Classes = { "apple-switch" }, Content = "On", IsChecked = original.NoiseGateEnabled, Tag = "noise-gate-enabled" };
         panel.Children.Add(enabled);
         var threshold = Number(-100, 0, 1, original.NoiseGateDb ?? -100);
         threshold.Tag = "noise-gate-db";
@@ -113,13 +114,13 @@ public sealed partial class MainWindow
         var peak = original.Peak;
         var panel = new StackPanel { Margin = new Thickness(16), Spacing = 10 };
         panel.Children.Add(Heading($"Limiters · Output {(char)('A' + channel - 1)}"));
-        var columns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 8 };
+        var columns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,130,*"), ColumnSpacing = 12 };
         var left = new StackPanel { Spacing = 8 };
         var right = new StackPanel { Spacing = 8 };
         AddColumn(columns, Card(left), 0);
-        AddColumn(columns, Card(right), 1);
+        AddColumn(columns, Card(right), 2);
         panel.Children.Add(columns);
-        var rmsEnabled = new CheckBox { Content = "RMS On", IsChecked = rms.Enabled, Tag = "rms-enabled" };
+        var rmsEnabled = new ToggleButton { Classes = { "apple-switch" }, Content = "Enabled", IsChecked = rms.Enabled, Tag = "rms-enabled" };
 
         Grid ParameterRow(string label, Control control)
         {
@@ -140,7 +141,7 @@ public sealed partial class MainWindow
 
         var attack = Input(left, "Attack · ms", "rms-attack", 1, 2000, 1, rms.AttackMs);
         var release = Input(left, "Release · × Attack", "rms-release", 2, 32, 1, rms.ReleaseMultiplier);
-        var auto = new CheckBox { Content = "Automatic timing", IsChecked = rms.Automatic, Tag = "rms-auto" };
+        var auto = new ToggleButton { Classes = { "apple-switch" }, Content = "Automatic timing", IsChecked = rms.Automatic, Tag = "rms-auto" };
         left.Children.Insert(1,auto);
         void Timing()
         {
@@ -148,7 +149,7 @@ public sealed partial class MainWindow
         }
         auto.IsCheckedChanged += (_, _) => Timing();
         Timing();
-        var peakEnabled = new CheckBox { Content = "Peak On", IsChecked = peak.Enabled, Tag = "peak-enabled" };
+        var peakEnabled = new ToggleButton { Classes = { "apple-switch" }, Content = "Enabled", IsChecked = peak.Enabled, Tag = "peak-enabled" };
 
         var peakVolts = Input(right, "Threshold · Vpeak", "peak-threshold", 0, (decimal)peak.MaximumVolts, .1m, peak.ThresholdVolts);
 
@@ -156,21 +157,24 @@ public sealed partial class MainWindow
         var decay = Input(right, "Release · ms", "peak-release", 20, 1000, 1, peak.ReleaseMs);
         var loadOhms = service.GetNativePresetMetadata(editedId)?.Channels.SingleOrDefault(c => c.Channel == channel)?.ConfiguredLoadOhms;
         var load = Number(.1m, 10000000, .1m, (decimal)(loadOhms is >= .1 and <= 10000000 ? loadOhms.Value : 8));
-        load.Tag = "limiter-load"; load.ShowButtonSpinner = true;
-        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,*"), ColumnSpacing = 20 };
-        var center = new StackPanel { Spacing = 6 };
-        var meters = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 12 };
-        center.Children.Add(meters); AddColumn(top,center,1);
-        panel.Children.Insert(1,top);
+        load.Tag = "limiter-load";
+        load.FormatString = "0.0";
+        load.ShowButtonSpinner = false;
+        var center = new StackPanel { Spacing = 16 };
+        center.Children.Add(Centered("Monitor", 16, Accent));
+        var meters = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 8 };
+        center.Children.Add(meters);
+        AddColumn(columns, Card(center), 1);
         Slider Fader(string label, NumericUpDown volts)
         {
             var slider = new Slider { Minimum = 0, Maximum = (double)volts.Maximum,
-                Value = (double)(volts.Value ?? 0), Height = 150, Width = 34, Orientation = Orientation.Vertical,
+                Value = (double)(volts.Value ?? 0), Height = 114, Width = 34, Orientation = Orientation.Vertical,
                 Tag = "limiter-fader-" + label };
             var strip = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-            strip.Children.Add(Centered(label,14,Accent)); strip.Children.Add(slider);
+            strip.Children.Add(Centered(label,18,Accent));
+            strip.Children.Add(slider);
             strip.Children.Add(label == "RMS" ? rmsEnabled : peakEnabled);
-            AddColumn(top,strip,label == "RMS" ? 0 : 2);
+            (label == "RMS" ? left : right).Children.Insert(0, strip);
             bool syncing = false;
             slider.ValueChanged += (_,_) =>
             {
@@ -194,12 +198,12 @@ public sealed partial class MainWindow
             column.Children.Add(meter); column.Children.Add(reading); meters.Children.Add(Field(label,column));
         }
         Fader("Peak",peakVolts);
-        load.Width = 95; center.Children.Add(Field("Load · Ω",load));
+        load.Width = 90; center.Children.Add(Field("Load · Ω",load));
         void PowerField(StackPanel column,string label,string tag,NumericUpDown volts)
         {
             var watts = Number(0,decimal.MaxValue,1,0);
             watts.FormatString="0"; watts.ShowButtonSpinner=true; watts.Tag=tag;
-            column.Children.Insert(1,ParameterRow(label,watts));
+            column.Children.Insert(2,ParameterRow(label,watts));
             bool syncing=false;
             void FromVolts()
             {
@@ -228,7 +232,7 @@ public sealed partial class MainWindow
         actions.Children.Add(apply);
         actions.Children.Add(cancel);
         panel.Children.Add(actions);
-        var editor = EditorWindow("Output limiters", new ScrollViewer { Content = panel }, 700, 650);
+        var editor = EditorWindow("Output limiters", new ScrollViewer { Content = panel }, 820, 580);
         var timer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         void RefreshMeters()
         {
@@ -245,7 +249,7 @@ public sealed partial class MainWindow
         timer.Tick += (_,_)=>RefreshMeters();
         editor.Opened += (_,_)=>{ RefreshMeters(); timer.Start(); };
         editor.Closed += (_,_)=>timer.Stop();
-        editor.MinWidth = 640;
+        editor.MinWidth = 780;
         editor.MinHeight = 570;
         (RmsLimiterState Rms, PeakLimiterState Peak) Draft()
         {

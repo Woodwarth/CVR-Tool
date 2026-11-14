@@ -18,7 +18,10 @@ public sealed partial class MainWindow : Window
 {
     // Theme and window state
     // One service instance is shared by every page in this window.
-    private static readonly IBrush Ink = Brush.Parse("#EDF2F5"), Muted = Brush.Parse("#96A5AE"), Accent = Brush.Parse("#00CEBD"), Line = Brush.Parse("#46525D");
+    private static IBrush Ink => Appearance.Ink;
+    private static IBrush Muted => Appearance.Muted;
+    private static IBrush Accent => Appearance.Accent;
+    private static IBrush Line => Appearance.Line;
     private readonly AmplifierService service;
     private readonly StackPanel navigation = new()
     {
@@ -53,21 +56,13 @@ public sealed partial class MainWindow : Window
     public MainWindow(AmplifierService amplifierService)
     {
         service = amplifierService;
+        WindowsTitleBar.Attach(this);
         Title = "CVR Tool · DSP control";
         Width = 1680;
         Height = 980;
         MinWidth = 1008;
         MinHeight = 588;
-        Background = new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-            GradientStops = new GradientStops
-            {
-                new(Color.Parse("#252D35"), 0),
-                new(Color.Parse("#10171E"), 1)
-            }
-        };
+        Background = Appearance.Canvas;
         Foreground = Ink;
         FontFamily = new FontFamily("Inter, Segoe UI, sans-serif");
         Icon = Branding.WindowIcon();
@@ -157,10 +152,10 @@ public sealed partial class MainWindow : Window
                 Tag = device.Id,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Padding = new Thickness(12, 14),
-                Background = selected ? Brush.Parse("#006F70") : Brushes.Transparent,
+                Background = selected ? Appearance.Selected : Brushes.Transparent,
                 BorderBrush = selected ? Accent : Brushes.Transparent,
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(5)
+                CornerRadius = new CornerRadius(12)
             };
             button.Click += (_, _) => Select(device.Id);
             navigation.Children.Add(button);
@@ -176,7 +171,7 @@ public sealed partial class MainWindow : Window
             var existing = tabs.Children.OfType<Button>().FirstOrDefault(b => Equals(b.Tag, name));
             if (existing is not null)
             {
-                existing.Background = activeTab == name ? Brush.Parse("#007F7D") : Brushes.Transparent;
+                existing.Background = activeTab == name ? Appearance.Selected : Brushes.Transparent;
                 existing.BorderBrush = activeTab == name ? Accent : Brushes.Transparent;
                 continue;
             }
@@ -188,10 +183,10 @@ public sealed partial class MainWindow : Window
                 Margin = new Thickness(0, 0, 6, 6),
                 Padding = new Thickness(12, 10),
                 VerticalAlignment = VerticalAlignment.Center,
-                Background = activeTab == name ? Brush.Parse("#007F7D") : Brushes.Transparent,
+                Background = activeTab == name ? Appearance.Selected : Brushes.Transparent,
                 BorderBrush = activeTab == name ? Accent : Brushes.Transparent,
-                BorderThickness = new Thickness(0, 0, 0, 2),
-                CornerRadius = new CornerRadius(4, 4, 0, 0)
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(12)
             };
             button.Click += (_, _) =>
             {

@@ -10,3 +10,5 @@ No SDK, Python or installed .NET runtime is required by users.
 Before publication, inspect all three assets, archive paths, CPU architecture,
 runtime files and SHA-256 digests. Publish the verified draft explicitly.
 Windows packages are unsigned. Mac is ad-hoc signed, not notarized.
+
+CI runs the locked restore, release build, core and network checks, and an MCP smoke test on all three platforms. Run the desktop interaction checks locally in a graphical session.

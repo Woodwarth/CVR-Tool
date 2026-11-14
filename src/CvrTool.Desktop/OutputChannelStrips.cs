@@ -49,6 +49,7 @@ public sealed partial class MainWindow
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Height = MeterHeight
             };
+            AddColumn(monitoring, MeterScale(liveReadOnly ? -40 : -60), 0);
             AddColumn(monitoring, new ChannelMeter(liveReadOnly ? data.OutputMeterDb : data.LevelDbFs, liveReadOnly ? -40 : -60) { Width = 24, Height = MeterHeight, Tag = "output-meter-" + draft.State.Name }, 1);
             var flags = new StackPanel
             {

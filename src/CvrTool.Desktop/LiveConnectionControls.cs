@@ -30,10 +30,11 @@ public sealed partial class MainWindow
         void Light(string tag, bool? value)
         {
             if (tagged[tag].FirstOrDefault() is not StackPanel panel) return;
-            panel.Children.OfType<StatusLed>().FirstOrDefault()?.Update(value);
+            if (panel.Children.OfType<StatusLed>().FirstOrDefault() is not { } led) return;
+            led.Update(value);
             if (panel.Children.OfType<TextBlock>().FirstOrDefault() is { } label)
             {
-                label.Foreground = value == true ? Brushes.LightCoral : Muted;
+                label.Foreground = value == true ? new SolidColorBrush(led.OnColor) : Muted;
                 ToolTip.SetTip(panel,label.Text + ": " + (value is null ? "Unknown" : value.Value ? "Active" : "Inactive"));
             }
         }
@@ -41,8 +42,8 @@ public sealed partial class MainWindow
         {
             var name = (char)('A' + t.Channel - 1);
             (tagged[$"channel-meter-{name}"].FirstOrDefault() as ChannelMeter)?.Update(t.InputMeterDb);
-            (tagged[$"output-meter-{name}"].FirstOrDefault() as ChannelMeter)?.Update(t.OutputMeterDb);
             Light($"channel-clip-{name}",t.InputClip);
+            (tagged[$"output-meter-{name}"].FirstOrDefault() as ChannelMeter)?.Update(t.OutputMeterDb);
             var s = t.Status;
             bool?[] flags = [s?.Fault,s?.Load,s?.Open,s?.OverTemperature,s?.Clip,s?.Standby,s?.HighImpedance,s?.Bridged,s?.Limiting];
             for (int i=0;i<flags.Length;i++) Light($"output-status-{name}-{i}",flags[i]);
@@ -62,6 +63,15 @@ public sealed partial class MainWindow
     {
         liveTimer.Tick += async (_, _) => await RefreshLiveAsync();
         liveTimer.Start();
+        var demoTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        demoTimer.Tick += (_, _) =>
+        {
+            if (!liveReadOnly && activeTab == "Main" && !string.IsNullOrEmpty(deviceId) &&
+                service.GetDevice(deviceId).IsDemo)
+                UpdateMainTelemetry();
+        };
+        demoTimer.Start();
+        Closed += (_, _) => demoTimer.Stop();
         Closed += (_, _) => liveTimer.Stop();
     }
 

@@ -36,6 +36,7 @@ public sealed partial class DemoBackend : IDemoManagement
             {
                 outputProcessing.Remove((id,output.Number));
                 firs.Remove((id,output.Number));
+                temperatures.Remove((id, output.Number));
                 dynamics.Remove((id,output.Number));
             }
             routing.Remove(id); inputs.Remove(id); controls.Remove(id);

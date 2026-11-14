@@ -49,7 +49,7 @@ public sealed partial class MainWindow
             await dialog.ShowDialog(this);
         };
         sidebar.Children.Add(manage);
-        center.Children.Add(new Border { Background = Brush.Parse("#192129"), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 1, 0), Child = sidebar });
+        center.Children.Add(new Border { Background = Appearance.Glass, CornerRadius = new CornerRadius(14), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 1, 0), Child = sidebar });
         var workspace = new Grid { RowDefinitions = new RowDefinitions("108,48,*"), RowSpacing = 12, Margin = new Thickness(16), Tag = "workspace" };
         workspace.Children.Add(DeviceHeader());
         Grid.SetRow(tabs, 1);
@@ -59,7 +59,7 @@ public sealed partial class MainWindow
         workspace.Children.Add(scroll);
         Grid.SetColumn(workspace, 1);
         center.Children.Add(workspace);
-        var footer = new Border { BorderBrush = Line, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(16, 8), Child = status };
+        var footer = new Border { Background = Appearance.Glass, BorderBrush = Line, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(16, 8), Child = status };
         Grid.SetRow(footer, 2);
         shell.Children.Add(footer);
         nameEditor.KeyDown += (_, e) =>
@@ -120,8 +120,21 @@ public sealed partial class MainWindow
         UpdateMcpStatus(0);
         actions.Children.Add(mcpIndicator);
         actions.Children.Add(browserStatusButton);
+        var appearance = new ComboBox { ItemsSource = Appearance.Choices, SelectedItem = Appearance.Choice,
+            Tag = "appearance", VerticalAlignment = VerticalAlignment.Center, MinWidth = 108 };
+        Avalonia.Automation.AutomationProperties.SetName(appearance, "Appearance");
+        ToolTip.SetTip(appearance, "Appearance");
+        appearance.SelectionChanged += (_, _) =>
+        {
+            if (appearance.SelectedItem is not string choice || Avalonia.Application.Current is not App app) return;
+            Appearance.Select(app, choice);
+            try { Appearance.Save(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            { status.Text = "Could not save appearance preference."; }
+        };
+        actions.Children.Add(appearance);
         actions.Children.Add(updates);
         AddColumn(header, actions, 1);
-        return new Border { Child = header, Padding = new Thickness(16, 10), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1) };
+        return new Border { Background = Appearance.Glass, Child = header, Padding = new Thickness(16, 10), BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1) };
     }
 }

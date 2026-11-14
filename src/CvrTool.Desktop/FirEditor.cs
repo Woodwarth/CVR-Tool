@@ -7,6 +7,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -30,7 +31,7 @@ public sealed partial class MainWindow
         var content = new StackPanel { Margin = new Thickness(20), Spacing = 12 };
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         header.Children.Add(Heading("Output FIR · Channel " + channel));
-        var enabled = new CheckBox { Content = draft.Enabled ? "FIR On" : "FIR Off", IsChecked = draft.Enabled, Tag = "fir-enabled" };
+        var enabled = new ToggleButton { Classes = { "apple-switch" }, Content = draft.Enabled ? "FIR On" : "FIR Off", IsChecked = draft.Enabled, Tag = "fir-enabled" };
         AddColumn(header, enabled, 1);
         content.Children.Add(header);
         var info = Text("", 13, Muted);

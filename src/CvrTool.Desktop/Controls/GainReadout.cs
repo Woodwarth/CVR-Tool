@@ -40,7 +40,7 @@ public sealed class GainReadout : ContentControl
 
     public GainReadout()
     {
-        Foreground = Brush.Parse("#EDF2F5");
+        Foreground = Appearance.Ink;
         FontSize = 16;
         FontWeight = FontWeight.SemiBold;
         Width = 128;
@@ -84,7 +84,7 @@ public sealed class GainReadout : ContentControl
             HorizontalContentAlignment = HorizontalAlignment.Center,
             Padding = new Thickness(6, 4),
             BorderBrush = Brush.Parse("#00CEBD"),
-            Background = Brush.Parse("#101B23")
+            Background = Appearance.Surface
         };
         void Commit()
         {

@@ -1,7 +1,30 @@
 <!-- Module: Provides the Avalonia interface for monitoring and controlling amplifiers.
      Registers the application theme and shared desktop styles. -->
-<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="CvrTool.Desktop.App" RequestedThemeVariant="Dark">
+<Application xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="CvrTool.Desktop.App">
   <Application.Styles>
     <FluentTheme/>
+    <Style Selector="Button, ToggleButton, ComboBox, TextBox, NumericUpDown">
+      <Setter Property="CornerRadius" Value="8"/>
+    </Style>
+    <Style Selector="ToggleButton.apple-switch">
+      <Setter Property="MinHeight" Value="28"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+            <Border Name="PART_Track" Width="34" Height="20" CornerRadius="10" Background="#697B84" Padding="3">
+              <Border Name="PART_Knob" Width="14" Height="14" CornerRadius="7" HorizontalAlignment="Left" Background="White"/>
+            </Border>
+            <ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center"/>
+          </StackPanel>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="ToggleButton.apple-switch:checked /template/ Border#PART_Track">
+      <Setter Property="Background" Value="#008B81"/>
+    </Style>
+    <Style Selector="ToggleButton.apple-switch:checked /template/ Border#PART_Knob">
+      <Setter Property="HorizontalAlignment" Value="Right"/>
+    </Style>
+    <Style Selector="ToggleButton.apple-switch:disabled"><Setter Property="Opacity" Value="0.45"/></Style>
   </Application.Styles>
 </Application>

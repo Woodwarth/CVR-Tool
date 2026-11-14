@@ -3,7 +3,7 @@
 // Purpose: serve embedded touch controls through the existing Application service.
 // Units: the same dB/ms/Hz/Q values as Desktop and MCP.
 // State: explicit start/stop, per-start access key and serialized browser writes.
-// Scope: one selected LAN address; no new amplifier sockets, reset or firmware API.
+// Scope: authenticated browser operations use the shared amplifier session.
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -133,6 +133,13 @@ public sealed class BrowserControlServer(AmplifierService service, TimeProvider?
             var taps = EqualizerResponse.GenerateFir(draft.Bands, draft.HighPass, draft.LowPass, draft.Enabled);
             return Results.Text(string.Join("\n", taps.Select(v => v.ToString("R", System.Globalization.CultureInfo.InvariantCulture))), "text/plain");
         });
+        app.MapGet("/api/inspection", (string id, int function, int channel, int segment) =>
+            Results.Json(service.InspectProtocol(id, function, channel, segment)));
+        app.MapPost("/api/fir-import", (BrowserFirImport file) =>
+        {
+            var analysis = FirFileAnalyzer.Analyze(file.Text);
+            return Results.Json(AmplifierService.ValidateFir(new(1, file.Name, analysis.Coefficients, false)));
+        });
         app.MapGet("/api/preset", (string id) => Results.File(service.ExportNativePreset(id), "application/octet-stream", "CVR-preset.sd"));
         app.MapPost("/api/change", async (BrowserChange change, HttpContext context) =>
         {
@@ -185,6 +192,7 @@ public sealed class BrowserControlServer(AmplifierService service, TimeProvider?
             dynamics = device.Outputs.Select(c => service.GetOutputDynamics(id, c.Number)).ToArray(),
             fir = device.Outputs.Select(c => service.GetFir(id, c.Number)).ToArray(),
             routing = service.GetRouting(id), presets = service.GetDevicePresets(id),
+            eqDefaults = PresetOperations.DefaultProcessing(1),
             crossoverOptions = CrossoverFilters.Options,
             liveCrossoverTypes = ObservedInputCrossovers.Options.Select(o => o.Code).ToArray()
         };
@@ -198,6 +206,9 @@ public sealed class BrowserControlServer(AmplifierService service, TimeProvider?
         "route" => service.ApplyRouting(service.PlanRouting(new(c.DeviceId, c.Input, c.Output, c.Value, c.Enabled)).Id),
         "dynamics" => service.ApplyOutputDynamics(service.PlanOutputDynamics((c.Dynamics ?? throw new ArgumentException("Dynamics settings required.")) with { DeviceId = c.DeviceId, Channel = c.Channel }).Id),
         "fir" => service.SetFirEnabled(c.DeviceId, c.Channel, c.Enabled ?? throw new ArgumentException("FIR state required.")),
+        "fir-replace" => service.SetFir(c.DeviceId, AmplifierService.ValidateFir(
+            (c.Filter ?? throw new ArgumentException("FIR required.")) with { Channel = c.Channel })),
+        "factory-reset" => c.Confirmed ? service.FactoryReset(c.DeviceId) : throw new InvalidOperationException("Confirm factory reset."),
         "lock" => service.SetControlState(c.DeviceId, displayLocked: c.Enabled),
         "standby" => service.SetControlState(c.DeviceId, standby: c.Enabled),
         "wink" => service.SetWink(c.DeviceId, c.Enabled ?? false),
@@ -243,7 +254,9 @@ public sealed record BrowserInterface(string Name, string Address)
 public sealed record BrowserChange(string DeviceId, string Operation, int Channel = 1,
     double? Value = null, bool? Enabled = null, double? DelayMs = null, bool? Inverted = null,
     int Input = 1, int Output = 1, InputProcessingChange? Processing = null,
-    OutputDynamicsChange? Dynamics = null, string? Name = null, string? Data = null, int Slot = 1, bool Confirmed = false);
+    OutputDynamicsChange? Dynamics = null, string? Name = null, string? Data = null, int Slot = 1, bool Confirmed = false, FirState? Filter = null);
+
+public sealed record BrowserFirImport(string Name, string Text);
 
 public sealed record BrowserEqDraft(EqualizerBand[] Bands, CrossoverFilter? HighPass, CrossoverFilter? LowPass, bool Enabled)
 {

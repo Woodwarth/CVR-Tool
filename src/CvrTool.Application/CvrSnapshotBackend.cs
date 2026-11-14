@@ -275,6 +275,22 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
             var before = settings.OutputProcessing![index];
             var after = AmplifierService.MergeInput(before, change);
             var block = ProcessingWire.EncodeEq(after, native[offset..(offset + 141)]);
+            if (SupportsCombinedEq)
+            {
+                foreach (var band in after.Bands)
+                {
+                    int position = band.Number * 14 + 1;
+                    var prior = before.Bands.Single(b => b.Number == band.Number);
+                    if (band.FilterType != 0 || prior.GainDb == band.GainDb || prior.FrequencyHz == band.FrequencyHz) continue;
+                    // Use the point command only when it covers the entire pending edit.
+                    if (block.AsSpan(0, position).SequenceEqual(native.AsSpan(offset, position)) &&
+                        block.AsSpan(position + 8).SequenceEqual(native.AsSpan(offset + position + 8, block.Length - position - 8)))
+                    {
+                        WriteEqPoint(client, (byte)index, 1, (byte)band.Number, offset + position, band);
+                        return;
+                    }
+                }
+            }
             WriteSettingsBytes(client, 52, (byte)index, 1, offset, block, messageStatus: 0);
         });
         return GetOutputProcessing(change.DeviceId, change.Channel).State;
@@ -306,12 +322,12 @@ public sealed partial class CvrSnapshotBackend : IAmplifierBackend, IAdvancedAmp
         MutateSettings(deviceId, expectedRevision, client =>
         {
             lock (gate) { firByChannel.Clear(); presetSlots = []; }
-            client.Command(16, [1]);
+            client.ResetSnapshot();
             ReadSettings(client);
             ReadMetadata(client);
             ReadTelemetry(client);
         });
-        return new("Factory reset", true, "Reset acknowledged; device settings refreshed.");
+        return new("Factory reset", true, "Reset settings received and read back.");
     }
     public void Dispose()
     {

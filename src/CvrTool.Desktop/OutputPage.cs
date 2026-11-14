@@ -44,7 +44,7 @@ public sealed partial class MainWindow
             Button Block(string title, string value, string tag, Action action)
             {
                 var caption = Centered(value, 12, Accent); caption.MaxWidth = 94; caption.TextTrimming = TextTrimming.CharacterEllipsis;
-                var button = new Button { Content = OutputBlockContent(title, caption), Tag = tag, Width = OutputBlockWidth, Height = OutputBlockHeight, Padding = new Thickness(6, 8), Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Background = Brush.Parse("#182129"), BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(3) };
+                var button = new Button { Content = OutputBlockContent(title, caption), Tag = tag, Width = OutputBlockWidth, Height = OutputBlockHeight, Padding = new Thickness(6, 8), Margin = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Center, HorizontalContentAlignment = HorizontalAlignment.Center, Background = Appearance.Surface, BorderBrush = Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8) };
                 button.Click += (_, _) => action();
                 return button;
             }
@@ -64,7 +64,7 @@ public sealed partial class MainWindow
             var mute = MuteSwitch(output.Muted, "Output " + output.Name, value => { Commit(new(deviceId, output.Number, Muted: value)); Render(); }, width: OutputBlockWidth, height: OutputBlockHeight, glyphSize: 24, heading: "Mute");
             mute.Tag = "mute-editor-" + output.Name;
             mute.Padding = new Thickness(6, 8);
-            mute.CornerRadius = new CornerRadius(3);
+            mute.CornerRadius = new CornerRadius(8);
             mute.VerticalAlignment = VerticalAlignment.Center;
             AddColumn(row, mute, 9);
             AddColumn(row, Block("Output " + output.Name, metadata?.Channels.Single(c => c.Channel == output.Number).SpeakerName is { Length: > 0 } speaker ? speaker : "Speaker", "output-speaker-" + output.Name, () => { activeTab = "Main"; Render(); }), 10);

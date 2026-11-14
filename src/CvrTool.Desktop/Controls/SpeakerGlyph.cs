@@ -14,7 +14,7 @@ internal sealed class SpeakerGlyph(bool muted) : Control
 {
     public override void Render(DrawingContext context)
     {
-        var pen = new Pen(Brushes.White, 1.5);
+        var pen = new Pen(muted ? Brushes.White : Appearance.Ink, 1.5);
         context.DrawGeometry(null, pen, Geometry.Parse("M 1,7 L 5,7 L 10,3 L 10,15 L 5,11 L 1,11 Z"));
         if (muted)
         {

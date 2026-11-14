@@ -80,10 +80,16 @@ public sealed partial class CvrSnapshotBackend
                 lock (gate) presetSlots = slots;
                 if (mode == 1 && slots.Length >= slot && slots[slot-1].Name == name ||
                     mode == 3 && slots.All(s => !s.Occupied) ||
-                    mode == 2 && Text(native[2160..2192]) == before[slot-1].Name) return;
+                    mode == 2 && MatchesRecalledSlot(Text(native[2160..2192]), slot, before[slot-1].Name)) return;
             } while (wait.Elapsed.TotalSeconds < 3);
             throw new InvalidOperationException("The amplifier did not confirm the preset operation. Check the device before retrying.");
         });
         return new("Preset",true,"Device preset readback confirmed.");
+    }
+
+    private static bool MatchesRecalledSlot(string label, int slot, string name)
+    {
+        // DSP-1004 includes the one-based slot in the current preset label.
+        return label == name || label == $"#{slot}.{name}" || label == $"#{slot:D2}.{name}";
     }
 }

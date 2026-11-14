@@ -98,7 +98,7 @@ public sealed partial class MainWindow
         Padding = new Thickness(18),
         BorderBrush = Line,
         BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(8),
-        Background = Brush.Parse("#202830")
+        CornerRadius = new CornerRadius(15),
+        Background = Appearance.Glass
     };
 }

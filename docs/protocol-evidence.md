@@ -554,3 +554,66 @@ Original 38-ID cohort: 37/38 (97%) have at least partial hardware evidence; rese
 
 
 A DSP-1004 output EQ write was verified with all outputs muted. A status-0 function 52 output block changed Output A Peak band 1 gain from 0 to -0.5 dB. Full settings confirmed the change and matched the original byte for byte after restoring the band and mutes. Other band values and crossover variants were not individually exercised by this test.
+
+## DSP-1004 device preset store and recall
+
+Function 59 mode 1 stored the muted configuration in slot 40. After changing
+output A trim from 0 to -0.5 dB, mode 2 restored 0 dB. The native settings
+matched the stored values except for the current preset label. The amplifier
+reported "#40.CVR Slot Test" for the stored name "CVR Slot Test". The first
+39 slot names remained unchanged. The original settings including output mutes
+were restored; PC recall left the current label "PC Recall". This test covers
+store and recall on slot 40. Clear-all and persistence across power cycles
+were not exercised. Coverage remains 37/38 IDs; factory reset (16) is outstanding.
+
+## DSP-1004 factory reset, firmware 106119
+
+A single function-16 status-0 command with body 01 produced a transport ACK
+followed immediately by a full function-27 settings reply (status 1, channel
+32, segment 10, side 0). No matching function-16 status-3 reply was observed.
+An independent subsequent settings read showed Output A trim reset from
+-12.5 to 0 dB, all four output mutes released and current preset label Null.
+All 40 slot names survived. The four named slots were recalled; one returned
+a different FIR coefficient on output C compared with the original capture.
+This brings the original 38-function cohort to 38/38 with at least partial
+physical evidence on this amplifier.
+After reconnecting, the original active settings and all four FIR blocks matched the backup byte for byte, excluding the current preset label.
+
+## Four additional DSP-1004 functions, firmware 106119
+
+| ID | Hardware observation | Scope |
+| --- | --- | --- |
+| 33 | A combined frequency/gain write set EQ slot 1 to 250 Hz and -0.5 dB on input 1 and output A. Each independent settings read matched the expected DSP bytes. | Eight bytes, frequency then gain as little-endian float32. Both original values restored. |
+| 51 | Each of four channel-copy reads returned 515 bytes, status 1, addressed channel, segment 10, side 0. | Bytes 0 through 372 matched the respective native channel record. Differences start at byte 373. Destination writes untested. |
+| 53 | Each of four dynamic EQ reads returned 105 bytes, status 1, addressed channel, segment 0, side 0. | All four blocks matched the corresponding native record at offset 410 exactly. Current blocks were identical across channels. |
+| 57 | Speaker data reads returned 2415 bytes for all four channels, status 1, addressed channel, segment 10. | For each channel, both side selections returned identical payloads. Field meanings and import remain unverified. |
+
+All 2687 bytes of full settings matched the pre-test capture after restoration.
+
+## DSP-1004 NET firmware 106119: offline receive dispatch
+
+The NET image has SHA-256 `cddb41b79b7deaaecf5e234b4d6349e5eaa2a3cad4f71662829c701abe81d5dc`. File offsets below refer to the raw image. The Thumb code loads the function byte at 0x229D2. Its comparison chain through 0x22BAE selects 68 distinct IDs (decimal, inclusive ranges):
+
+    0, 4, 6–12, 14–28, 30–44, 46–62, 68–69, 71–72, 74, 77–80, 83, 87, 91
+
+Function 10 provides a cross-check against captured mute behavior. Its branch reaches 0x23514, separates statuses 0/1 from 2, and checks the binary value and side on the update path. IDs 33, 51, 53 and 57 have explicit branches, consistent with the bench observations above. IDs 81, 82, 88, 90 and 93 have no case in this receive path. This finding is specific to the image and path; other models and unsolicited messages may differ.
+
+Function 91 has a channel-indexed status-2 path at 0x2D81C. At 0x2D8F0–0x2D902 it submits a 30-byte reply with function 91, status 1, the requested channel and segment 10. Field meanings and physical responses remain unverified. The 68 cases measure static dispatch coverage, not bench verification or feature count.
+
+### Function 91: copying output limiters
+
+AMP Controller routes function 91 to its limiter decoder. Its limiter editor reads the source output at segment 0 and reuses the returned body when pasting to the destination output. The packed 30-byte structure agrees with the length and field stores in firmware 106119:
+
+| Body bytes (inclusive) | Contents |
+| --- | --- |
+| 0-12 | RMS limiter: attack, release multiplier, threshold, bypass, automatic timing flag, maximum voltage (same field order as function 55). |
+| 13-25 | Peak limiter: hold, release, threshold, bypass, maximum voltage (same field order as function 54). |
+| 26-29 | Configured limiter load, little-endian float32. AMP Controller assigns it to the output's load setting. |
+
+The desktop reference interprets byte 8 as automatic when zero in its combined-block receive path. The bench evidence for function 48 records automatic when one. Verify byte 8 against physical readbacks before sharing flag decoding across these functions. For the first read-only bench check, compare slices 0-12 and 13-25 to same-channel function 55 and 54 replies, and compare the final float to the configured limiter load. Physical function-91 reads and destination writes remain unverified.
+
+### Function 48 and function 91 byte 8
+
+In the 106119 NET image the single-channel function-48 update accepts 0 or 1 and passes the byte unchanged to the write/readback helper at file offset 0x2548C. Its read path at 0x254EC and the function-91 path at 0x2D82E index the same table (0x0803DE56, entries 1140 through 1143) and call the same getter. Function 48 returns the getter byte directly. Function 91 stores it at body offset 8 (its working pointer has advanced by one). Both therefore report the same raw flag for a given output and stable device state.
+
+AMP Controller assigns the same Boolean expression (raw byte equals zero) in both receive handlers. The earlier wording implying a function-specific polarity difference was misleading. The bench report associates raw 1 with disabled manual timing controls. The getter establishes raw equivalence; an observation of actual limiter timing under both settings would distinguish the DSP behavior from the controller's presentation.

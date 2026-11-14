@@ -6,6 +6,7 @@
 // Scope: crossovers and device filter types are preserved, not guessed.
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Controls.Templates;
 using CvrTool.Core;
@@ -27,7 +28,7 @@ public sealed partial class MainWindow
         var content = new Grid { Margin = new Thickness(20), RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 14 };
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 16 };
         header.Children.Add(Heading(side+" EQ · Channel " + channel));
-        var enabled = new CheckBox { Content = input.EqEnabled ? "EQ On" : "EQ Off", IsChecked = input.EqEnabled, Tag = "input-eq-enabled" };
+        var enabled = new ToggleButton { Classes = { "apple-switch" }, Content = input.EqEnabled ? "EQ On" : "EQ Off", IsChecked = input.EqEnabled, Tag = "input-eq-enabled" };
         AddColumn(header, enabled, 1);
         content.Children.Add(header);
         var graph = new EqualizerGraph { HighPass = input.HighPass, LowPass = input.LowPass, Bands = draft, EqEnabled = input.EqEnabled, Tag = output ? "output-eq-graph" : "input-eq-graph", Height = 340 };
@@ -38,7 +39,7 @@ public sealed partial class MainWindow
         Grid.SetRow(graph, 1);
         content.Children.Add(graph);
         var cards = new Grid { ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("*", 10))), ColumnSpacing = 8 };
-        var fields = new Dictionary<int, (NumericUpDown Frequency, NumericUpDown Gain, NumericUpDown Q, CheckBox Enabled)>();
+        var fields = new Dictionary<int, (NumericUpDown Frequency, NumericUpDown Gain, NumericUpDown Q, ToggleButton Enabled)>();
         var syncing = false;
         foreach (var band in draft)
         {
@@ -53,7 +54,7 @@ public sealed partial class MainWindow
             var q = Number(.1m, 20, .01m, (decimal)band.Q);
             q.Tag = "eq-q-" + band.Number;
             q.FormatString = "0.00";
-            var active = new CheckBox { Content = "On", IsChecked = band.Enabled, Tag = "eq-band-enabled-" + band.Number };
+            var active = new ToggleButton { Classes = { "apple-switch" }, Content = "On", IsChecked = band.Enabled, Tag = "eq-band-enabled-" + band.Number };
             column.Children.Add(Field("Hz", frequency));
             column.Children.Add(Field("dB", gain));
             column.Children.Add(Field("Q", q));
@@ -105,7 +106,7 @@ public sealed partial class MainWindow
             var frequency = Number(20, 20000, 1, (decimal)(filter?.FrequencyHz ?? (high ? 20 : 20000)));
             frequency.Tag = key + "-frequency";
             frequency.FormatString = "0";
-            var active = new CheckBox { Content = "On", IsChecked = filter?.Enabled == true, Tag = key + "-enabled" };
+            var active = new ToggleButton { Classes = { "apple-switch" }, Content = "On", IsChecked = filter?.Enabled == true, Tag = key + "-enabled" };
             column.Children.Add(type);
             column.Children.Add(Field("Hz", frequency));
             column.Children.Add(active);
@@ -164,7 +165,7 @@ public sealed partial class MainWindow
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         var apply = new Button { Content = "Apply", Tag = "apply-input-eq" };
         var cancel = new Button { Content = "Cancel" };
-        var generate = new Button { Content = "Generate FIR…", Tag = "generate-eq-fir" };
+        var generate = new Button { Content = "Generate FIR", Tag = "generate-eq-fir" };
         var reset = new Button { Content = "Reset EQ", Tag = "eq-reset" };
         reset.Click += (_, _) =>
         {

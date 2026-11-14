@@ -18,29 +18,15 @@ public sealed partial class MainWindow
     private static string OnOff(bool value) => value ? "On" : "Off";
     private static string Known(double? value, string unit = "") => value is { } number ? number.ToString("0.###") + unit : "—";
     private static string Flag(bool? value) => value is null ? "Unknown" : value.Value ? "On" : "Off";
-    private Control LiveDetailsPage()
+    private Button ProtocolInspectionButton(string inspectedDevice)
     {
-        var snapshot = service.GetDevice(deviceId);
-        var data = snapshot.Readings!;
-        var root = new StackPanel { Spacing = 16, Tag = "live-details" };
-        void Values(string title, params (string Label, string Value)[] values)
-        {
-            var box = new StackPanel { Spacing = 8 };
-            box.Children.Add(Heading(title));
-            foreach (var (label, value) in values)
-            {
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("230,*"), ColumnSpacing = 16 };
-                row.Children.Add(Text(label, 13, Muted)); AddColumn(row, Text(value, 13), 1); box.Children.Add(row);
-            }
-            root.Children.Add(Card(box));
-        }
-        var inspectedDevice = deviceId;
+        var snapshot = service.GetDevice(inspectedDevice);
         var inspect = new Button { Content = "Inspect protocol reply", Tag = "inspect-protocol" };
         inspect.Click += async (_, _) =>
         {
-            var options = new (int Id, string Label)[] { (43,"FIR"), (50,"Stereo / bridge"), (52,"Output EQ"),
-                (54,"Peak limiter"), (55,"RMS limiter"), (59,"Preset names"), (62,"Source alignment"),
-                (82,"RTA"), (88,"Input delay switch"), (93,"Input group gain") };
+            var options = new (int Id, string Label)[] { (43,"FIR"), (50,"Stereo / bridge"), (51,"Channel copy"), (52,"Output EQ"), (53,"Dynamic EQ"),
+                (54,"Peak limiter"), (55,"RMS limiter"), (57,"Speaker profile"), (59,"Preset names"), (62,"Source alignment"),
+                (82,"RTA"), (88,"Input delay switch"), (91,"Limiter settings and load"), (93,"Input group gain") };
             var choice = new ComboBox { ItemsSource = options.Select(o => $"{o.Id} · {o.Label}").ToArray(), SelectedIndex = 0 };
             var channel = new ComboBox { ItemsSource = snapshot.Outputs.Select(o => o.Number).ToArray(), SelectedIndex = 0 };
             var source = new ComboBox { ItemsSource = new[] { "Analog", "Digital", "AES" }, SelectedIndex = 0, IsEnabled = false };
@@ -60,7 +46,26 @@ public sealed partial class MainWindow
             panel.Children.Add(Field("Source", source)); panel.Children.Add(read); panel.Children.Add(result);
             await EditorWindow("Protocol inspection", panel, 620, 460).ShowDialog(this);
         };
-        root.Children.Add(inspect);
+        return inspect;
+    }
+
+    private Control LiveDetailsPage()
+    {
+        var snapshot = service.GetDevice(deviceId);
+        var data = snapshot.Readings!;
+        var root = new StackPanel { Spacing = 16, Tag = "live-details" };
+        void Values(string title, params (string Label, string Value)[] values)
+        {
+            var box = new StackPanel { Spacing = 8 };
+            box.Children.Add(Heading(title));
+            foreach (var (label, value) in values)
+            {
+                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("230,*"), ColumnSpacing = 16 };
+                row.Children.Add(Text(label, 13, Muted)); AddColumn(row, Text(value, 13), 1); box.Children.Add(row);
+            }
+            root.Children.Add(Card(box));
+        }
+        root.Children.Add(ProtocolInspectionButton(deviceId));
         var controls = service.GetControlState(deviceId);
         Values("Live device · Limited editing", ("Name", snapshot.Name), ("Firmware", data.FirmwareHeader),
             ("MAC address", data.MacAddress ?? "—"), ("Operating time", DeviceMetadataCodec.FormatOperatingTime(data.OperatingMinutes)), ("Preset", data.CurrentPreset ?? "—"),

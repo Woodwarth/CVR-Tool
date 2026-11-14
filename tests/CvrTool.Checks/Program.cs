@@ -100,7 +100,29 @@ var renamedPreset = JsonSerializer.Deserialize<PresetDocument>(service.ExportPre
 Check(renamedPreset.Name == "Front amplifier" && renamedPreset.Routing?.Count == 16, "Preset exports name and routing");
 Check(service.GetDevice("demo-2002").Name != "Front amplifier", "Names isolate devices");
 var telemetry = service.GetTelemetry("demo-1004");
-Check(telemetry.Count == 4 && telemetry.Select(t => t.Channel).Distinct().Count() == 4 && telemetry.All(t => t is { LevelDbFs: null, Voltage: null, Current: null, LoadOhms: null, TemperatureC: null } && t.Status == new OutputStatus()), "Per-output telemetry stays explicitly unknown");
+Check(telemetry.Count == 4 && telemetry.All(t => t is { OutputMeterDb: not null, Voltage: >= 0, Current: >= 0, LoadOhms: > 0, TemperatureC: > 0 }), "Demo channels simulate electrical and thermal measurements");
+var meters = new AmplifierService(new DemoBackend());
+const string meterId = "demo-1004";
+void SetRoute(int input, double gain, bool muted) => meters.ApplyRouting(meters.PlanRouting(new(meterId, input, 1, gain, muted)).Id);
+Check(meters.GetTelemetry(meterId).All(t => t.OutputMeterDb == -60 && t.Status?.Clip == false), "Muted demo outputs stay silent");
+meters.Apply(meters.Plan(new(meterId, 1, GainDb: -3, Muted: false)).Id);
+SetRoute(1, -4, false);
+SetRoute(2, -6, false);
+var sample = meters.GetTelemetry(meterId);
+var expectedMix = 10 * Math.Log10(Math.Pow(10, (sample[0].InputMeterDb!.Value - 4) / 10) + Math.Pow(10, (sample[1].InputMeterDb!.Value - 6) / 10)) - 3;
+Check(Math.Abs(sample[0].OutputMeterDb!.Value - expectedMix) < 0.00001 && sample[1].OutputMeterDb == -60, "Matrix gains mix both inputs before channel trim");
+SetRoute(1, 18, true);
+SetRoute(2, 18, true);
+Check(meters.GetTelemetry(meterId)[0].OutputMeterDb == -60, "Muted routes contribute no signal");
+SetRoute(1, 0, false);
+var rmsDemo = meters.GetOutputDynamics(meterId, 1).Rms with { Enabled = true, ThresholdVolts = 0.01 };
+meters.ApplyOutputDynamics(meters.PlanOutputDynamics(new(meterId, 1, Rms: rmsDemo, LoadMode: 1, Bridged: true)).Id);
+var bridged = meters.GetTelemetry(meterId);
+Check(bridged.Take(2).All(t => t.Status is { HighImpedance: true, Bridged: true, Limiting: true } &&
+    t.Voltage == .01 && t.Current == .01 / t.LoadOhms), "Bridged demo outputs follow the leader's limiter and simulated load");
+meters.SetControlState(meterId, standby: true);
+Check(meters.GetTelemetry(meterId).All(t => t.Voltage == 0 && t.Current == 0 && t.Status is { Standby: true, Limiting: false }),
+    "Standby silences every simulated output and clears limiter activity");
 var routeExpiring = timed.PlanRouting(new("demo-1004", 1, 1, GainDb: 0));
 clock.Now = clock.Now.AddMinutes(2);
 Reject<InvalidOperationException>(() => timed.ApplyRouting(routeExpiring.Id));

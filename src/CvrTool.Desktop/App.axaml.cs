@@ -22,6 +22,7 @@ public partial class App : Avalonia.Application
         System.Globalization.CultureInfo.CurrentCulture = culture;
         System.Globalization.CultureInfo.CurrentUICulture = culture;
         AvaloniaXamlLoader.Load(this);
+        Appearance.Initialize(this);
     }
 
     public override void OnFrameworkInitializationCompleted()

@@ -41,7 +41,9 @@ static class SnapshotPeerChecks
         var remote = new AmplifierService(new SessionBackend(pipe));
         check(remote.GetDevice(id).Readings!.ReadOnly && remote.GetInputProcessing(id, 1).Bands.Count == 8, "Shared IPC exposes the same live snapshot and read-only mode");
         check(remote.InspectProtocol(id,59,1,0).Contains("24 entries") && remote.InspectProtocol(id,16,1,0).Contains("protected"), "IPC inspection reads the preset table and never issues reset");
-        check(SpinWait.SpinUntil(() => peer.Confirmations > 0, 1000) && peer.Writes == 0 && peer.UnexpectedQueries == 0, "Only bulk reads, transport ACKs and empty status-3 confirmation are sent");
+        var limiterReply = remote.InspectProtocol(id, 91, 3, 0);
+        check(limiterReply.Contains("6 Ω") && limiterReply.Contains("match last full settings"), "Output C limiter load is decoded from the combined read through IPC");
+        check(SpinWait.SpinUntil(() => peer.Confirmations > 0, 1000) && peer.Writes == 0 && peer.UnexpectedQueries == 0, "Only expected reads and confirmations are sent");
         var oldEq = service.GetOutputProcessing(id, 1);
         var editedEq = service.ApplyOutputProcessing(service.PlanOutputProcessing(new(id, 1, EqEnabled: !oldEq.EqEnabled)).Id);
         check(editedEq.EqEnabled != oldEq.EqEnabled, "Output EQ block edits are independently read back");
@@ -151,7 +153,7 @@ static class SnapshotPeerChecks
         check(service.ExportNativePreset(id).SequenceEqual(verifiedBefore),"All verified DSP edits restore the complete original native settings");
         try {service.ApplyOutputDynamics(service.PlanOutputDynamics(new(id,1,LoadMode:2)).Id);throw new Exception("100V enabled");}
         catch(NotSupportedException){check(true,"Uncaptured 100V mode remains disabled");}
-        check(service.FactoryReset(id).Confirmed, "Simulated factory reset acknowledges command and refreshes settings");
+        check(service.FactoryReset(id).Confirmed, "Factory reset accepts the DSP-1004 settings reply and refreshes settings");
         var crossoverBefore = service.GetInputProcessing(id,1);
         var crossoverNative = service.ExportNativePreset(id);
         service.ApplyInputProcessing(service.PlanInputProcessing(new(id,1,HighPass:new(80,4,true),LowPass:new(18000,4,true))).Id);
@@ -286,7 +288,7 @@ static class SnapshotPeerChecks
                         continue;
                     }
                     if(message is {Function:16,Status:0} && message.Body.SequenceEqual(new byte[]{1}))
-                    { await Send(new(16,3,0,0,0,[]),received.RemoteEndPoint); continue; }
+                    { await Send(new(27,1,32,10,0,Sync),received.RemoteEndPoint); continue; }
                     if(message is {Function:42,Status:1,Side:1,Body.Length:4})
                     { message.Body.CopyTo(Sync,36+message.Channel*515+76); continue; }
                     if(message is {Function:50,Side:1,Body.Length:1})
@@ -331,6 +333,13 @@ static class SnapshotPeerChecks
                         Sync[offset < 0 ? 2232 + message.Channel : 36 + message.Channel * 515 + offset] = message.Body[0];
                         continue;
                     }
+                    if (message is { Status: 1, Function: 33, Body.Length: 8 })
+                    {
+                        var record = 36 + message.Channel * 515 + (message.Side == 0 ? 85 : 226) + message.Segment * 14;
+                        message.Body.AsSpan(0, 4).CopyTo(Sync.AsSpan(record + 5));
+                        message.Body.AsSpan(4, 4).CopyTo(Sync.AsSpan(record + 1));
+                        continue;
+                    }
                     if (message is { Status: 1, Function: 30 or 31 or 32 or 34 or 36, Side: 0 })
                     {
                         Interlocked.Increment(ref Writes);
@@ -366,6 +375,14 @@ static class SnapshotPeerChecks
                         var allocation = new byte[40];
                         BitConverter.GetBytes(8f).CopyTo(allocation, 8);
                         await Send(new(81, 1, 32, 10, 0, allocation), received.RemoteEndPoint);
+                        continue;
+                    }
+                    if (message is { Function: 91, Status: 2, Channel: 2, Segment: 0, Side: 1, Body.Length: 0 })
+                    {
+                        var limiter = new byte[30];
+                        Sync.AsSpan(36 + 2 * 515 + 59, 26).CopyTo(limiter);
+                        BitConverter.GetBytes(6f).CopyTo(limiter, 26);
+                        await Send(new(91, 1, 2, 10, 1, limiter), received.RemoteEndPoint);
                         continue;
                     }
                     if (message is { Function: 59, Status: 2, Body.Length: 34 } && message.Body.All(b => b == 0))

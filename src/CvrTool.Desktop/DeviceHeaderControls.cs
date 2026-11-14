@@ -126,7 +126,7 @@ public sealed partial class MainWindow
             {
                 var active = button.IsChecked == true;
                 button.Content = new DeviceGlyph(kind, active);
-                button.Background = active ? Brush.Parse("#007F7D") : Brush.Parse("#182129");
+                button.Background = active ? Appearance.Selected : Appearance.Surface;
                 button.BorderBrush = active ? Accent : Line;
                 AutomationProperties.SetName(button, label + (kind == "standby" && !state.StandbyKnown ? " unknown" : active ? " on" : " off"));
                 ToolTip.SetTip(button, label + (active ? ": on" : ": off"));

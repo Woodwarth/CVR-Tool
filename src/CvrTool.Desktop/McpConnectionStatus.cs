@@ -37,6 +37,6 @@ public sealed partial class MainWindow
         ((TextBlock)mcpIndicator.Child).HorizontalAlignment = HorizontalAlignment.Center;
         ((TextBlock)mcpIndicator.Child).VerticalAlignment = VerticalAlignment.Center;
         mcpIndicator.BorderBrush = connected ? Accent : Line;
-        mcpIndicator.Background = Brush.Parse(connected ? "#12362F" : "#182129");
+        mcpIndicator.Background = connected ? Appearance.Selected : Appearance.Surface;
     }
 }

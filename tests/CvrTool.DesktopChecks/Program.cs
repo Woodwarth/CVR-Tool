@@ -51,6 +51,14 @@ void Save(string name, int width = 1680, int height = 960)
     image.Save(Path.Combine("artifacts", name + ".png"), PngBitmapEncoderOptions.Default);
 }
 PresetDocument Preset() { Click("☰   Presets"); return JsonSerializer.Deserialize<PresetDocument>(window.ExportSelectedPreset())!; }
+var application = (App)Avalonia.Application.Current!;
+var originalVariant = application.RequestedThemeVariant;
+application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light;
+Layout(); Save("main-light");
+var lightInk = ((ISolidColorBrush)window.Foreground!).Color;
+application.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
+Layout();
+Check(lightInk != ((ISolidColorBrush)window.Foreground!).Color, "Open desktop changes palette when the application theme switches");
 Layout(); Save("main-1004");
 // Browser status remains visible outside the pairing dialog.
 var browserStatusServer=(CvrTool.Web.BrowserControlServer)typeof(MainWindow).GetField("browserServer",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(window)!;
@@ -191,9 +199,9 @@ Press(Tagged<Button>("output-limiters-A"));
 window.OwnedWindows.Single().GetLogicalDescendants().OfType<ComboBox>().Single(b=>Equals(b.Tag,"editor-channel")).SelectedIndex=2;
 Layout();
 var limiterC = window.OwnedWindows.Single();
-using (var preview = new RenderTargetBitmap(new PixelSize(700,650)))
+using (var preview = new RenderTargetBitmap(new PixelSize(820,580)))
 {
-    limiterC.Measure(new Size(700,650)); limiterC.Arrange(new Rect(0,0,700,650)); limiterC.UpdateLayout();
+    limiterC.Measure(new Size(820,580)); limiterC.Arrange(new Rect(0,0,820,580)); limiterC.UpdateLayout();
     preview.Render(limiterC); preview.Save("artifacts/limiter-panel.png",PngBitmapEncoderOptions.Default);
 }
 NumericUpDown LimiterValue(string tag) => limiterC.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>Equals(n.Tag,tag));
@@ -206,11 +214,13 @@ limiterC.GetLogicalDescendants().OfType<NumericUpDown>().Single(b=>Equals(b.Tag,
 CopyPair(limiterC);
 WaitUi(()=>demoService.GetOutputDynamics("demo-1004",4).Peak.ThresholdVolts==11);
 Check(demoService.GetOutputDynamics("demo-1004",3).Peak.ThresholdVolts!=11,"Limiter channel switch and C to D draft copy preserve C");
-limiterC.Close();Layout();
+LimiterValue("peak-threshold").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+Layout();
+Check(window.OwnedWindows.Count == 0, "Escape from a limiter field closes the editor");
 Press(Tagged<Button>("output-fir-A"));var firWindow=window.OwnedWindows.Single();Press(Tagged<Button>("output-fir-A"));
 Check(window.OwnedWindows.Count==1 && firWindow.GetLogicalDescendants().OfType<ResponsePlot>().Count()==3,"FIR has one editor with impulse, frequency and phase plots");
 Check(firWindow.GetLogicalDescendants().OfType<Button>().Count(b=>b.Tag?.ToString() is "fir-import" or "fir-export" or "fir-remove")==3,"FIR exposes import, export and remove controls");
-firWindow.GetLogicalDescendants().OfType<CheckBox>().Single(b=>b.Tag?.ToString()=="fir-enabled").IsChecked=true;
+firWindow.GetLogicalDescendants().OfType<ToggleButton>().Single(b=>b.Tag?.ToString()=="fir-enabled").IsChecked=true;
 using(var renderedFir=new RenderTargetBitmap(new PixelSize(1140,780))) {firWindow.Measure(new Size(1140,780));firWindow.Arrange(new Rect(0,0,1140,780));firWindow.UpdateLayout();renderedFir.Render(firWindow);renderedFir.Save("artifacts/output-fir.png",PngBitmapEncoderOptions.Default);}
 firWindow.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-fir").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
 Check(Preset().Firs![0].Enabled,"FIR enable applies through the shared service");
@@ -264,7 +274,7 @@ Check(Preset().Outputs[0].Muted,"Styled output mute still commits immediately");
 Click("◖   Outputs");Tagged<ToggleButton>("mute-editor-A").IsChecked=false;Layout();
 Check(!Preset().Outputs[0].Muted,"Styled output mute can unmute again");
 Click("◖   Outputs");Press(Tagged<Button>("output-noise-A"));var noiseEditor=window.OwnedWindows.Single();
-noiseEditor.GetLogicalDescendants().OfType<CheckBox>().Single(b=>b.Tag?.ToString()=="noise-gate-enabled").IsChecked=true;
+noiseEditor.GetLogicalDescendants().OfType<ToggleButton>().Single(b=>b.Tag?.ToString()=="noise-gate-enabled").IsChecked=true;
 noiseEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(b=>b.Tag?.ToString()=="noise-gate-db").Value=-65;
 noiseEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-noise-gate").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
 Check(Preset().Dynamics![0] is {NoiseGateEnabled:true,NoiseGateDb:-65} && !Preset().Dynamics![1].NoiseGateEnabled,"Noise gate on/off and dB edit are per output");
@@ -272,9 +282,9 @@ Click("◖   Outputs");Press(Tagged<Button>("output-limiters-A"));var limiterEdi
 Check(window.OwnedWindows.Count==1 && ReferenceEquals(limiterEditor,window.OwnedWindows.Single()),"Repeated limiter clicks reuse the existing editor");
 void SetLimiter(string tag,decimal value)=>limiterEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()==tag).Value=value;
 SetLimiter("rms-threshold",60);SetLimiter("rms-attack",40);SetLimiter("rms-release",8);SetLimiter("peak-threshold",100);SetLimiter("peak-hold",80);SetLimiter("peak-release",450);
-limiterEditor.GetLogicalDescendants().OfType<CheckBox>().Single(c=>c.Tag?.ToString()=="rms-auto").IsChecked=true;
+limiterEditor.GetLogicalDescendants().OfType<ToggleButton>().Single(c=>c.Tag?.ToString()=="rms-auto").IsChecked=true;
 Check(!limiterEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="rms-attack").IsEnabled,"Automatic RMS timing disables manual timing controls");
-using(var rendered=new RenderTargetBitmap(new PixelSize(760,590))){limiterEditor.Measure(new Size(760,590));limiterEditor.Arrange(new Rect(0,0,760,590));limiterEditor.UpdateLayout();rendered.Render(limiterEditor);rendered.Save("artifacts/output-limiters.png",PngBitmapEncoderOptions.Default);}
+using(var rendered=new RenderTargetBitmap(new PixelSize(820,580))){limiterEditor.Measure(new Size(820,580));limiterEditor.Arrange(new Rect(0,0,820,580));limiterEditor.UpdateLayout();rendered.Render(limiterEditor);rendered.Save("artifacts/output-limiters.png",PngBitmapEncoderOptions.Default);}
 limiterEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-limiters").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));Layout();
 var appliedDynamics=Preset().Dynamics![0];Check(appliedDynamics.Rms is {ThresholdVolts:60,AttackMs:40,ReleaseMultiplier:8,Automatic:true} && appliedDynamics.Peak is {ThresholdVolts:100,HoldMs:80,ReleaseMs:450},"Peak and RMS limiter editors commit every displayed setting");
 Click("◖   Outputs");Save("outputs-dynamics");
@@ -338,13 +348,13 @@ var hpType=eqEditor.GetLogicalDescendants().OfType<ComboBox>().Single(n=>n.Tag?.
 var lpType=eqEditor.GetLogicalDescendants().OfType<ComboBox>().Single(n=>n.Tag?.ToString()=="lp-type");
 Check(hpType.Items.Count==11 && lpType.Items.Count==11,"HP and LP offer all eleven reference filter choices");
 hpType.SelectedItem=CrossoverFilters.Options.Single(o=>o.ShortName=="LR-24");lpType.SelectedItem=CrossoverFilters.Options.Single(o=>o.ShortName=="BE-48");
-eqEditor.GetLogicalDescendants().OfType<CheckBox>().Single(n=>n.Tag?.ToString()=="hp-enabled").IsChecked=true;
-eqEditor.GetLogicalDescendants().OfType<CheckBox>().Single(n=>n.Tag?.ToString()=="lp-enabled").IsChecked=true;
+eqEditor.GetLogicalDescendants().OfType<ToggleButton>().Single(n=>n.Tag?.ToString()=="hp-enabled").IsChecked=true;
+eqEditor.GetLogicalDescendants().OfType<ToggleButton>().Single(n=>n.Tag?.ToString()=="lp-enabled").IsChecked=true;
 graph.MoveCrossover(true,80);graph.MoveCrossover(false,16000);
 Check(eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="hp-frequency").Value==80 && eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="lp-frequency").Value==16000,"Crossover graph handles synchronize cutoff fields");
 Check(eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="eq-frequency-1").Value==1000 && eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(n=>n.Tag?.ToString()=="eq-gain-1").Value==6,"Graph handles synchronize numeric EQ draft fields");
 using(var renderedEq = new RenderTargetBitmap(new PixelSize(1400,800))) { eqEditor.Measure(new Size(1400,800));eqEditor.Arrange(new Rect(0,0,1400,800));eqEditor.UpdateLayout();renderedEq.Render(eqEditor);renderedEq.Save("artifacts/input-eq-graph.png",PngBitmapEncoderOptions.Default); }
-eqEditor.GetLogicalDescendants().OfType<CheckBox>().Single(b=>b.Tag?.ToString()=="input-eq-enabled").IsChecked=false;
+eqEditor.GetLogicalDescendants().OfType<ToggleButton>().Single(b=>b.Tag?.ToString()=="input-eq-enabled").IsChecked=false;
 eqEditor.GetLogicalDescendants().OfType<NumericUpDown>().Single(b=>b.Tag?.ToString()=="eq-gain-1").Value=3;
 eqEditor.GetLogicalDescendants().OfType<Button>().Single(b=>b.Tag?.ToString()=="apply-input-eq").RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Layout();
 var processed=Preset().Inputs![0];
@@ -367,7 +377,7 @@ using(var pairingImage=new RenderTargetBitmap(new PixelSize(280,280))) {pairingI
 Check(pairingQr.IsVisible && pairingQr.ConnectionUrl==pairingTestUrl,"Pairing QR contains the full connection link including its private key");
 pairingQr.SetConnectionUrl(null);
 Check(!pairingQr.IsVisible && pairingQr.ConnectionUrl is null,"Stopping browser control clears the old QR payload");
-window.Close();
+application.RequestedThemeVariant = originalVariant; window.Close();
 var nativeService = new AmplifierService(new DemoBackend());
 var nativeFixture = nativeService.ExportNativePreset("demo-1004");
 System.Text.Encoding.ASCII.GetBytes("Input annotation").CopyTo(nativeFixture, 36 + 378);
@@ -514,8 +524,8 @@ sealed class TelemetryFixture : IAmplifierBackend
     public DeviceSnapshot Rename(string id, string name, long revision) => demo.Rename(id, name, revision);
     public IReadOnlyList<OutputTelemetry> GetTelemetry(string id) => demo.GetTelemetry(id).Select(t => t.Channel switch
     {
-        1 => t with { LevelDbFs = -1, Voltage = 42, Current = 5.25, LoadOhms = 8, TemperatureC = 55, Status = new OutputStatus(Clip: true) },
-        2 => t with { LevelDbFs = -12, Voltage = 21, Current = 2.625, LoadOhms = 8, TemperatureC = 40, Status = new OutputStatus(Clip: false) },
-        _ => t
+        1 => t with { InputMeterDb = -1, InputClip = true, LevelDbFs = -1, Voltage = 42, Current = 5.25, LoadOhms = 8, TemperatureC = 55, Status = new OutputStatus(Clip: true) },
+        2 => t with { InputMeterDb = -12, InputClip = false, LevelDbFs = -12, Voltage = 21, Current = 2.625, LoadOhms = 8, TemperatureC = 40, Status = new OutputStatus(Clip: false) },
+        _ => t with { InputMeterDb = null, InputClip = null }
     }).ToArray();
 }

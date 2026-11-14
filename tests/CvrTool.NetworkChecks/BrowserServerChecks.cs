@@ -73,11 +73,13 @@ static class BrowserServerChecks
         check((await Post(new { deviceId="demo-1004",operation="output",channel=2,enabled=true,value=-3.5 })).IsSuccessStatusCode && desktop.GetDevice("demo-1004").Outputs[1].Muted, "Browser output gain/mute use shared validation");
         var previous=desktop.ExportPreset("demo-1004");
         check((await Post(new { deviceId="demo-1004",operation="input",channel=1,processing=new {gainDb=500} })).StatusCode==HttpStatusCode.Conflict && desktop.ExportPreset("demo-1004")==previous,"Invalid browser gain is rejected without changing device state");
-        check((await Post(new {deviceId="demo-1004",operation="factory-reset"})).StatusCode==HttpStatusCode.Conflict,"Browser exposes no factory-reset operation");
+        check((await Post(new {deviceId="demo-1004",operation="factory-reset"})).StatusCode==HttpStatusCode.Conflict,"Browser rejects an unconfirmed factory reset");
         check((await Post(new {deviceId="demo-1004",operation="load-preset",data="AA=="})).StatusCode==HttpStatusCode.Conflict,"Preset loading requires explicit confirmation");
         var file=await client.GetByteArrayAsync("/api/preset?id=demo-1004");
         check(NativePresetCodec.Decode(file).Outputs.Count==4,"Browser preset download is a valid native .sd file");
         check((await client.GetStringAsync("/app.js")).Contains("sessionStorage") && (await client.GetStringAsync("/style.css")).Contains("@media"),"Browser controls ship local scripts and responsive styles");
+        check((await Post(new {deviceId="demo-1004",operation="factory-reset",confirmed=true})).IsSuccessStatusCode &&
+            desktop.GetInputProcessing("demo-1004",1).GainDb == 0, "Confirmed browser factory reset restores demo input gain");
         await browser.DisposeAsync();
         check(browser.Address is null && browser.AccessKey=="" && !browser.IsRunning && !browser.ClientConnected,"Stopping browser control clears address and credentials");
         await browser.StartAsync(IPAddress.Loopback,0);

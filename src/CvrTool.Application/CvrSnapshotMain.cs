@@ -37,14 +37,30 @@ public sealed partial class CvrSnapshotBackend
             {
                 var prior = before.Bands.Single(b => b.Number == band.Number); var bandOffset = offset + 85 + band.Number * 14;
                 if (band.Enabled != prior.Enabled) WriteSettingsBytes(client, 30, ch, 0, bandOffset, [(byte)(band.Enabled ? 0 : 255)], segment:(byte)band.Number);
-                if (band.GainDb != prior.GainDb) WriteSettingsBytes(client, 31, ch, 0, bandOffset + 1, BitConverter.GetBytes((float)band.GainDb), segment:(byte)band.Number);
-                if (band.FrequencyHz != prior.FrequencyHz) WriteSettingsBytes(client, 32, ch, 0, bandOffset + 5, BitConverter.GetBytes((float)band.FrequencyHz), segment:(byte)band.Number);
+                if (SupportsCombinedEq && band.GainDb != prior.GainDb && band.FrequencyHz != prior.FrequencyHz)
+                    WriteEqPoint(client, ch, 0, (byte)band.Number, bandOffset + 1, band);
+                else
+                {
+                    if (band.GainDb != prior.GainDb) WriteSettingsBytes(client, 31, ch, 0, bandOffset + 1, BitConverter.GetBytes((float)band.GainDb), segment:(byte)band.Number);
+                    if (band.FrequencyHz != prior.FrequencyHz) WriteSettingsBytes(client, 32, ch, 0, bandOffset + 5, BitConverter.GetBytes((float)band.FrequencyHz), segment:(byte)band.Number);
+                }
                 if (band.Q != prior.Q) WriteSettingsBytes(client, 34, ch, 0, bandOffset + 9, BitConverter.GetBytes((float)band.Q), segment:(byte)band.Number);
             }
             if (change.EqEnabled is { } eq) WriteSettingsBytes(client, 36, ch, 0, offset + 225, [(byte)(eq ? 0 : 1)]);
         });
         return GetInputProcessing(change.DeviceId, change.Channel).State;
     }
+    private bool SupportsCombinedEq => settings.Model == "DSP-1004" && native.AsSpan(9, 6).SequenceEqual("106119"u8);
+
+    private void WriteEqPoint(CvrUdpClient client, byte channel, byte side, byte slot, int offset, EqualizerBand band)
+    {
+        var gain = BitConverter.GetBytes((float)band.GainDb);
+        var frequency = BitConverter.GetBytes((float)band.FrequencyHz);
+        // Native settings store gain first. The combined command sends frequency first.
+        WriteSettingsBytes(client, 33, channel, side, offset, [..gain, ..frequency], segment: slot,
+            wireBody: [..frequency, ..gain]);
+    }
+
     private void WriteInputCrossover(CvrUdpClient client, byte channel, int record, byte slot,
         CrossoverFilter? before, CrossoverFilter? after)
     {
@@ -58,7 +74,7 @@ public sealed partial class CvrSnapshotBackend
                 [unchecked((byte)(after.Enabled ? after.FilterType : -after.FilterType - 1))], segment: slot);
     }
 
-    private void WriteSettingsBytes(CvrUdpClient client, byte function, byte channel, byte side, int offset, byte[] body, byte segment = 0, byte messageStatus = 1, bool requireUnchangedRemainder = true)
+    private void WriteSettingsBytes(CvrUdpClient client, byte function, byte channel, byte side, int offset, byte[] body, byte segment = 0, byte messageStatus = 1, bool requireUnchangedRemainder = true, byte[]? wireBody = null)
     {
         byte[] expected;
         lock (gate)
@@ -67,7 +83,7 @@ public sealed partial class CvrSnapshotBackend
             if (expected.AsSpan(offset, body.Length).SequenceEqual(body)) return;
             body.CopyTo(expected, offset); revision++;
         }
-        client.Write(function, body, channel, segment, side, messageStatus);
+        client.Write(function, wireBody ?? body, channel, segment, side, messageStatus);
         var deadline = Stopwatch.StartNew();
         while (true)
         {
