@@ -21,7 +21,7 @@ internal static class UpdateChecks
             tag_name = "v" + version,
             draft = false,
             prerelease = false,
-            assets = new[] { new { name = $"CVR-Tool-{version}-win-x64.zip", state = "uploaded", browser_download_url = $"https://github.com/Woodwarth/CVR-Tool/releases/download/v{version}/CVR-Tool-{version}-win-x64.zip", digest = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(package)), size = package.Length } }
+            assets = new[] { new { id = 123, name = $"CVR-Tool-{version}-win-x64.zip", state = "uploaded", browser_download_url = $"https://github.com/Woodwarth/CVR-Tool/releases/download/v{version}/CVR-Tool-{version}-win-x64.zip", digest = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(package)), size = package.Length } }
         };
         var handler = new Replies { Metadata = JsonSerializer.Serialize(release), Package = package };
         using var http = new HttpClient(handler);
@@ -33,6 +33,27 @@ internal static class UpdateChecks
         Directory.CreateDirectory(root);
         var file = await updates.DownloadAsync(update!, Path.Combine(root, "downloads"));
         check(File.Exists(file) && new FileInfo(file).Length == package.Length, "Download verifies size and SHA-256 before committing the archive");
+        const string privateSource = "example/private-releases";
+        var restricted = new Replies
+        {
+            Metadata = handler.Metadata.Replace(GitHubUpdates.Repository, privateSource),
+            Package = package,
+            ExpectedToken = "test-only"
+        };
+        using var privateHttp = new HttpClient(restricted);
+        var authenticated = new GitHubUpdates(privateHttp, privateSource, restricted.ExpectedToken);
+        var privateUpdate = await authenticated.CheckAsync("0.0.0", "win-x64");
+        var privateFile = await authenticated.DownloadAsync(privateUpdate!, Path.Combine(root, "private"));
+        check(File.Exists(privateFile) && restricted.LastPath == "/repos/example/private-releases/releases/assets/123",
+            "Private updates use the authenticated asset API and verify the package");
+        await Reject(async () => await updates.DownloadAsync(privateUpdate!, root), check, "Update cannot switch repository after checking");
+        restricted.Status = HttpStatusCode.NotFound;
+        try
+        {
+            await authenticated.CheckAsync(version, "win-x64");
+            throw new Exception("Hidden repository reported as current");
+        }
+        catch (InvalidOperationException) { check(true, "Hidden releases report missing access"); }
         var installer = new UpdateInstallation(Path.Combine(root, "app"));
         var executable = await installer.StageAsync(update!, file);
         check(File.Exists(executable) && installer.NewerInstalledExecutable("0.0.0", "win-x64") is null, "Staging does not activate or replace the current installation");
@@ -126,11 +147,21 @@ internal static class UpdateChecks
     private sealed class Replies : HttpMessageHandler
     {
         public required string Metadata; public required byte[] Package;
+        public string? ExpectedToken;
+        public string? LastPath;
+        public HttpStatusCode Status = HttpStatusCode.OK;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
             if (!request.Headers.UserAgent.Any())
                 throw new Exception("Missing updater User-Agent");
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request, Content = request.RequestUri!.Host == "api.github.com" ? new StringContent(Metadata) : new ByteArrayContent(Package) });
+            LastPath = request.RequestUri!.AbsolutePath;
+            if (request.Headers.Authorization?.Parameter != ExpectedToken ||
+                (ExpectedToken is not null && (request.RequestUri.Host != "api.github.com" ||
+                 request.Headers.Authorization?.Scheme != "Bearer")))
+                throw new Exception("Unexpected update credentials");
+            if (LastPath.Contains("/assets/") && !request.Headers.Accept.Any(a => a.MediaType == "application/octet-stream"))
+                throw new Exception("Expected binary asset request");
+            return Task.FromResult(new HttpResponseMessage(Status) { RequestMessage = request, Content = LastPath.EndsWith("/latest") ? new StringContent(Metadata) : new ByteArrayContent(Package) });
         }
     }
 }

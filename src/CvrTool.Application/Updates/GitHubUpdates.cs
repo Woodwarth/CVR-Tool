@@ -1,7 +1,7 @@
 // Application / GitHub release updates
 // Module: Coordinates device sessions, validates DSP changes and reads native presets.
 // Purpose: find stable releases and download the native package with integrity checks.
-// Input: public metadata from the fixed project repository; no account/token needed.
+// Input: public or private GitHub releases; optional read credential held in memory.
 // State: checks are explicit; downloading never changes the running installation.
 // Scope: SHA-256 checks integrity; packages retain their existing signing status.
 using System.Net.Http.Headers;
@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 
 namespace CvrTool.Application;
 
-public sealed record AppUpdate(string Version, string Runtime, string AssetName, Uri DownloadUrl, string Sha256, long Size);
+public sealed record AppUpdate(string Version, string Runtime, string AssetName, Uri DownloadUrl, string Sha256, long Size, string Source = GitHubUpdates.Repository, long? AssetId = null);
 
 public sealed class GitHubUpdates
 {
@@ -25,7 +25,19 @@ public sealed class GitHubUpdates
         _ => throw new NotSupportedException("No update package for this Windows architecture.")
     } : OperatingSystem.IsMacOS() && RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "osx-arm64" : throw new NotSupportedException("Updates support Windows x64/ARM64 and Apple Silicon.");
     private readonly HttpClient http;
-    public GitHubUpdates(HttpClient? client = null) => http = client ?? SharedClient;
+    private readonly string source;
+    private readonly string? credential;
+    private static bool ValidSource(string value) =>
+        Regex.IsMatch(value, @"\A[A-Za-z0-9-]+/[A-Za-z0-9_.-]+\z") && value.Split('/')[1] is not ("." or "..");
+
+    public GitHubUpdates(HttpClient? client = null, string source = Repository, string? credential = null)
+    {
+        if (!ValidSource(source))
+            throw new ArgumentException("Enter a GitHub repository as owner/name.");
+        this.source = source;
+        this.credential = string.IsNullOrWhiteSpace(credential) ? null : credential.Trim();
+        http = client ?? SharedClient;
+    }
     private static readonly HttpClient SharedClient = new() { Timeout = TimeSpan.FromMinutes(15) };
     public static Version ParseVersion(string value)
     {
@@ -33,12 +45,14 @@ public sealed class GitHubUpdates
             throw new InvalidDataException("Unsupported release version.");
         return version;
     }
-    private static HttpRequestMessage Request(Uri uri)
+    private HttpRequestMessage Request(Uri uri)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, uri);
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("CVR-Tool", "1.0"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         request.Headers.Add("X-GitHub-Api-Version", "2026-03-10");
+        if (credential is not null && uri.Host == "api.github.com")
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential);
         return request;
     }
     public async Task<AppUpdate?> CheckAsync(string currentVersion, string runtime, CancellationToken token = default)
@@ -46,10 +60,10 @@ public sealed class GitHubUpdates
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         token = timeout.Token;
-        using var request = Request(new("https://api.github.com/repos/" + Repository + "/releases/latest"));
+        using var request = Request(new("https://api.github.com/repos/" + source + "/releases/latest"));
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            return null;
+        if (response.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.Unauthorized)
+            throw new InvalidOperationException("Release unavailable. Check the repository, published release and read access.");
         response.EnsureSuccessStatusCode();
         using var data = new MemoryStream();
         await CopyBounded(await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false), data, 2 * 1024 * 1024, null, token).ConfigureAwait(false);
@@ -68,7 +82,7 @@ public sealed class GitHubUpdates
         if (candidates.Length != 1)
             throw new InvalidDataException("This release has no unique package for your platform.");
         var asset = candidates[0];
-        var expected = $"https://github.com/{Repository}/releases/download/{tag}/{assetName}";
+        var expected = $"https://github.com/{source}/releases/download/{tag}/{assetName}";
         if (asset.GetProperty("browser_download_url").GetString() != expected)
             throw new InvalidDataException("Unexpected update download URL.");
         var digest = asset.GetProperty("digest").GetString() ?? "";
@@ -77,18 +91,28 @@ public sealed class GitHubUpdates
         var size = asset.GetProperty("size").GetInt64();
         if (size is <= 0 or > 536870912)
             throw new InvalidDataException("Unexpected update package size.");
-        return new(version.ToString(), runtime, assetName, new(expected), digest[7..].ToLowerInvariant(), size);
+        long? assetId = null;
+        if (credential is not null)
+        {
+            if (!asset.TryGetProperty("id", out var id) || !id.TryGetInt64(out var number) || number <= 0)
+                throw new InvalidDataException("Missing GitHub release asset ID.");
+            assetId = number;
+        }
+        return new(version.ToString(), runtime, assetName, new(expected), digest[7..].ToLowerInvariant(), size, source, assetId);
     }
     public async Task<string> DownloadAsync(AppUpdate update, string directory, IProgress<double>? progress = null, CancellationToken token = default)
     {
         Validate(update);
+        if (source != update.Source || (credential is not null && update.AssetId is null))
+            throw new InvalidDataException("Update source changed. Check for updates again.");
         Directory.CreateDirectory(directory);
         var destination = Path.Combine(directory, update.AssetName);
         var temporary = destination + "." + Guid.NewGuid().ToString("N") + ".part";
         try
         {
-            using var request = Request(update.DownloadUrl);
+            using var request = Request(update.AssetId is { } id ? new Uri($"https://api.github.com/repos/{source}/releases/assets/{id}") : update.DownloadUrl);
             request.Headers.Accept.Clear();
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             if (response.RequestMessage?.RequestUri?.Scheme is { } scheme && scheme != "https")
@@ -109,7 +133,7 @@ public sealed class GitHubUpdates
         if (update.Runtime is not ("win-x64" or "win-arm64" or "osx-arm64"))
             throw new InvalidDataException("Invalid update runtime.");
         var name = $"CVR-Tool-{version}-{update.Runtime}." + (update.Runtime.StartsWith("win-") ? "zip" : "tar.gz");
-        if (update.AssetName != name || update.DownloadUrl != new Uri($"https://github.com/{Repository}/releases/download/v{version}/{name}") ||
+        if (!ValidSource(update.Source) || update.AssetId is <= 0 || update.AssetName != name || update.DownloadUrl != new Uri($"https://github.com/{update.Source}/releases/download/v{version}/{name}") ||
             !Regex.IsMatch(update.Sha256, "^[0-9a-fA-F]{64}$", RegexOptions.CultureInvariant) || update.Size is <= 0 or > 536870912)
             throw new InvalidDataException("Invalid update identity.");
     }

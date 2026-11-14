@@ -29,7 +29,7 @@ public partial class App : Avalonia.Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var backend = new ConnectionBackend();
+            var backend = new ConnectionBackend(DemoBackend.ListPath(Program.SessionName));
             try
             {
                 session = new SessionHost(backend, Program.SessionName);

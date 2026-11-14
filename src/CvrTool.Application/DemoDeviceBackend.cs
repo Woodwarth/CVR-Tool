@@ -22,6 +22,7 @@ public sealed partial class DemoBackend
                 Name = AmplifierService.NormalizeDeviceName(name),
                 ObservedAt = DateTimeOffset.UtcNow
             };
+            SaveList(devices.Values.Select(e => e.Device.Id == deviceId ? result : e.Device));
             devices[deviceId] = (result, entry.Revision + 1);
             return Copy(result);
         }

@@ -42,7 +42,7 @@ public static class McpHost
         builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace);
         if (owner)
         {
-            using var backend = new ConnectionBackend();
+            using var backend = new ConnectionBackend(DemoBackend.ListPath(pipe));
             using var session = new SessionHost(backend, pipe);
             await builder.Build().RunAsync();
             return;

@@ -18,6 +18,22 @@ void Reject<T>(Action action) where T : Exception
     catch (T) { count++; return; }
     throw new Exception("Expected " + typeof(T).Name);
 }
+var rosterPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+try
+{
+    var demos = new DemoBackend(rosterPath);
+    var first = demos.AddDemo("DSP-1502");
+    var second = demos.AddDemo("DSP-1502");
+    demos.Rename(second.Id, "Spare", 0);
+    demos.RemoveDemo("demo-1004");
+    var restored = new DemoBackend(rosterPath);
+    Check(restored.ListDevices().Select(d => d.Id).SequenceEqual(new[] { first.Id, second.Id })
+        && restored.GetDevice(second.Id).Name == "Spare", "Restore duplicate demo models, identities and names");
+    restored.RemoveDemo(first.Id);
+    restored.RemoveDemo(second.Id);
+    Check(new DemoBackend(rosterPath).ListDevices().Count == 0, "Empty demo roster survives restart");
+}
+finally { File.Delete(rosterPath); }
 var service = new AmplifierService(new DemoBackend());
 Check(service.ListDevices().Single().Id == "demo-1004", "Only DSP-1004 starts by default");
 var addedDemo = service.AddDemo("DSP-1502");

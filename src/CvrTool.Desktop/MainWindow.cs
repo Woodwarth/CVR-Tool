@@ -69,7 +69,9 @@ public sealed partial class MainWindow : Window
         Content = BuildShell();
         InitializeBrowserControl();
         Opened += (_, _) => FitInitialWindow();
-        Select(deviceId);
+        deviceId = service.ListDevices().FirstOrDefault()?.Id ?? "";
+        if (deviceId.Length == 0) Render();
+        else Select(deviceId);
         StartLiveRefresh();
     }
 

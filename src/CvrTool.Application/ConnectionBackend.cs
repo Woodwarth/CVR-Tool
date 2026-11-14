@@ -20,7 +20,8 @@ public sealed class ConnectionBackend : IDemoManagement, IAmplifierBackend, ICon
 {
     public DeviceSnapshot AddDemo(string model) => local.AddDemo(model);
     public void RemoveDemo(string id) => local.RemoveDemo(id);
-    private readonly DemoBackend local = new();
+    private readonly DemoBackend local;
+    public ConnectionBackend(string? demoListPath = null) => local = new DemoBackend(demoListPath);
     private readonly Dictionary<string, IAmplifierBackend> peers = new();
     private readonly object gate = new();
     private CvrDiscoveryService? discovery;
